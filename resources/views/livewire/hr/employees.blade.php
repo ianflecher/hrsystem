@@ -1,0 +1,517 @@
+<?php
+
+use Livewire\Volt\Component;
+use Livewire\Attributes\Layout;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+
+new #[Layout('components.layouts.humanresource')] class extends Component
+{
+    public $employees = [];
+    public $departments = [];
+
+    public string $search = '';
+    public string $statusFilter = 'all';
+
+    public bool $showModal = false;
+    public ?int $editingId = null;
+
+    public string $full_name = '';
+    public string $username = '';
+    public string $email = '';
+    public string $job_title = '';
+    public $department_id = '';
+    public string $hire_date = '';
+    public $salary = '';
+    public string $status = 'active';
+    public string $role = 'employee';
+
+    /**
+     * Shown once, immediately after an account is created, and never stored in
+     * readable form - the column holds only the hash. If it is missed here it
+     * cannot be looked up again; it has to be reset.
+     */
+    public ?string $issuedPassword = null;
+    public ?string $issuedFor = null;
+
+    public array $statuses = [
+        'active'     => 'Active',
+        'inactive'   => 'Inactive',
+        'on_leave'   => 'On leave',
+        'terminated' => 'Terminated',
+    ];
+
+    public array $roles = [
+        'employee'   => 'Employee',
+        'supervisor' => 'Supervisor',
+        'leader'     => 'Leader',
+        'hr'         => 'HR',
+        'admin'      => 'Admin',
+    ];
+
+    public function mount(): void
+    {
+        $this->hire_date = now()->toDateString();
+        $this->loadDepartments();
+        $this->loadEmployees();
+    }
+
+    public function loadDepartments(): void
+    {
+        $this->departments = DB::table('departments')
+            ->select('department_id', 'department_name')
+            ->orderBy('department_name')
+            ->get();
+    }
+
+    public function loadEmployees(): void
+    {
+        $query = DB::table('employees as e')
+            ->join('users as u', 'e.user_id', '=', 'u.user_id')
+            ->leftJoin('departments as d', 'e.department_id', '=', 'd.department_id')
+            ->whereNull('u.deleted_at')
+            ->select(
+                'e.employee_id', 'e.job_title', 'e.status', 'e.hire_date', 'e.salary',
+                'u.user_id', 'u.full_name', 'u.username', 'u.email', 'u.role',
+                'u.must_change_password',
+                'd.department_name'
+            );
+
+        if ($this->statusFilter !== 'all') {
+            $query->where('e.status', $this->statusFilter);
+        }
+
+        if (trim($this->search) !== '') {
+            $term = '%'.trim($this->search).'%';
+            $query->where(function ($q) use ($term) {
+                $q->where('u.full_name', 'like', $term)
+                  ->orWhere('u.username', 'like', $term)
+                  ->orWhere('u.email', 'like', $term)
+                  ->orWhere('e.job_title', 'like', $term);
+            });
+        }
+
+        $this->employees = $query->orderBy('u.full_name')->get();
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->loadEmployees();
+    }
+
+    public function setStatusFilter(string $status): void
+    {
+        $this->statusFilter = $status;
+        $this->loadEmployees();
+    }
+
+    public function openCreate(): void
+    {
+        $this->resetForm();
+        $this->showModal = true;
+    }
+
+    public function edit(int $employeeId): void
+    {
+        $row = DB::table('employees as e')
+            ->join('users as u', 'e.user_id', '=', 'u.user_id')
+            ->where('e.employee_id', $employeeId)
+            ->select('e.*', 'u.full_name', 'u.username', 'u.email', 'u.role')
+            ->first();
+
+        if (! $row) {
+            session()->flash('error', 'That employee no longer exists.');
+            $this->loadEmployees();
+
+            return;
+        }
+
+        $this->editingId     = $row->employee_id;
+        $this->full_name     = $row->full_name;
+        $this->username      = $row->username;
+        $this->email         = $row->email;
+        $this->job_title     = $row->job_title;
+        $this->department_id = $row->department_id ?? '';
+        $this->hire_date     = $row->hire_date;
+        $this->salary        = $row->salary;
+        $this->status        = $row->status;
+        $this->role          = $row->role;
+        $this->showModal     = true;
+    }
+
+    public function save(): void
+    {
+        $userId = $this->editingId
+            ? DB::table('employees')->where('employee_id', $this->editingId)->value('user_id')
+            : null;
+
+        $data = $this->validate([
+            'full_name'     => ['required', 'string', 'max:150'],
+            'username'      => ['required', 'string', 'max:100', Rule::unique('users', 'username')->ignore($userId, 'user_id')],
+            'email'         => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($userId, 'user_id')],
+            'job_title'     => ['required', 'string', 'max:100'],
+            'department_id' => ['nullable'],
+            'hire_date'     => ['required', 'date'],
+            'salary'        => ['nullable', 'numeric', 'min:0'],
+            'status'        => ['required', Rule::in(array_keys($this->statuses))],
+            'role'          => ['required', Rule::in(array_keys($this->roles))],
+        ]);
+
+        $departmentId = $data['department_id'] !== '' ? (int) $data['department_id'] : null;
+        $salary = $data['salary'] === '' || $data['salary'] === null ? 0 : $data['salary'];
+
+        if ($this->editingId) {
+            DB::transaction(function () use ($data, $departmentId, $salary, $userId) {
+                DB::table('users')->where('user_id', $userId)->update([
+                    'full_name'  => $data['full_name'],
+                    'username'   => $data['username'],
+                    'email'      => $data['email'],
+                    'role'       => $data['role'],
+                    'updated_at' => now(),
+                ]);
+
+                DB::table('employees')->where('employee_id', $this->editingId)->update([
+                    'job_title'     => $data['job_title'],
+                    'department_id' => $departmentId,
+                    'hire_date'     => $data['hire_date'],
+                    'salary'        => $salary,
+                    'status'        => $data['status'],
+                    'updated_at'    => now(),
+                ]);
+            });
+
+            session()->flash('success', $data['full_name'].' updated.');
+            $this->showModal = false;
+            $this->resetForm();
+            $this->loadEmployees();
+
+            return;
+        }
+
+        // A new account needs a first password, and somebody has to hand it
+        // over. It is generated rather than chosen so it is not a guessable
+        // house default, and the account must replace it at first sign-in.
+        $password = Str::password(12, symbols: false);
+
+        DB::transaction(function () use ($data, $departmentId, $salary, $password) {
+            $newUserId = DB::table('users')->insertGetId([
+                'full_name'            => $data['full_name'],
+                'username'             => $data['username'],
+                'email'                => $data['email'],
+                'password'             => Hash::make($password),
+                'must_change_password' => true,
+                'role'                 => $data['role'],
+                'created_at'           => now(),
+                'updated_at'           => now(),
+            ]);
+
+            DB::table('employees')->insert([
+                'user_id'       => $newUserId,
+                'job_title'     => $data['job_title'],
+                'department_id' => $departmentId,
+                'hire_date'     => $data['hire_date'],
+                'salary'        => $salary,
+                'status'        => $data['status'],
+                'created_at'    => now(),
+                'updated_at'    => now(),
+            ]);
+        });
+
+        $this->issuedPassword = $password;
+        $this->issuedFor      = $data['full_name'];
+        $this->showModal      = false;
+        $this->resetForm();
+        $this->loadEmployees();
+    }
+
+    public function dismissIssued(): void
+    {
+        $this->issuedPassword = null;
+        $this->issuedFor = null;
+    }
+
+    /**
+     * Issues a fresh first password for somebody who never received theirs or
+     * has lost it. The old one stops working immediately.
+     */
+    public function resetPassword(int $employeeId): void
+    {
+        $row = DB::table('employees as e')
+            ->join('users as u', 'e.user_id', '=', 'u.user_id')
+            ->where('e.employee_id', $employeeId)
+            ->select('u.user_id', 'u.full_name')
+            ->first();
+
+        if (! $row) {
+            return;
+        }
+
+        $password = Str::password(12, symbols: false);
+
+        DB::table('users')->where('user_id', $row->user_id)->update([
+            'password'             => Hash::make($password),
+            'must_change_password' => true,
+            'updated_at'           => now(),
+        ]);
+
+        $this->issuedPassword = $password;
+        $this->issuedFor      = $row->full_name;
+        $this->loadEmployees();
+    }
+
+    public function closeModal(): void
+    {
+        $this->showModal = false;
+        $this->resetForm();
+    }
+
+    private function resetForm(): void
+    {
+        $this->editingId     = null;
+        $this->full_name     = '';
+        $this->username      = '';
+        $this->email         = '';
+        $this->job_title     = '';
+        $this->department_id = '';
+        $this->hire_date     = now()->toDateString();
+        $this->salary        = '';
+        $this->status        = 'active';
+        $this->role          = 'employee';
+        $this->resetErrorBag();
+    }
+}; ?>
+
+<div class="p-6 md:p-8">
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Employees</h1>
+            <p class="text-sm text-gray-600 mt-1">
+                Everyone on the payroll, and the accounts they sign in with.
+            </p>
+        </div>
+        <button wire:click="openCreate" class="btn-primary">
+            <i class="fas fa-user-plus"></i> Add employee
+        </button>
+    </div>
+
+    @if ($issuedPassword)
+        <div class="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4">
+            <div class="flex items-start gap-3">
+                <i class="fas fa-key text-amber-600 mt-1"></i>
+                <div class="flex-1">
+                    <p class="font-semibold text-amber-900">
+                        First password for {{ $issuedFor }}
+                    </p>
+                    <p class="text-sm text-amber-800 mt-1">
+                        Hand this over in person. It is shown once and cannot be looked up
+                        again &mdash; only a hash is stored. They will be asked to replace
+                        it the first time they sign in.
+                    </p>
+                    <div class="mt-3 inline-flex items-center gap-3 rounded-lg border border-amber-300 bg-white px-4 py-2">
+                        <code class="text-base font-semibold tracking-wider text-gray-900">{{ $issuedPassword }}</code>
+                    </div>
+                </div>
+                <button wire:click="dismissIssued" class="text-amber-700 hover:text-amber-900" title="Dismiss">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    @endif
+
+    @if (session('success'))
+        <div class="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            {{ session('success') }}
+        </div>
+    @endif
+    @if (session('error'))
+        <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {{ session('error') }}
+        </div>
+    @endif
+
+    <div class="flex flex-wrap items-center gap-3 mb-5">
+        <div class="flex gap-2">
+            @foreach (array_merge(['all' => 'All'], $statuses) as $key => $label)
+                <button wire:click="setStatusFilter('{{ $key }}')"
+                        class="px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
+                            {{ $statusFilter === $key
+                                ? 'bg-red-600 border-red-600 text-white'
+                                : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300' }}">
+                    {{ $label }}
+                </button>
+            @endforeach
+        </div>
+        <div class="flex-1 min-w-[14rem]">
+            <input type="search" wire:model.live.debounce.300ms="search" class="form-input"
+                   placeholder="Search by name, username, email or job title...">
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        @if (count($employees) === 0)
+            <div class="px-6 py-14 text-center">
+                <p class="text-gray-900 font-medium">
+                    {{ trim($search) !== '' || $statusFilter !== 'all' ? 'Nobody matches that' : 'No employees yet' }}
+                </p>
+                <p class="text-sm text-gray-600 mt-1">
+                    {{ trim($search) !== '' || $statusFilter !== 'all'
+                        ? 'Try a different search or filter.'
+                        : 'Add the first one and the system creates their sign-in with it.' }}
+                </p>
+            </div>
+        @else
+            <div class="overflow-x-auto">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Job title</th>
+                            <th>Department</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($employees as $employee)
+                            <tr wire:key="emp-{{ $employee->employee_id }}">
+                                <td>
+                                    <div class="font-medium text-gray-900">{{ $employee->full_name }}</div>
+                                    <div class="text-sm text-gray-600">{{ $employee->email }}</div>
+                                    @if ($employee->must_change_password)
+                                        <div class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-amber-700">
+                                            <i class="fas fa-key"></i> Has not set their own password yet
+                                        </div>
+                                    @endif
+                                </td>
+                                <td class="text-gray-700">{{ $employee->job_title }}</td>
+                                <td class="text-gray-600">{{ $employee->department_name ?? '—' }}</td>
+                                <td class="text-gray-600">{{ $roles[$employee->role] ?? $employee->role }}</td>
+                                <td>
+                                    <span class="status-badge
+                                        @if ($employee->status === 'active') status-active
+                                        @elseif ($employee->status === 'on_leave') status-onleave
+                                        @elseif ($employee->status === 'terminated') status-terminated
+                                        @else status-inactive @endif">
+                                        {{ $statuses[$employee->status] ?? $employee->status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="flex items-center justify-end gap-2">
+                                        <button wire:click="edit({{ $employee->employee_id }})"
+                                                class="px-2.5 py-1.5 text-sm text-gray-700 hover:text-gray-900" title="Edit">
+                                            <i class="fas fa-pen"></i>
+                                        </button>
+                                        <button wire:click="resetPassword({{ $employee->employee_id }})"
+                                                wire:confirm="Issue a new first password? The current one stops working immediately."
+                                                class="px-2.5 py-1.5 text-sm text-gray-700 hover:text-gray-900" title="Issue a new password">
+                                            <i class="fas fa-key"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </div>
+
+    @if ($showModal)
+        <div class="fixed inset-0 z-50 overflow-y-auto">
+            <div class="flex min-h-screen items-center justify-center p-4">
+                <div class="fixed inset-0 bg-gray-900/50" wire:click="closeModal"></div>
+
+                <div class="relative w-full max-w-2xl bg-white rounded-xl shadow-xl">
+                    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-gray-900">
+                            {{ $editingId ? 'Edit employee' : 'Add employee' }}
+                        </h2>
+                        <button wire:click="closeModal" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div class="px-6 py-5 space-y-4">
+                        @unless ($editingId)
+                            <p class="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                                This creates their sign-in as well. A first password is
+                                generated and shown once, for you to hand over.
+                            </p>
+                        @endunless
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label" for="full_name">Full name</label>
+                                <input id="full_name" type="text" wire:model="full_name" class="form-input">
+                                @error('full_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="job_title">Job title</label>
+                                <input id="job_title" type="text" wire:model="job_title" class="form-input">
+                                @error('job_title') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="username">Username</label>
+                                <input id="username" type="text" wire:model="username" class="form-input">
+                                @error('username') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="email">Email</label>
+                                <input id="email" type="email" wire:model="email" class="form-input">
+                                @error('email') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="department_id">Department</label>
+                                <select id="department_id" wire:model="department_id" class="form-input">
+                                    <option value="">Not specified</option>
+                                    @foreach ($departments as $department)
+                                        <option value="{{ $department->department_id }}">{{ $department->department_name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label" for="role">Role</label>
+                                <select id="role" wire:model="role" class="form-input">
+                                    @foreach ($roles as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                @error('role') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="hire_date">Hire date</label>
+                                <input id="hire_date" type="date" wire:model="hire_date" class="form-input">
+                                @error('hire_date') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="salary">Monthly salary</label>
+                                <input id="salary" type="number" step="0.01" min="0" wire:model="salary"
+                                       class="form-input" placeholder="0.00">
+                                @error('salary') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="status">Status</label>
+                                <select id="status" wire:model="status" class="form-input">
+                                    @foreach ($statuses as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                @error('status') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+                        <button wire:click="closeModal" class="btn-secondary">Cancel</button>
+                        <button wire:click="save" class="btn-primary">
+                            {{ $editingId ? 'Save changes' : 'Create employee' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+</div>

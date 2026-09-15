@@ -26,7 +26,12 @@ Volt::route('/applicant/login', 'auth.applicantlogin')->name('applicant.login');
 */
 
 Route::middleware('auth')->group(function () {
+    // Reachable by any signed-in account, because anyone HR creates lands here
+    // before they can reach their own portal.
+    Volt::route('/password/change', 'auth.change-password')->name('password.change');
+
     Volt::route('/admin/hr', 'hr.home')->name('hr.home');
+    Volt::route('/hr/employees', 'hr.employees')->name('hr.employees');
     Volt::route('/hr/positions', 'hr.positions')->name('hr.positions');
     Volt::route('/hr/applications', 'hr.applications')->name('hr.applications');
     Volt::route('/hr/attendance', 'hr.attendance')->name('hr.attendance');

@@ -823,6 +823,9 @@
             <a href="{{ route('hr.home') }}" class="nav-link {{ request()->routeIs('hr.home') ? 'active' : '' }}">
                 <i class="fas fa-tachometer-alt"></i>Dashboard
             </a>
+            <a href="{{ route('hr.employees') }}" class="nav-link {{ request()->routeIs('hr.employees') ? 'active' : '' }}">
+                <i class="fas fa-users"></i>Employees
+            </a>
             <a href="{{ route('hr.attendance') }}" class="nav-link {{ request()->routeIs('hr.attendance') ? 'active' : '' }}">
                 <i class="fas fa-clock"></i>Attendance
             </a>

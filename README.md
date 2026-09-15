@@ -12,7 +12,7 @@ and `username`.
 
 | Portal | Entry | Screens |
 | --- | --- | --- |
-| HR back office | `/admin/login` | Dashboard, Openings, Applications, Attendance, Leave, Payroll |
+| HR back office | `/admin/login` | Dashboard, Employees, Attendance, Payroll, Openings, Applications, Leave |
 | Employee self-service | `/employee/login` | Dashboard, Attendance (clock in/out), Payroll, Leave |
 | Careers / applicant | `/applicant/login` | Register, application status, document uploads |
 
@@ -60,6 +60,18 @@ they meant something. Everything else is entered through the app.
 
 Both start with the password `imprint123`, matching Imprint Production.
 **Change them after the first sign-in.**
+
+## Employee accounts
+
+Staff accounts are created by HR at `/hr/employees`, not by the staff
+themselves. Adding an employee creates their sign-in and their employee record
+together, and shows a generated first password **once** - only a hash is
+stored, so a missed password has to be reissued rather than looked up.
+
+Because somebody other than the account holder knows that password, the account
+is held at a change-password screen until it is replaced. The flag driving this
+(`users.must_change_password`) defaults to false, so accounts that already
+existed are unaffected.
 
 ## Job openings
 
