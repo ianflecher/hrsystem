@@ -1259,6 +1259,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         </div>
                     @endif
                     
+                    @if($selectedEmployee->payroll_id)
+                        <div class="mt-4 border-t border-gray-200 pt-4">
+                            <a href="{{ route('payslip.show', $selectedEmployee->payroll_id) }}" target="_blank"
+                               class="btn-secondary inline-flex items-center gap-2">
+                                <i class="fas fa-print"></i> Open printable payslip
+                            </a>
+                        </div>
+                    @endif
+
                     <!-- Notes -->
                     @if($selectedEmployee->notes)
                     <div class="mt-4 border-t border-gray-200 pt-4">

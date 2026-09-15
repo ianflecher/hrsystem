@@ -154,38 +154,13 @@ new #[Layout('components.layouts.employeeland')] class extends Component
         $this->payrollBreakdown = $breakdown;
     }
     
-    public function downloadPayslip($payrollId)
-    {
-        $payroll = DB::table('hr_payroll')
-            ->where('payroll_id', $payrollId)
-            ->where('employee_id', $this->employee->employee_id)
-            ->first();
-        
-        if (!$payroll) {
-            session()->flash('error', 'Payroll record not found!');
-            return;
-        }
-        
-        // Generate PDF payslip
-        try {
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('payslip.pdf', [
-                'employee' => $this->employee,
-                'payroll' => $payroll,
-                'breakdown' => $this->payrollBreakdown,
-                'date' => Carbon::now()
-            ]);
-            
-            $filename = "payslip-{$payroll->period_start}-to-{$payroll->period_end}.pdf";
-            
-            return response()->streamDownload(function () use ($pdf) {
-                echo $pdf->output();
-            }, $filename);
-            
-        } catch (\Exception $e) {
-            session()->flash('error', 'Error generating payslip: ' . $e->getMessage());
-        }
-    }
-    
+    /*
+     * downloadPayslip() used to build a PDF with barryvdh/dompdf and a
+     * payslip.pdf view. Neither was ever installed, so the button only ever
+     * flashed "Error generating payslip: Class not found". The payslip is a
+     * page now, printed or saved as PDF by the browser - see routes/web.php.
+     */
+
     public function requestCorrection($payrollId)
     {
         $payroll = DB::table('hr_payroll')
@@ -396,10 +371,10 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                                     View
                                                 </button>
                                                 @if($record->status == 'paid')
-                                                <button wire:click="downloadPayslip({{ $record->payroll_id }})" 
+                                                <a href="{{ route('payslip.show', $record->payroll_id) }}" target="_blank" 
                                                         class="text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300">
-                                                    Download
-                                                </button>
+                                                    Payslip
+                                                </a>
                                                 @endif
                                             </td>
                                         </tr>
@@ -495,13 +470,13 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                             <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
                                 @if($currentPayroll->status === 'paid')
-                                <button wire:click="downloadPayslip({{ $currentPayroll->payroll_id }})" 
+                                <a href="{{ route('payslip.show', $currentPayroll->payroll_id) }}" target="_blank" 
                                         class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center justify-center">
                                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                     </svg>
-                                    Download Payslip
-                                </button>
+                                    View payslip
+                                </a>
                                 @endif
                                 
                                 @if($currentPayroll->status === 'paid')

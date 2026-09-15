@@ -45,6 +45,7 @@ class PayrollRun
                 'employee_id' => $employeeId, 'period_start' => $period->start, 'period_end' => $period->end,
                 'gross_pay' => $c['gross'], 'deductions' => round($c['deductions'] + $deduction, 2), 'net_pay' => round($c['net'] - $deduction, 2),
                 'overtime_pay' => $c['overtime'], 'holiday_pay' => $c['holiday'], 'time_deduction' => $time['total'],
+                'sss' => $c['sss'], 'philhealth' => $c['philhealth'], 'pagibig' => $c['pagibig'], 'tax' => $c['tax'],
                 'loan_deduction' => $deduction, 'status' => 'calculated', 'notes' => $notes,
                 'created_at' => now(), 'updated_at' => now(),
             ]);

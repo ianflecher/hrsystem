@@ -30,6 +30,7 @@ Volt::route('/applicant/login', 'auth.applicantlogin')->name('applicant.login');
 */
 
 Route::middleware('auth')->group(function () {
+    Route::get('/payslip/{id}', \App\Http\Controllers\PayslipController::class)->whereNumber('id')->name('payslip.show');
     Route::get('/people/documents/{id}/download', [\App\Http\Controllers\PeopleController::class, 'download'])->whereNumber('id')->name('people.documents.download');
     foreach (['hr', 'employee'] as $portal) {
         Route::get('/'.$portal.'/people/{module}', [\App\Http\Controllers\PeopleController::class, 'index'])->name('people.'.$portal);
