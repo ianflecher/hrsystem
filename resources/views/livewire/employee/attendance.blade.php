@@ -436,7 +436,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                 <!-- Clock System Status -->
                 @if($isClockedIn)
                     <div class="mt-4 p-3 bg-slate-100 rounded-lg border border-gray-200">
-                        <p class="text-sm text-red-700 font-medium">✓ Clocked In via System</p>
+                        <p class="text-sm text-red-700 font-medium">Clocked In via System</p>
                         <p class="text-xs text-red-600">
                             @if($clockStatus['last_clock_in'])
                                 Since {{ \Carbon\Carbon::parse($clockStatus['last_clock_in'])->format('h:i A') }}

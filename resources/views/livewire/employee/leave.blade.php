@@ -95,13 +95,13 @@ new #[Layout('components.layouts.employeeland')] class extends Component
 };
 ?>
 
-<div class="min-h-screen bg-gray-50 p-4 md:p-8">
+<div class="p-6 md:p-8">
     <div class="max-w-7xl mx-auto space-y-8">
         
         <!-- HEADER -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-                <h1 class="text-3xl font-bold text-gray-900">
+                <h1 class="text-2xl font-bold text-gray-900">
                     Leave Management
                 </h1>
                 <p class="text-gray-600 mt-2">Submit and track your leave requests</p>
@@ -147,15 +147,15 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                 <select wire:model="leave_type"
                                     class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white
                                            focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition duration-200 cursor-pointer">
-                                    <option value="vacation">🏖️ Vacation</option>
-                                    <option value="sick">🤒 Sick Leave</option>
-                                    <option value="emergency">🚨 Emergency</option>
-                                    <option value="maternity">👶 Maternity</option>
-                                    <option value="paternity">👨‍👦 Paternity</option>
-                                    <option value="bereavement">😔 Bereavement</option>
-                                    <option value="study">📚 Study</option>
-                                    <option value="unpaid">💼 Unpaid</option>
-                                    <option value="others">📝 Others</option>
+                                    <option value="vacation">Vacation</option>
+                                    <option value="sick">Sick Leave</option>
+                                    <option value="emergency">Emergency</option>
+                                    <option value="maternity">Maternity</option>
+                                    <option value="paternity">‍ Paternity</option>
+                                    <option value="bereavement">Bereavement</option>
+                                    <option value="study">Study</option>
+                                    <option value="unpaid">Unpaid</option>
+                                    <option value="others">Others</option>
                                 </select>
                             </label>
                         </div>
@@ -311,19 +311,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                 @foreach ($this->leaves as $leave)
                                     <tr class="hover:bg-red-50/50 transition duration-150">
                                         <td class="px-6 py-4 flex items-center">
-                                            <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center mr-3">
-                                                @switch($leave->leave_type)
-                                                    @case('vacation') 🏖️ @break
-                                                    @case('sick') 🤒 @break
-                                                    @case('emergency') 🚨 @break
-                                                    @case('maternity') 👶 @break
-                                                    @case('paternity') 👨‍👦 @break
-                                                    @case('bereavement') 😔 @break
-                                                    @case('study') 📚 @break
-                                                    @case('unpaid') 💼 @break
-                                                    @default 📝
-                                                @endswitch
-                                            </div>
+                                            <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center mr-3">@switch($leave->leave_type) @case('vacation') @break @case('sick') @break @case('emergency') @break @case('maternity') @break @case('paternity') ‍ @break @case('bereavement') @break @case('study') @break @case('unpaid') @break @default @endswitch</div>
                                             <span class="font-medium text-gray-700">{{ ucfirst($leave->leave_type) }}</span>
                                         </td>
                                         <td class="px-6 py-4 text-gray-600">{{ $leave->start_date }} - {{ $leave->end_date }}</td>

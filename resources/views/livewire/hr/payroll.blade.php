@@ -355,7 +355,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 }
 ?>
 
-<div class="py-6">
+<div class="p-6 md:p-8">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Header Section -->
         <div class="md:flex md:items-center md:justify-between mb-6">

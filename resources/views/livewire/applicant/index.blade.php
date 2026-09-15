@@ -240,7 +240,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
     <!-- Page Header -->
     <div class="page-header mb-8">
-        <h1 class="text-3xl font-bold">Applicant Dashboard</h1>
+        <h1 class="text-2xl font-bold">Applicant Dashboard</h1>
         <p class="text-lg opacity-90">Track your application and manage your documents</p>
     </div>
 

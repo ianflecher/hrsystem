@@ -235,7 +235,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
 }
 ?>
 
-<div class="py-6">
+<div class="p-6 md:p-8">
     <!-- Header -->
     <div class="mb-8">
         <div class="flex justify-between items-center">

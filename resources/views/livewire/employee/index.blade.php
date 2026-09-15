@@ -183,7 +183,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
 }
 ?>
 
-<div class="py-6">
+<div class="p-6 md:p-8">
     <!-- Welcome Section -->
     <div class="mb-8">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">

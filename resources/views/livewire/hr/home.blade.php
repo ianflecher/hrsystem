@@ -432,7 +432,7 @@ class extends Component
     <div class="mb-8">
         <div class="flex justify-between items-center">
             <div>
-                <h1 class="text-3xl font-bold text-gray-900">HR Dashboard</h1>
+                <h1 class="text-2xl font-bold text-gray-900">HR Dashboard</h1>
                 <p class="text-gray-700 mt-2 font-medium">Applications, attendance, leave and payroll in one place</p>
             </div>
             <div class="flex items-center space-x-3">
@@ -452,7 +452,7 @@ class extends Component
         <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex flex-wrap gap-6">
                 <div>
-                    <label class="block text-sm font-semibold text-gray-800 mb-2">📅 Date Range</label>
+                    <label class="block text-sm font-semibold text-gray-800 mb-2">Date Range</label>
                     <div class="relative">
                         <select wire:model.live="dateRange" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
                             <option value="today">Today</option>
@@ -469,7 +469,7 @@ class extends Component
                 </div>
                 
                 <div>
-                    <label class="block text-sm font-semibold text-gray-800 mb-2">🏢 Department</label>
+                    <label class="block text-sm font-semibold text-gray-800 mb-2">Department</label>
                     <div class="relative">
                         <select wire:model.live="department_id" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
                             <option value="">All Departments</option>
@@ -484,7 +484,7 @@ class extends Component
                 </div>
                 
                 <div>
-                    <label class="block text-sm font-semibold text-gray-800 mb-2">👥 Employee Status</label>
+                    <label class="block text-sm font-semibold text-gray-800 mb-2">Employee Status</label>
                     <div class="relative">
                         <select wire:model.live="employee_status" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
                             <option value="all">All Status</option>
@@ -500,7 +500,7 @@ class extends Component
                 </div>
                 
                 <div>
-                    <label class="block text-sm font-semibold text-gray-800 mb-2">📋 Application Status</label>
+                    <label class="block text-sm font-semibold text-gray-800 mb-2">Application Status</label>
                     <div class="relative">
                         <select wire:model.live="application_status" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-green-500 focus:ring-green-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
                             <option value="all">All Applications</option>
@@ -628,7 +628,7 @@ class extends Component
                 </svg>
             </div>
             <div>
-                <h2 class="text-xl font-bold text-gray-900">⚡ Quick Actions</h2>
+                <h2 class="text-xl font-bold text-gray-900">Quick Actions</h2>
                 <p class="text-red-700 mt-1">Frequently used HR operations</p>
             </div>
         </div>
@@ -713,7 +713,7 @@ class extends Component
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div class="p-6 border-b border-gray-200">
                     <div class="flex justify-between items-center">
-                        <h2 class="text-xl font-bold text-gray-900">📊 Recruitment Overview</h2>
+                        <h2 class="text-xl font-bold text-gray-900">Recruitment Overview</h2>
                         <div class="flex space-x-2">
                             <span class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-medium">
                                 {{ $applicationStats['total'] }} Total
@@ -759,7 +759,7 @@ class extends Component
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div class="p-6 border-b border-gray-200">
                     <div class="flex justify-between items-center">
-                        <h2 class="text-xl font-bold text-gray-900">📝 Recent Job Applications</h2>
+                        <h2 class="text-xl font-bold text-gray-900">Recent Job Applications</h2>
                         <a href="#" class="text-white hover:text-red-100 text-sm font-medium flex items-center">
                             View All 
                             <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -883,7 +883,7 @@ class extends Component
             <!-- Popular Positions -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div class="p-6 border-b border-gray-200">
-                    <h2 class="text-xl font-bold text-gray-900">🎯 Popular Positions</h2>
+                    <h2 class="text-xl font-bold text-gray-900">Popular Positions</h2>
                 </div>
                 <div class="p-6">
                     <div class="space-y-4">
@@ -933,7 +933,7 @@ class extends Component
             <!-- Status Distribution -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div class="p-6 border-b border-gray-200">
-                    <h2 class="text-xl font-bold text-gray-900">📈 Status Distribution</h2>
+                    <h2 class="text-xl font-bold text-gray-900">Status Distribution</h2>
                 </div>
                 <div class="p-6">
                     <div class="space-y-4">
