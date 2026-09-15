@@ -283,81 +283,32 @@ new #[Layout('components.layouts.landing')] class extends Component
                     </div>
                 </form>
 
-                <!-- Role Information -->
-                <div class="mt-6 grid grid-cols-2 gap-4">
-                    <!-- Employee Features -->
-                    <div class="p-4 bg-red-50 border border-gray-200 rounded-lg">
-                        <div class="flex items-start">
-                            <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center mr-2">
-                                <i class="fas fa-user-tie text-red-600 text-sm"></i>
-                            </div>
-                            <div>
-                                <p class="text-xs font-medium text-red-800 mb-1">Employee</p>
-                                <ul class="text-xs text-red-700 space-y-0.5">
-                                    <li class="flex items-center gap-1">
-                                        <i class="fas fa-check text-xs"></i>
-                                        <span>Attendance</span>
-                                    </li>
-                                    <li class="flex items-center gap-1">
-                                        <i class="fas fa-check text-xs"></i>
-                                        <span>Tasks</span>
-                                    </li>
-                                    <li class="flex items-center gap-1">
-                                        <i class="fas fa-check text-xs"></i>
-                                        <span>Orders</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
+                {{-- What this portal actually does.
 
-                    <!-- Manager Features -->
-                    <div class="p-4 bg-purple-50 border border-purple-100 rounded-lg">
-                        <div class="flex items-start">
-                            <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-2">
-                                <i class="fas fa-user-cog text-purple-600 text-sm"></i>
-                            </div>
-                            <div>
-                                <p class="text-xs font-medium text-purple-800 mb-1">Manager</p>
-                                <ul class="text-xs text-purple-700 space-y-0.5">
-                                    <li class="flex items-center gap-1">
-                                        <i class="fas fa-check text-xs"></i>
-                                        <span>Reports</span>
-                                    </li>
-                                    <li class="flex items-center gap-1">
-                                        <i class="fas fa-check text-xs"></i>
-                                        <span>Approvals</span>
-                                    </li>
-                                    <li class="flex items-center gap-1">
-                                        <i class="fas fa-check text-xs"></i>
-                                        <span>Team</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Access Badges -->
-                <div class="mt-6 flex justify-center gap-3">
-                    <div class="inline-flex items-center px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs">
-                        <i class="fas fa-user-tie mr-1"></i>
-                        <span class="font-medium">Employee</span>
-                    </div>
-                    <div class="inline-flex items-center px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
-                        <i class="fas fa-user-cog mr-1"></i>
-                        <span class="font-medium">Manager</span>
-                    </div>
-                </div>
-
-                <!-- Note -->
-                <div class="mt-6 p-4 bg-red-50 border border-gray-200 rounded-lg">
-                    <div class="flex items-start">
-                        <i class="fas fa-info-circle text-red-500 mt-0.5 mr-2"></i>
-                        <p class="text-xs text-red-700">
-                            <span class="font-medium">Note:</span> Login grants access based on your role permissions.
-                        </p>
-                    </div>
+                     It used to advertise two roles with three features each:
+                     Employee got Attendance, Tasks and Orders; Manager got
+                     Reports, Approvals and Team. Six claims, one of them true.
+                     Tasks and Orders belong to the projects and ERP modules,
+                     which are not part of the HRIS, and there is no manager
+                     view at all - both roles land on the same dashboard. --}}
+                <div class="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
+                        In this portal
+                    </p>
+                    <ul class="space-y-2">
+                        <li class="flex items-start gap-2 text-sm text-gray-700">
+                            <i class="fas fa-clock text-red-600 mt-0.5 w-4 text-center"></i>
+                            <span>Clock in and out, and review your attendance</span>
+                        </li>
+                        <li class="flex items-start gap-2 text-sm text-gray-700">
+                            <i class="fas fa-money-bill-wave text-red-600 mt-0.5 w-4 text-center"></i>
+                            <span>View your payslips</span>
+                        </li>
+                        <li class="flex items-start gap-2 text-sm text-gray-700">
+                            <i class="fas fa-umbrella-beach text-red-600 mt-0.5 w-4 text-center"></i>
+                            <span>File leave requests and track their status</span>
+                        </li>
+                    </ul>
                 </div>
             </div>
             
@@ -366,7 +317,7 @@ new #[Layout('components.layouts.landing')] class extends Component
                 <div class="flex items-center justify-center">
                     <i class="fas fa-building text-red-600 mr-2"></i>
                     <p class="text-xs text-center text-red-800 font-medium">
-                        Imprint Customs Staff Portal v2.0
+                        Imprint Customs Staff Portal
                     </p>
                 </div>
             </div>
