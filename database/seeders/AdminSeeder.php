@@ -46,7 +46,7 @@ class AdminSeeder extends Seeder
                 'full_name'  => $account['full_name'],
                 'username'   => $account['username'],
                 'email'      => $account['email'],
-                'password'   => Hash::make('password'),
+                'password'   => Hash::make('imprint123'),
                 'role'       => 'admin',
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -67,6 +67,6 @@ class AdminSeeder extends Seeder
             $this->command->info("Created {$account['username']}.");
         }
 
-        $this->command->warn('Both accounts use the password "password" - change them after signing in.');
+        $this->command->warn('Both accounts use the password "imprint123" - change them after signing in.');
     }
 }

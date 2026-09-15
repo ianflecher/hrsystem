@@ -30,11 +30,6 @@ new #[Layout('components.layouts.landing')] class extends Component
     $password = $this->password;
     
     // Debug: Let's see what we're looking for
-    \Log::info('Login attempt', [
-        'input' => $this->username,
-        'trimmed' => $usernameInput,
-        'is_email' => filter_var($usernameInput, FILTER_VALIDATE_EMAIL)
-    ]);
 
     // Find user by checking both email and username
     $user = DB::table('users')
@@ -54,12 +49,6 @@ new #[Layout('components.layouts.landing')] class extends Component
         ]);
     }
 
-    \Log::info('User found', [
-        'user_id' => $user->user_id,
-        'email' => $user->email,
-        'username' => $user->username,
-        'role' => $user->role
-    ]);
 
     // The staff portal is for the people it serves: employees and the two
     // tiers above them. Admin and HR sign in through the back office.
@@ -90,7 +79,6 @@ new #[Layout('components.layouts.landing')] class extends Component
         'password' => $password
     ];
 
-    \Log::info('Attempting authentication', ['email' => $user->email]);
 
     if (!Auth::attempt($authCredentials, $this->remember)) {
         \Log::warning('Authentication failed', ['email' => $user->email]);
@@ -99,7 +87,6 @@ new #[Layout('components.layouts.landing')] class extends Component
         ]);
     }
 
-    \Log::info('Login successful', ['user_id' => $user->user_id]);
     
     session()->regenerate();
     

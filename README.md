@@ -53,12 +53,13 @@ employees or openings. Invented records are hard to tell apart from real ones
 once they are in the database, and they turn up in headcounts and reports as if
 they meant something. Everything else is entered through the app.
 
-| Username | Role |
+| Sign in with | Role |
 | --- | --- |
-| `admin` | Super admin |
-| `hr` | HR manager |
+| `admin` / `admin@imprintcustoms.ph` | Super admin |
+| `hr` / `hr@imprintcustoms.ph` | HR manager |
 
-Both start with the password `password`. **Change them after the first sign-in.**
+Both start with the password `imprint123`, matching Imprint Production.
+**Change them after the first sign-in.**
 
 ## Job openings
 

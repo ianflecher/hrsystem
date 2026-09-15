@@ -35,8 +35,6 @@ new #[Layout('components.layouts.employee')] class extends Component
         $credentials['username'] = $this->username;
     }
 
-    // DEBUG: Log what we're looking for
-    \Log::info('Login attempt:', $credentials);
     
     // Check if user exists
     $user = DB::table('users')
@@ -48,10 +46,8 @@ new #[Layout('components.layouts.employee')] class extends Component
             }
         })
         ->whereNull('deleted_at')
-        ->first(); // Use first() instead of exists() to see the actual user
+        ->first();
 
-    \Log::info('Found user:', $user ? (array)$user : ['not found']);
-    
     if (!$user) {
         throw ValidationException::withMessages([
             'username' => __('User not found.'),
@@ -60,7 +56,6 @@ new #[Layout('components.layouts.employee')] class extends Component
 
     // Check if user has admin role
     if ($user->role !== 'admin') {
-        \Log::info('User role is not admin:', ['role' => $user->role]);
         throw ValidationException::withMessages([
             'username' => __('Access denied. Administrator credentials required.'),
         ]);
