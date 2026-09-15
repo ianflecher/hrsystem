@@ -6,6 +6,7 @@ use Livewire\WithPagination;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use App\Services\DocumentVault;
 use App\Support\WorkWeek;
 use Illuminate\Validation\Rule;
 
@@ -41,6 +42,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
      * cannot be looked up again; it has to be reset.
      */
     public ?string $issuedPassword = null;
+    public int $carriedDocuments = 0;
     public ?string $issuedFor = null;
 
     public array $statuses = [
@@ -255,7 +257,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'updated_at'           => now(),
             ]);
 
-            DB::table('employees')->insert([
+            $employeeId = DB::table('employees')->insertGetId([
                 'user_id'       => $newUserId,
                 'job_title'     => $data['job_title'],
                 'shift_start'   => $shiftStart,
@@ -269,6 +271,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'created_at'    => now(),
                 'updated_at'    => now(),
             ]);
+
+            // If this person applied to us, the files they sent with their
+            // application are the files HR would ask for again. They start in
+            // the vault instead.
+            $this->carriedDocuments = (new DocumentVault)->adoptApplicationDocuments($newUserId, $employeeId);
         });
 
         $this->issuedPassword = $password;
@@ -282,6 +289,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         $this->issuedPassword = null;
         $this->issuedFor = null;
+        $this->carriedDocuments = 0;
     }
 
     /**
@@ -367,6 +375,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     </p>
                     <div class="mt-3 inline-flex items-center gap-3 rounded-lg border border-amber-300 bg-white px-4 py-2">
                         <code class="text-base font-semibold tracking-wider text-gray-900">{{ $issuedPassword }}</code>
+                        @if ($carriedDocuments > 0)
+                            <p class="mt-2 text-sm text-amber-800">
+                                {{ $carriedDocuments }} document(s) from their application are already in their vault.
+                            </p>
+                        @endif
                     </div>
                 </div>
                 <button wire:click="dismissIssued" class="text-amber-700 hover:text-amber-900" title="Dismiss">

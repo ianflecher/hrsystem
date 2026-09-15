@@ -71,6 +71,51 @@ class PeopleFeaturesTest extends TestCase
         $this->post('/employee/people/documents/'.$doc->id, ['action' => 'delete'])->assertForbidden();
     }
 
+    public function test_an_employee_uploads_their_own_document(): void
+    {
+        Storage::fake('local');
+
+        $this->actingAs($this->staff)->post('/employee/people/documents', [
+            'title' => 'My NBI clearance', 'category' => 'id',
+            'document' => UploadedFile::fake()->create('nbi.pdf', 10, 'application/pdf'),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        // Filed against them, not against whoever they might have named.
+        $this->assertDatabaseHas('employee_documents', ['employee_id' => $this->employeeId, 'title' => 'My NBI clearance']);
+    }
+
+    public function test_application_documents_land_in_the_vault_when_somebody_is_hired(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+
+        $applicant = User::create(['full_name' => 'Applicant '.bin2hex(random_bytes(4)), 'username' => 'appl'.bin2hex(random_bytes(4)),
+            'email' => bin2hex(random_bytes(4)).'@example.test', 'password' => 'Password123!', 'role' => 'employee']);
+
+        $applicationId = DB::table('job_applications')->insertGetId(['user_id' => $applicant->user_id,
+            'position_applied' => 'Screen Printing Operator', 'years_experience' => 2, 'status' => 'pending',
+            'application_date' => today()->toDateString(), 'created_at' => now(), 'updated_at' => now()]);
+
+        Storage::disk('public')->put('application_documents/1/resume.pdf', 'their resume');
+        DB::table('application_documents')->insert(['application_id' => $applicationId, 'user_id' => $applicant->user_id,
+            'filename' => 'resume.pdf', 'filepath' => 'application_documents/1/resume.pdf', 'filetype' => 'application/pdf',
+            'filesize' => 12, 'uploaded_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+
+        $employeeId = DB::table('employees')->insertGetId(['user_id' => $applicant->user_id, 'job_title' => 'Hired',
+            'hire_date' => today()->toDateString(), 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+
+        $carried = (new \App\Services\DocumentVault)->adoptApplicationDocuments($applicant->user_id, $employeeId);
+
+        $this->assertSame(1, $carried);
+        $document = DB::table('employee_documents')->where('employee_id', $employeeId)->first();
+        $this->assertSame('resume.pdf', $document->original_name);
+        Storage::disk('local')->assertExists($document->path);
+
+        // Running it again must not file the same document twice.
+        $this->assertSame(0, (new \App\Services\DocumentVault)->adoptApplicationDocuments($applicant->user_id, $employeeId));
+        $this->assertSame(1, DB::table('employee_documents')->where('employee_id', $employeeId)->count());
+    }
+
     private function overtime(): int
     {
         $this->actingAs($this->staff)->post('/employee/people/overtime', ['employee_id' => 999999,

@@ -133,7 +133,8 @@ class PeopleController extends Controller
     {
         [$hr, $employeeId] = $this->context($request);
         abort_unless(isset(self::MODULES[$module]), 404);
-        if (! in_array($module, ['overtime', 'loans'], true)) PeopleAccess::hr();
+        // Documents, overtime and loans come from the person they are about.
+        if (! in_array($module, ['overtime', 'loans', 'documents'], true)) PeopleAccess::hr();
         // Loans are requested from the employee portal only - see the view.
         abort_if($hr && in_array($module, ['loans', 'overtime'], true), 403, 'This is requested by the employee.');
         if (in_array($module, ['documents', 'checklists', 'reviews'], true) && $hr) {
