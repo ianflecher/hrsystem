@@ -546,7 +546,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <h3 class="font-medium text-gray-900">{{ $leave->full_name }}</h3>
                                 <p class="text-sm text-gray-500">{{ $leave->job_title }}</p>
                             </div>
-                            <span class="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <span class="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                 {{ $this->leaveTypes[$leave->leave_type] ?? ucfirst($leave->leave_type) }}
                             </span>
                         </div>
@@ -684,7 +684,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         @if($leave->status === 'pending')
                                             <button wire:click="approveLeave('{{ $leave->leave_id }}')" 
                                                     onclick="return confirm('Approve leave request for {{ $leave->full_name }}?')"
-                                                    class="px-3 py-1 text-xs bg-green-50 text-green-600 rounded hover:bg-green-100">
+                                                    class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">
                                                 <i class="fas fa-check mr-1"></i>Approve
                                             </button>
                                             
@@ -874,7 +874,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             <h4 class="text-sm font-medium text-gray-700 mb-3">Actions</h4>
                             <div class="flex flex-col sm:flex-row gap-3">
                                 <button wire:click="approveLeave('{{ $selectedLeave->leave_id }}')" 
-                                        class="flex-1 inline-flex justify-center items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                        class="flex-1 inline-flex justify-center items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                                     <i class="fas fa-check mr-2"></i>
                                     Approve Leave
                                 </button>

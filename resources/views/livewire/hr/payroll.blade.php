@@ -482,7 +482,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 <div class="p-5">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <svg class="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="h-6 w-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
@@ -613,7 +613,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="text-sm font-medium text-green-600">
+                                    <span class="text-sm font-medium text-red-600">
                                         ₱{{ number_format($employee->net_pay ?? 0, 2) }}
                                     </span>
                                 </td>
@@ -624,7 +624,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                             'calculated' => 'bg-blue-100 text-blue-800',
                                             'approved' => 'bg-yellow-100 text-yellow-800',
                                             'paid' => 'bg-green-100 text-green-800',
-                                            'cancelled' => 'bg-red-100 text-red-800',
+                                            'cancelled' => 'bg-green-100 text-green-800',
                                             'not_processed' => 'bg-gray-100 text-gray-800',
                                         ];
                                         $payrollStatus = $employee->payroll_status;
@@ -770,7 +770,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <div>
                                     <span class="text-xs text-gray-500">Status:</span>
                                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                        {{ $selectedEmployee->employee_status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800' }}">
+                                        {{ $selectedEmployee->employee_status === 'active' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800' }}">
                                         {{ ucfirst($selectedEmployee->employee_status) }}
                                     </span>
                                 </div>
@@ -789,7 +789,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             
                             <!-- Earnings -->
                             <div class="mb-4">
-                                <h5 class="text-xs font-medium text-green-600 mb-2">EARNINGS</h5>
+                                <h5 class="text-xs font-medium text-red-600 mb-2">EARNINGS</h5>
                                 <div class="space-y-1">
                                     <div class="flex justify-between">
                                         <span class="text-sm">Basic Salary:</span>
@@ -797,7 +797,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     </div>
                                     <div class="flex justify-between border-t border-gray-200 pt-1 font-medium">
                                         <span>Total Gross Pay:</span>
-                                        <span class="text-green-600">₱{{ number_format($selectedEmployee->gross_pay, 2) }}</span>
+                                        <span class="text-red-600">₱{{ number_format($selectedEmployee->gross_pay, 2) }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -854,7 +854,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 </div>
                                 <div class="flex justify-between text-lg font-bold">
                                     <span>NET PAY:</span>
-                                    <span class="text-green-600">₱{{ number_format($selectedEmployee->net_pay, 2) }}</span>
+                                    <span class="text-red-600">₱{{ number_format($selectedEmployee->net_pay, 2) }}</span>
                                 </div>
                             </div>
                             

@@ -310,19 +310,19 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
 <div class="p-6">
     <!-- Simplified Header -->
     <div class="mb-8">
-        <h1 class="text-2xl font-bold text-emerald-800 mb-2">My Attendance Overview</h1>
-        <p class="text-emerald-600">Track your daily attendance and work hours</p>
+        <h1 class="text-2xl font-bold text-red-800 mb-2">My Attendance Overview</h1>
+        <p class="text-red-600">Track your daily attendance and work hours</p>
     </div>
     
     <!-- Today's Status Card -->
-    <div class="bg-white rounded-xl shadow-lg p-6 mb-8 border border-emerald-100">
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-8 border border-red-100">
         <div class="flex items-center justify-between mb-4">
             <h2 class="text-xl font-bold text-emerald-800">Today's Status</h2>
             <div class="flex items-center space-x-2">
-                <span class="text-emerald-600">{{ now()->format('l, F j, Y') }}</span>
+                <span class="text-red-600">{{ now()->format('l, F j, Y') }}</span>
                 <button 
                     wire:click="refreshData"
-                    class="p-2 text-emerald-600 hover:text-emerald-800 transition rounded-lg hover:bg-emerald-50"
+                    class="p-2 text-red-600 hover:text-red-800 transition rounded-lg hover:bg-red-50"
                     title="Refresh data"
                 >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -334,27 +334,27 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
         
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <!-- Time In -->
-            <div class="bg-emerald-50 rounded-lg p-5 border border-emerald-200">
+            <div class="bg-red-50 rounded-lg p-5 border border-red-200">
                 <div class="flex items-center mb-3">
-                    <div class="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center mr-3">
-                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
-                    <h3 class="font-semibold text-emerald-800">Time In</h3>
+                    <h3 class="font-semibold text-red-800">Time In</h3>
                 </div>
                 @if($attendance && $attendance->time_in)
-                    <p class="text-3xl font-bold text-emerald-700 mb-1">
+                    <p class="text-3xl font-bold text-red-700 mb-1">
                         {{ \Carbon\Carbon::parse($attendance->time_in)->format('h:i A') }}
                     </p>
-                    <p class="text-emerald-600 text-sm">
+                    <p class="text-red-600 text-sm">
                         {{ \Carbon\Carbon::parse($attendance->time_in)->format('M j, Y') }}
                     </p>
                 @else
-                    <p class="text-xl text-emerald-500 italic mb-3">Not recorded</p>
+                    <p class="text-xl text-red-500 italic mb-3">Not recorded</p>
                     <button 
                         wire:click="manualTimeIn"
-                        class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg transition flex items-center justify-center space-x-2"
+                        class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition flex items-center justify-center space-x-2"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -365,27 +365,27 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             </div>
             
             <!-- Time Out -->
-            <div class="bg-emerald-50 rounded-lg p-5 border border-emerald-200">
+            <div class="bg-red-50 rounded-lg p-5 border border-red-200">
                 <div class="flex items-center mb-3">
-                    <div class="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center mr-3">
-                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                         </svg>
                     </div>
-                    <h3 class="font-semibold text-emerald-800">Time Out</h3>
+                    <h3 class="font-semibold text-red-800">Time Out</h3>
                 </div>
                 @if($attendance && $attendance->time_out)
-                    <p class="text-3xl font-bold text-emerald-700 mb-1">
+                    <p class="text-3xl font-bold text-red-700 mb-1">
                         {{ \Carbon\Carbon::parse($attendance->time_out)->format('h:i A') }}
                     </p>
-                    <p class="text-emerald-600 text-sm">
+                    <p class="text-red-600 text-sm">
                         {{ \Carbon\Carbon::parse($attendance->time_out)->format('M j, Y') }}
                     </p>
                 @elseif($attendance && $attendance->time_in)
-                    <p class="text-xl text-emerald-500 italic mb-3">Not recorded</p>
+                    <p class="text-xl text-red-500 italic mb-3">Not recorded</p>
                     <button 
                         wire:click="manualTimeOut"
-                        class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg transition flex items-center justify-center space-x-2"
+                        class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition flex items-center justify-center space-x-2"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -393,15 +393,15 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                         <span>Manual Time Out</span>
                     </button>
                 @else
-                    <p class="text-xl text-emerald-500 italic">Time in required first</p>
+                    <p class="text-xl text-red-500 italic">Time in required first</p>
                 @endif
             </div>
             
             <!-- Status & Hours -->
-            <div class="bg-emerald-50 rounded-lg p-5 border border-emerald-200">
+            <div class="bg-red-50 rounded-lg p-5 border border-red-200">
                 <div class="flex items-center mb-3">
-                    <div class="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center mr-3">
-                        <svg class="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                    <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                        <svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                         </svg>
                     </div>
@@ -426,18 +426,18 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                             $hours = $timeIn->diffInHours($timeOut);
                             $minutes = $timeIn->diffInMinutes($timeOut) % 60;
                         @endphp
-                        <p class="text-2xl font-bold text-emerald-800">{{ $hours }}h {{ $minutes }}m</p>
-                        <p class="text-emerald-600 text-sm">Total hours worked</p>
+                        <p class="text-2xl font-bold text-red-800">{{ $hours }}h {{ $minutes }}m</p>
+                        <p class="text-red-600 text-sm">Total hours worked</p>
                     @endif
                 @else
-                    <p class="text-xl text-emerald-500 italic">No attendance today</p>
+                    <p class="text-xl text-red-500 italic">No attendance today</p>
                 @endif
                 
                 <!-- Clock System Status -->
                 @if($isClockedIn)
-                    <div class="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                        <p class="text-sm text-green-700 font-medium">✓ Clocked In via System</p>
-                        <p class="text-xs text-green-600">
+                    <div class="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                        <p class="text-sm text-red-700 font-medium">✓ Clocked In via System</p>
+                        <p class="text-xs text-red-600">
                             @if($clockStatus['last_clock_in'])
                                 Since {{ \Carbon\Carbon::parse($clockStatus['last_clock_in'])->format('h:i A') }}
                             @endif
@@ -472,12 +472,12 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
         <!-- Left Column - Monthly Summary -->
         <div class="lg:col-span-2">
             <!-- Monthly Statistics -->
-            <div class="bg-white rounded-xl shadow-lg p-6 border border-emerald-100 mb-8">
-                <h2 class="text-xl font-bold text-emerald-800 mb-6">Monthly Overview - {{ $currentMonth }}</h2>
+            <div class="bg-white rounded-xl shadow-lg p-6 border border-green-100 mb-8">
+                <h2 class="text-xl font-bold text-green-800 mb-6">Monthly Overview - {{ $currentMonth }}</h2>
                 
                 @if($monthlySummary)
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div class="bg-emerald-50 rounded-lg p-5 text-center border border-emerald-200">
+                        <div class="bg-red-50 rounded-lg p-5 text-center border border-red-200">
                             <div class="text-3xl font-bold text-emerald-700 mb-2">{{ $monthlySummary->present_days ?? 0 }}</div>
                             <p class="text-emerald-600 text-sm">Present Days</p>
                         </div>
@@ -499,7 +499,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                     </div>
                     
                     <!-- Monthly Total -->
-                    <div class="mt-6 p-5 bg-gradient-to-r from-emerald-500 to-green-600 rounded-lg text-white">
+                    <div class="mt-6 p-5 bg-gradient-to-r from-red-500 to-red-600 rounded-lg text-white">
                         <div class="flex justify-between items-center">
                             <div>
                                 <p class="text-sm opacity-90">Total Working Days This Month</p>
@@ -517,30 +517,30 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                     </div>
                 @else
                     <div class="text-center py-8">
-                        <p class="text-emerald-600">No attendance data available for this month.</p>
+                        <p class="text-red-600">No attendance data available for this month.</p>
                     </div>
                 @endif
             </div>
             
             <!-- Recent Attendance -->
-            <div class="bg-white rounded-xl shadow-lg p-6 border border-emerald-100">
-                <h2 class="text-xl font-bold text-emerald-800 mb-6">Recent Attendance</h2>
+            <div class="bg-white rounded-xl shadow-lg p-6 border border-red-100">
+                <h2 class="text-xl font-bold text-red-800 mb-6">Recent Attendance</h2>
                 
                 @if(count($attendanceHistory) > 0)
                     <div class="space-y-4">
                         @foreach(array_slice($attendanceHistory, 0, 7) as $record)
-                            <div class="flex items-center justify-between p-4 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition">
+                            <div class="flex items-center justify-between p-4 bg-red-50 rounded-lg hover:bg-red-100 transition">
                                 <div class="flex items-center">
-                                    <div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center mr-4 border border-emerald-200">
-                                        <span class="text-emerald-700 font-bold">{{ \Carbon\Carbon::parse($record->date)->format('d') }}</span>
+                                    <div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center mr-4 border border-red-200">
+                                        <span class="text-red-700 font-bold">{{ \Carbon\Carbon::parse($record->date)->format('d') }}</span>
                                     </div>
                                     <div>
-                                        <p class="font-medium text-emerald-800">
+                                        <p class="font-medium text-red-800">
                                             {{ \Carbon\Carbon::parse($record->date)->format('l, M j') }}
                                         </p>
                                         <div class="flex items-center space-x-4 mt-1">
                                             @if($record->time_in)
-                                                <span class="text-sm text-emerald-600">
+                                                <span class="text-sm text-red-600">
                                                     <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
                                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
                                                     </svg>
@@ -548,7 +548,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                                                 </span>
                                             @endif
                                             @if($record->time_out)
-                                                <span class="text-sm text-emerald-600">
+                                                <span class="text-sm text-red-600">
                                                     <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
                                                         <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd" />
                                                     </svg>
@@ -574,19 +574,19 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                     
                     @if(count($attendanceHistory) > 7)
                         <div class="mt-6 text-center">
-                            <button class="px-4 py-2 text-emerald-600 hover:text-emerald-800 font-medium hover:bg-emerald-50 rounded-lg transition">
+                            <button class="px-4 py-2 text-red-600 hover:text-red-800 font-medium hover:bg-red-50 rounded-lg transition">
                                 View All Records →
                             </button>
                         </div>
                     @endif
                 @else
                     <div class="text-center py-8">
-                        <div class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg class="w-8 h-8 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-red-400" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                             </svg>
                         </div>
-                        <p class="text-emerald-600">No attendance records found for this month.</p>
+                        <p class="text-red-600">No attendance records found for this month.</p>
                     </div>
                 @endif
             </div>
@@ -595,23 +595,23 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
         <!-- Right Column - Employee Info & Legend -->
         <div class="space-y-8">
             <!-- Employee Info Card -->
-            <div class="bg-white rounded-xl shadow-lg p-6 border border-emerald-100">
-                <h2 class="text-xl font-bold text-emerald-800 mb-4">Employee Information</h2>
+            <div class="bg-white rounded-xl shadow-lg p-6 border border-red-100">
+                <h2 class="text-xl font-bold text-red-800 mb-4">Employee Information</h2>
                 
                 <div class="space-y-4">
                     <div>
-                        <p class="text-sm text-emerald-600 mb-1">Name</p>
-                        <p class="font-medium text-emerald-800">{{ $employee->full_name }}</p>
+                        <p class="text-sm text-red-600 mb-1">Name</p>
+                        <p class="font-medium text-red-800">{{ $employee->full_name }}</p>
                     </div>
                     
                     <div>
-                        <p class="text-sm text-emerald-600 mb-1">Department</p>
-                        <p class="font-medium text-emerald-800">{{ $employee->department_name }}</p>
+                        <p class="text-sm text-red-600 mb-1">Department</p>
+                        <p class="font-medium text-red-800">{{ $employee->department_name }}</p>
                     </div>
                     
                     <div>
-                        <p class="text-sm text-emerald-600 mb-1">Employee ID</p>
-                        <p class="font-medium text-emerald-800">{{ str_pad($employee->employee_id, 6, '0', STR_PAD_LEFT) }}</p>
+                        <p class="text-sm text-red-600 mb-1">Employee ID</p>
+                        <p class="font-medium text-red-800">{{ str_pad($employee->employee_id, 6, '0', STR_PAD_LEFT) }}</p>
                     </div>
                     
                     <div>
@@ -624,8 +624,8 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                     </div>
                     
                     <div>
-                        <p class="text-sm text-emerald-600 mb-1">Hire Date</p>
-                        <p class="font-medium text-emerald-800">
+                        <p class="text-sm text-red-600 mb-1">Hire Date</p>
+                        <p class="font-medium text-red-800">
                             {{ \Carbon\Carbon::parse($employee->hire_date)->format('M d, Y') }}
                         </p>
                     </div>
@@ -633,19 +633,19 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             </div>
             
             <!-- Status Legend -->
-            <div class="bg-white rounded-xl shadow-lg p-6 border border-emerald-100">
+            <div class="bg-white rounded-xl shadow-lg p-6 border border-red-100">
                 <h2 class="text-xl font-bold text-emerald-800 mb-4">Status Guide</h2>
                 
                 <div class="space-y-3">
-                    <div class="flex items-center p-3 bg-emerald-50 rounded-lg">
-                        <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center mr-3">
-                            <svg class="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                    <div class="flex items-center p-3 bg-green-50 rounded-lg">
+                        <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-3">
+                            <svg class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                             </svg>
                         </div>
                         <div>
                             <p class="font-medium text-emerald-800">Present</p>
-                            <p class="text-sm text-emerald-600">On time attendance</p>
+                            <p class="text-sm text-green-600">On time attendance</p>
                         </div>
                     </div>
                     
@@ -688,12 +688,12 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             </div>
             
             <!-- Quick Stats -->
-            <div class="bg-white rounded-xl shadow-lg p-6 border border-emerald-100">
-                <h2 class="text-xl font-bold text-emerald-800 mb-4">Quick Stats</h2>
+            <div class="bg-white rounded-xl shadow-lg p-6 border border-red-100">
+                <h2 class="text-xl font-bold text-red-800 mb-4">Quick Stats</h2>
                 
                 <div class="space-y-4">
-                    <div class="flex items-center justify-between p-3 bg-emerald-50 rounded-lg">
-                        <span class="text-emerald-700">This Week</span>
+                    <div class="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                        <span class="text-red-700">This Week</span>
                         @php
                             $weekDays = collect($attendanceHistory)->filter(function($record) {
                                 return in_array($record->status, ['present', 'late', 'half_day']) && 
@@ -703,7 +703,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                                        );
                             })->count();
                         @endphp
-                        <span class="text-xl font-bold text-emerald-800">{{ $weekDays }} days</span>
+                        <span class="text-xl font-bold text-red-800">{{ $weekDays }} days</span>
                     </div>
                     
                     <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
@@ -740,7 +740,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
     <!-- Flash Messages -->
     @if(session()->has('success'))
         <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)" 
-             class="fixed bottom-4 right-4 bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
+             class="fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
             {{ session('success') }}
         </div>
     @endif

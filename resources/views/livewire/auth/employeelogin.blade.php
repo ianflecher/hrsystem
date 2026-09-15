@@ -106,11 +106,11 @@ new #[Layout('components.layouts.landing')] class extends Component
 }
 }
 ?>
-<div class="min-h-screen bg-gradient-to-b from-white to-green-50 py-12 px-4 sm:px-6 lg:px-8" x-data="{ showPassword: false }" x-init="$refs.username.focus()">
+<div class="min-h-screen bg-gradient-to-b from-white to-red-50 py-12 px-4 sm:px-6 lg:px-8" x-data="{ showPassword: false }" x-init="$refs.username.focus()">
     <div class="max-w-md mx-auto">
         <!-- Brand Header -->
         <div class="text-center mb-8">
-            <div class="mx-auto h-20 w-20 bg-gradient-to-r from-green-500 to-indigo-600 rounded-full flex items-center justify-center mb-4 overflow-hidden border-2 border-green-200 shadow-lg">
+            <div class="mx-auto h-20 w-20 bg-gradient-to-r from-red-500 to-indigo-600 rounded-full flex items-center justify-center mb-4 overflow-hidden border-2 border-red-200 shadow-lg">
                 <i class="fas fa-users text-3xl text-white"></i>
             </div>
             <h1 class="text-3xl font-bold text-gray-900 mb-2">Staff Portal</h1>
@@ -136,8 +136,8 @@ new #[Layout('components.layouts.landing')] class extends Component
                                 x-ref="username"
                                 required
                                 autofocus
-                                placeholder="staff@tgif.local"
-                                class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none transition"
+                                placeholder="staff@imprintcustoms.ph"
+                                class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition"
                             >
                             <div class="absolute left-3 top-3 text-gray-400">
                                 <i class="fas fa-id-badge"></i>
@@ -154,7 +154,7 @@ new #[Layout('components.layouts.landing')] class extends Component
                             <label for="password" class="block text-sm font-medium text-gray-700">
                                 Password
                             </label>
-                            <a href="#" class="text-sm text-green-600 hover:text-green-700 font-medium">
+                            <a href="#" class="text-sm text-red-600 hover:text-red-700 font-medium">
                                 Forgot password?
                             </a>
                         </div>
@@ -165,7 +165,7 @@ new #[Layout('components.layouts.landing')] class extends Component
                                 id="password"
                                 required
                                 placeholder="••••••••"
-                                class="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none transition"
+                                class="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition"
                             >
                             <div class="absolute left-3 top-3 text-gray-400">
                                 <i class="fas fa-lock"></i>
@@ -188,7 +188,7 @@ new #[Layout('components.layouts.landing')] class extends Component
                         <button 
                             type="submit" 
                             wire:loading.attr="disabled"
-                            class="w-full bg-gradient-to-r from-green-600 to-indigo-600 text-white py-3 px-4 rounded-lg hover:from-green-700 hover:to-indigo-700 transition font-medium flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                            class="w-full bg-gradient-to-r from-red-600 to-indigo-600 text-white py-3 px-4 rounded-lg hover:from-red-700 hover:to-indigo-700 transition font-medium flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
                         >
                             <span wire:loading.remove wire:target="login">
                                 <i class="fas fa-sign-in-alt"></i>
@@ -205,14 +205,14 @@ new #[Layout('components.layouts.landing')] class extends Component
                 <!-- Role Information -->
                 <div class="mt-6 grid grid-cols-2 gap-4">
                     <!-- Employee Features -->
-                    <div class="p-4 bg-green-50 border border-green-100 rounded-lg">
+                    <div class="p-4 bg-red-50 border border-red-100 rounded-lg">
                         <div class="flex items-start">
-                            <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-2">
-                                <i class="fas fa-user-tie text-green-600 text-sm"></i>
+                            <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center mr-2">
+                                <i class="fas fa-user-tie text-red-600 text-sm"></i>
                             </div>
                             <div>
-                                <p class="text-xs font-medium text-green-800 mb-1">Employee</p>
-                                <ul class="text-xs text-green-700 space-y-0.5">
+                                <p class="text-xs font-medium text-red-800 mb-1">Employee</p>
+                                <ul class="text-xs text-red-700 space-y-0.5">
                                     <li class="flex items-center gap-1">
                                         <i class="fas fa-check text-xs"></i>
                                         <span>Attendance</span>
@@ -259,7 +259,7 @@ new #[Layout('components.layouts.landing')] class extends Component
 
                 <!-- Access Badges -->
                 <div class="mt-6 flex justify-center gap-3">
-                    <div class="inline-flex items-center px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+                    <div class="inline-flex items-center px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs">
                         <i class="fas fa-user-tie mr-1"></i>
                         <span class="font-medium">Employee</span>
                     </div>
@@ -270,10 +270,10 @@ new #[Layout('components.layouts.landing')] class extends Component
                 </div>
 
                 <!-- Note -->
-                <div class="mt-6 p-4 bg-green-50 border border-green-100 rounded-lg">
+                <div class="mt-6 p-4 bg-red-50 border border-red-100 rounded-lg">
                     <div class="flex items-start">
-                        <i class="fas fa-info-circle text-green-500 mt-0.5 mr-2"></i>
-                        <p class="text-xs text-green-700">
+                        <i class="fas fa-info-circle text-red-500 mt-0.5 mr-2"></i>
+                        <p class="text-xs text-red-700">
                             <span class="font-medium">Note:</span> Login grants access based on your role permissions.
                         </p>
                     </div>
@@ -281,11 +281,11 @@ new #[Layout('components.layouts.landing')] class extends Component
             </div>
             
             <!-- Footer -->
-            <div class="bg-gradient-to-r from-green-50 to-indigo-50 px-8 py-4 border-t border-green-100">
+            <div class="bg-gradient-to-r from-red-50 to-indigo-50 px-8 py-4 border-t border-red-100">
                 <div class="flex items-center justify-center">
-                    <i class="fas fa-building text-green-600 mr-2"></i>
-                    <p class="text-xs text-center text-green-800 font-medium">
-                        TGIF Staff Portal v2.0
+                    <i class="fas fa-building text-red-600 mr-2"></i>
+                    <p class="text-xs text-center text-red-800 font-medium">
+                        Imprint Customs Staff Portal v2.0
                     </p>
                 </div>
             </div>
@@ -295,7 +295,7 @@ new #[Layout('components.layouts.landing')] class extends Component
         <div class="mt-8 text-center">
             <div class="inline-flex items-center gap-2 text-sm text-gray-500">
                 <i class="fas fa-headset"></i>
-                <span>Support: <span class="font-medium">hr@tgif.local</span> | IT: <span class="font-medium">it@tgif.local</span></span>
+                <span>Support: <span class="font-medium">hr@imprintcustoms.ph</span> | IT: <span class="font-medium">it@imprintcustoms.ph</span></span>
             </div>
         </div>
     </div>

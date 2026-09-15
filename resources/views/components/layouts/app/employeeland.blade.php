@@ -52,16 +52,16 @@
                         },
                         // Default Green Theme
                         primary: {
-                            50: '#f0fdf4',
-                            100: '#dcfce7',
-                            200: '#bbf7d0',
-                            300: '#86efac',
-                            400: '#4ade80',
-                            500: '#22c55e',
-                            600: '#16a34a',
-                            700: '#15803d',
-                            800: '#166534',
-                            900: '#14532d',
+                            50: '#FDF6F6',
+                            100: '#FDECEC',
+                            200: '#93A0B4',
+                            300: '#93A0B4',
+                            400: '#F05A60',
+                            500: '#E31B23',
+                            600: '#C8161D',
+                            700: '#17233A',
+                            800: '#0C1626',
+                            900: '#0C1626',
                         }
                     }
                 }
@@ -69,25 +69,25 @@
         }
     </script>
     
-    <title>Thanks G Its Fries Day - Employee Portal</title>
+    <title>Imprint Customs PH - Employee Portal</title>
 
     <style>
         :root {
-            --primary-green: #22c55e;
-            --dark-green: #15803d;
-            --light-green: #dcfce7;
-            --forest-green: #14532d;
-            --mint-green: #86efac;
+            --primary-green: #E31B23;
+            --dark-green: #17233A;
+            --light-green: #FDECEC;
+            --forest-green: #0C1626;
+            --mint-green: #93A0B4;
         }
         
         /* Use default green theme for everyone */
         body {
-            --dept-primary: #22c55e;
-            --dept-dark: #15803d;
-            --dept-light: #dcfce7;
-            --dept-accent: #86efac;
-            --dept-primary-rgb: 34, 197, 94;
-            --dept-accent-rgb: 134, 239, 172;
+            --dept-primary: #E31B23;
+            --dept-dark: #17233A;
+            --dept-light: #FDECEC;
+            --dept-accent: #93A0B4;
+            --dept-primary-rgb: 227, 27, 35;
+            --dept-accent-rgb: 147, 160, 180;
         }
         
         body {
@@ -524,12 +524,12 @@
             // Everyone uses default green theme
             const departmentClass = 'department-default';
             const colors = {
-                primary: '#22c55e',
-                dark: '#15803d',
-                light: '#dcfce7',
-                accent: '#86efac',
-                primaryRgb: '34, 197, 94',
-                accentRgb: '134, 239, 172'
+                primary: '#E31B23',
+                dark: '#17233A',
+                light: '#FDECEC',
+                accent: '#93A0B4',
+                primaryRgb: '227, 27, 35',
+                accentRgb: '147, 160, 180'
             };
             
             // Set CSS custom properties
@@ -588,16 +588,16 @@
         <!-- Logo -->
         <div class="logo-container">
             <div class="logo-icon">
-                @if(file_exists(public_path('TGIF.png')))
-                    <img src="{{ asset('TGIF.png') }}" alt="TGIF Logo" style="height: 40px; width: auto; filter: brightness(0) invert(1);">
+                @if(file_exists(public_path('imprint-customs.jpg')))
+                    <img src="{{ asset('imprint-customs.jpg') }}" alt="Imprint Customs" style="height: 40px; width: 40px; object-fit: contain; background: #fff; border-radius: 50%; padding: 3px;">
                 @else
                     <div style="background: rgba(255, 255, 255, 0.2); color: white; font-weight: bold; padding: 4px 8px; border-radius: 6px;">
-                        TGIF
+                        Imprint Customs
                     </div>
                 @endif
             </div>
             <div class="logo-text">
-                <div class="company-name">Thanks G Its Fries Day</div>
+                <div class="company-name">Imprint Customs PH</div>
                 <div class="company-tagline">
                     Employee Portal
                 </div>

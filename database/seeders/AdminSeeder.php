@@ -19,7 +19,7 @@ class AdminSeeder extends Seeder
             [
                 'full_name' => 'System Administrator',
                 'username'  => 'admin',
-                'email'     => 'admin@hris.local',
+                'email'     => 'admin@imprintcustoms.ph',
                 'role'      => 'admin',
                 'job_title' => 'System Administrator',
                 'salary'    => 80000.00,
@@ -27,7 +27,7 @@ class AdminSeeder extends Seeder
             [
                 'full_name' => 'HR Manager',
                 'username'  => 'hr',
-                'email'     => 'hr@hris.local',
+                'email'     => 'hr@imprintcustoms.ph',
                 'role'      => 'admin',
                 'job_title' => 'HR Manager',
                 'salary'    => 65000.00,
@@ -79,7 +79,7 @@ class AdminSeeder extends Seeder
             $userId = DB::table('users')->insertGetId([
                 'full_name'  => $fullName,
                 'username'   => $username,
-                'email'      => $username.'@hris.local',
+                'email'      => $username.'@imprintcustoms.ph',
                 'password'   => Hash::make('password'),
                 'role'       => 'employee',
                 'created_at' => now(),

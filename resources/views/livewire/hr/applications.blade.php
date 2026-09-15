@@ -760,7 +760,7 @@ public function updateApplicationStatus($applicationId, $status)
 
         <div class="dashboard-card">
             <div class="card-header">
-                <div class="card-icon bg-green-100 text-green-600">
+                <div class="card-icon bg-red-100 text-red-600">
                     <i class="fas fa-list"></i>
                 </div>
                 <div class="text-right">
@@ -946,7 +946,7 @@ public function updateApplicationStatus($applicationId, $status)
                                     'scheduled_interview' => 'bg-purple-100 text-purple-800',
                                     'interview_completed' => 'bg-indigo-100 text-indigo-800',
                                     'shortlisted' => 'bg-green-100 text-green-800',
-                                    'rejected' => 'bg-red-100 text-red-800',
+                                    'rejected' => 'bg-green-100 text-green-800',
                                     'hired' => 'bg-teal-100 text-teal-800',
                                 ];
                             @endphp
@@ -1123,7 +1123,7 @@ public function updateApplicationStatus($applicationId, $status)
                                                 'admin' => 'text-red-700 bg-red-50',
                                                 'manager' => 'text-orange-700 bg-orange-50',
                                                 'hr' => 'text-purple-700 bg-purple-50',
-                                                'employee' => 'text-green-700 bg-green-50',
+                                                'employee' => 'text-red-700 bg-red-50',
                                                 'customer' => 'text-blue-700 bg-blue-50',
                                                 'supplier' => 'text-indigo-700 bg-indigo-50',
                                             ];
@@ -1142,7 +1142,7 @@ public function updateApplicationStatus($applicationId, $status)
                                         'admin' => 'bg-red-100 text-red-800',
                                         'manager' => 'bg-orange-100 text-orange-800',
                                         'hr' => 'bg-purple-100 text-purple-800',
-                                        'employee' => 'bg-green-100 text-green-800',
+                                        'employee' => 'bg-red-100 text-red-800',
                                         'customer' => 'bg-blue-100 text-blue-800',
                                         'supplier' => 'bg-indigo-100 text-indigo-800',
                                     ];
@@ -1242,7 +1242,7 @@ public function updateApplicationStatus($applicationId, $status)
                                         <div class="flex gap-2">
                                             @if($employee->employee_id)
                                                 <button wire:click="openSalaryModal('{{ $employee->employee_id }}')" 
-                                                        class="px-3 py-1 text-xs bg-green-50 text-green-600 rounded hover:bg-green-100">
+                                                        class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">
                                                     <i class="fas fa-money-bill-wave mr-1"></i>Salary
                                                 </button>
                                                 
@@ -1277,7 +1277,7 @@ public function updateApplicationStatus($applicationId, $status)
                                                     'admin' => 'text-red-600',
                                                     'manager' => 'text-orange-600',
                                                     'hr' => 'text-purple-600',
-                                                    'employee' => 'text-green-600',
+                                                    'employee' => 'text-red-600',
                                                     'customer' => 'text-blue-600',
                                                     'supplier' => 'text-indigo-600',
                                                 ];
@@ -1345,7 +1345,7 @@ public function updateApplicationStatus($applicationId, $status)
                                 </div>
                                 <div class="col-span-2">
                                     <span class="text-gray-500">Current Salary:</span>
-                                    <p class="font-medium text-lg text-green-600">
+                                    <p class="font-medium text-lg text-red-600">
                                         ₱{{ number_format($selectedEmployeeForSalary->salary ?? 0, 2) }}
                                     </p>
                                 </div>
@@ -1390,12 +1390,12 @@ public function updateApplicationStatus($applicationId, $status)
                 
                 <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                     <button wire:click="updateSalary" 
-                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm">
+                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
                         <i class="fas fa-save mr-2"></i>
                         Update Salary
                     </button>
                     <button wire:click="$set('showSalaryModal', false)" 
-                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
                         Cancel
                     </button>
                 </div>
@@ -1455,12 +1455,12 @@ public function updateApplicationStatus($applicationId, $status)
                 
                 <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                     <button wire:click="createNewDepartment" 
-                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm">
+                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
                         <i class="fas fa-plus mr-2"></i>
                         Create Department
                     </button>
                     <button wire:click="$set('showNewDepartmentModal', false)" 
-                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
                         Cancel
                     </button>
                 </div>
@@ -1538,7 +1538,7 @@ public function updateApplicationStatus($applicationId, $status)
                                             'pending' => 'bg-yellow-100 text-yellow-800',
                                             'reviewed' => 'bg-blue-100 text-blue-800',
                                             'shortlisted' => 'bg-green-100 text-green-800',
-                                            'rejected' => 'bg-red-100 text-red-800',
+                                            'rejected' => 'bg-green-100 text-green-800',
                                             'hired' => 'bg-teal-100 text-teal-800',
                                         ];
                                     @endphp
@@ -1640,8 +1640,8 @@ public function updateApplicationStatus($applicationId, $status)
                                                         'pdf' => 'fas fa-file-pdf text-red-500',
                                                         'doc' => 'fas fa-file-word text-blue-500',
                                                         'docx' => 'fas fa-file-word text-blue-500',
-                                                        'xls' => 'fas fa-file-excel text-green-500',
-                                                        'xlsx' => 'fas fa-file-excel text-green-500',
+                                                        'xls' => 'fas fa-file-excel text-red-500',
+                                                        'xlsx' => 'fas fa-file-excel text-red-500',
                                                         'jpg' => 'fas fa-file-image text-purple-500',
                                                         'jpeg' => 'fas fa-file-image text-purple-500',
                                                         'png' => 'fas fa-file-image text-purple-500',
@@ -1819,8 +1819,8 @@ public function updateApplicationStatus($applicationId, $status)
                             <label class="form-label">Interview Result</label>
                             <div class="grid grid-cols-2 gap-2">
                                 <label class="inline-flex items-center">
-                                    <input type="radio" wire:model="interviewResult" value="passed" class="form-radio text-green-600">
-                                    <span class="ml-2 text-green-700">
+                                    <input type="radio" wire:model="interviewResult" value="passed" class="form-radio text-red-600">
+                                    <span class="ml-2 text-red-700">
                                         <i class="fas fa-check-circle mr-1"></i>Passed
                                     </span>
                                 </label>
@@ -1971,7 +1971,7 @@ public function updateApplicationStatus($applicationId, $status)
                                     {{ $selectedUserForRoleChange->role === 'admin' ? 'bg-red-100 text-red-800' : 
                                        ($selectedUserForRoleChange->role === 'manager' ? 'bg-orange-100 text-orange-800' : 
                                        ($selectedUserForRoleChange->role === 'hr' ? 'bg-purple-100 text-purple-800' : 
-                                       ($selectedUserForRoleChange->role === 'employee' ? 'bg-green-100 text-green-800' : 
+                                       ($selectedUserForRoleChange->role === 'employee' ? 'bg-red-100 text-red-800' : 
                                        ($selectedUserForRoleChange->role === 'customer' ? 'bg-blue-100 text-blue-800' : 
                                        'bg-indigo-100 text-indigo-800')))) }}">
                                     {{ ucfirst($selectedUserForRoleChange->role ?? 'employee') }}
@@ -2008,8 +2008,8 @@ public function updateApplicationStatus($applicationId, $status)
                                     <span class="ml-1">Human resources and recruitment</span>
                                 </div>
                                 <div class="flex items-center">
-                                    <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                                    <span class="font-medium text-green-600">Employee:</span>
+                                    <span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                                    <span class="font-medium text-red-600">Employee:</span>
                                     <span class="ml-1">Regular staff with assigned tasks</span>
                                 </div>
                             </div>

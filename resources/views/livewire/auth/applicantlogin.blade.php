@@ -116,7 +116,7 @@ new #[Layout('components.layouts.employee')] class extends Component
         <!-- Hero Section -->
         <div class="text-center mb-12">
             <h1 class="text-4xl font-bold text-gray-900 mb-4">
-                Join Our Team at <span class="text-green-600">TGIF</span>
+                Join Our Team at <span class="text-red-600">Imprint Customs</span>
             </h1>
             <p class="text-lg text-gray-600 max-w-2xl mx-auto">
                 Looking for an exciting career opportunity? Apply now to become part of our growing team!
@@ -141,7 +141,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                             ];
                         @endphp
                         @foreach($positions as $position)
-                            <div class="border border-gray-200 rounded-lg p-4 hover:border-green-300 transition-colors">
+                            <div class="border border-gray-200 rounded-lg p-4 hover:border-red-300 transition-colors">
                                 <div class="flex justify-between items-start">
                                     <div>
                                         <h3 class="font-semibold text-gray-900">{{ $position['title'] }}</h3>
@@ -158,11 +158,11 @@ new #[Layout('components.layouts.employee')] class extends Component
 
                 <!-- Benefits -->
                 <div class="bg-white rounded-2xl shadow-lg p-6">
-                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Why Join TGIF?</h2>
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Why Join Imprint Customs?</h2>
                     <div class="grid grid-cols-2 gap-4">
                         @php
                             $benefits = [
-                                ['icon' => 'fa-money-bill-wave', 'title' => 'Competitive Salary', 'color' => 'text-green-600'],
+                                ['icon' => 'fa-money-bill-wave', 'title' => 'Competitive Salary', 'color' => 'text-red-600'],
                                 ['icon' => 'fa-utensils', 'title' => 'Free Meals', 'color' => 'text-amber-600'],
                                 ['icon' => 'fa-heartbeat', 'title' => 'Health Insurance', 'color' => 'text-red-600'],
                                 ['icon' => 'fa-graduation-cap', 'title' => 'Training Programs', 'color' => 'text-blue-600'],
@@ -185,7 +185,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                 <!-- Form Toggle -->
                 <div class="flex mb-8">
                     <button wire:click="toggleForm" 
-                            class="flex-1 py-3 text-center font-medium text-lg {{ $showLogin ? 'bg-green-600 text-white rounded-l-lg' : 'bg-gray-100 text-gray-600 rounded-l-lg' }}">
+                            class="flex-1 py-3 text-center font-medium text-lg {{ $showLogin ? 'bg-red-600 text-white rounded-l-lg' : 'bg-gray-100 text-gray-600 rounded-l-lg' }}">
                         <i class="fas fa-sign-in-alt mr-2"></i>
                         Login
                     </button>
@@ -222,7 +222,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                                            id="login-email"
                                            type="email" 
                                            required
-                                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                                            placeholder="you@example.com">
                                 </div>
                                 @error('email')
@@ -236,7 +236,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                                     <label for="login-password" class="block text-sm font-medium text-gray-700">
                                         Password
                                     </label>
-                                    <a href="#" class="text-sm text-green-600 hover:text-green-700">
+                                    <a href="#" class="text-sm text-red-600 hover:text-red-700">
                                         Forgot password?
                                     </a>
                                 </div>
@@ -248,7 +248,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                                            id="login-password"
                                            type="password" 
                                            required
-                                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                                            placeholder="••••••••">
                                 </div>
                                 @error('password')
@@ -258,7 +258,7 @@ new #[Layout('components.layouts.employee')] class extends Component
 
                             <!-- Submit Button -->
                             <button type="submit" 
-                                    class="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors">
+                                    class="w-full bg-red-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors">
                                 <i class="fas fa-sign-in-alt mr-2"></i>
                                 Sign In
                             </button>
@@ -532,16 +532,16 @@ new #[Layout('components.layouts.employee')] class extends Component
         <div class="mt-12 text-center">
             <div class="inline-flex items-center space-x-6 text-gray-600">
                 <div class="flex items-center">
-                    <i class="fas fa-shield-alt text-green-600 mr-2"></i>
+                    <i class="fas fa-shield-alt text-red-600 mr-2"></i>
                     <span>Secure Application Process</span>
                 </div>
                 <div class="flex items-center">
-                    <i class="fas fa-clock text-green-600 mr-2"></i>
+                    <i class="fas fa-clock text-red-600 mr-2"></i>
                     <span>24/7 Application Support</span>
                 </div>
                 <div class="flex items-center">
-                    <i class="fas fa-headset text-green-600 mr-2"></i>
-                    <span>HR Support: hr@tgif.com</span>
+                    <i class="fas fa-headset text-red-600 mr-2"></i>
+                    <span>HR Support: hr@imprintcustoms.ph</span>
                 </div>
             </div>
         </div>

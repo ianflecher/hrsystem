@@ -226,7 +226,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             </div>
             <div class="mt-4 flex space-x-2">
                 @if(!$attendanceStats['today'] || !$attendanceStats['today']->time_in)
-                    <button wire:click="clockIn" class="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700">
+                    <button wire:click="clockIn" class="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700">
                         Clock In
                     </button>
                 @endif
@@ -278,8 +278,8 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         {{ count($pendingLeave) }}
                     </p>
                 </div>
-                <div class="p-3 bg-green-100 dark:bg-green-900 rounded-lg">
-                    <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-3 bg-red-100 dark:bg-red-900 rounded-lg">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                     </svg>
                 </div>
@@ -316,7 +316,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
                 <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                     <h2 class="text-lg font-semibold text-gray-900 dark:text-white">My Leave Requests</h2>
-                    <a href="{{ route('employee.leave') }}" class="text-sm font-medium text-green-600 hover:underline dark:text-green-400">
+                    <a href="{{ route('employee.leave') }}" class="text-sm font-medium text-red-600 hover:underline dark:text-red-400">
                         File a request
                     </a>
                 </div>
@@ -521,7 +521,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                 close: true,
                 gravity: "top",
                 position: "right",
-                backgroundColor: "#10B981",
+                backgroundColor: "#E31B23",
             }).showToast();
         });
     </script>

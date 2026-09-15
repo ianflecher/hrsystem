@@ -267,8 +267,8 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         ₱{{ number_format($payrollRecords->sum('gross_pay'), 2) }}
                     </p>
                 </div>
-                <div class="p-3 bg-green-100 dark:bg-green-900 rounded-lg">
-                    <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-3 bg-red-100 dark:bg-red-900 rounded-lg">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
@@ -450,7 +450,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                             <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
                                 <div class="flex justify-between items-center">
                                     <span class="text-lg font-bold text-gray-900 dark:text-white">Net Pay</span>
-                                    <span class="text-2xl font-bold text-green-600 dark:text-green-400">
+                                    <span class="text-2xl font-bold text-red-600 dark:text-red-400">
                                         ₱{{ number_format($currentPayroll->net_pay, 2) }}
                                     </span>
                                 </div>
@@ -551,7 +551,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                             </div>
                             <div class="flex justify-between items-center">
                                 <span class="text-sm text-gray-600 dark:text-gray-400">YTD Net Income</span>
-                                <span class="text-sm font-medium text-green-600 dark:text-green-400">
+                                <span class="text-sm font-medium text-red-600 dark:text-red-400">
                                     ₱{{ number_format($ytdNet, 2) }}
                                 </span>
                             </div>
@@ -559,7 +559,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                             <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
                                 <div class="flex justify-between items-center">
                                     <span class="text-sm font-medium text-gray-900 dark:text-white">Projected Annual Income</span>
-                                    <span class="text-sm font-bold text-green-600 dark:text-green-400">
+                                    <span class="text-sm font-bold text-red-600 dark:text-red-400">
                                         ₱{{ number_format($ytdNet * (12 / $periods), 2) }}
                                     </span>
                                 </div>
@@ -617,19 +617,19 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                             <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">Payment Schedule</h4>
                             <ul class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                                 <li class="flex items-center">
-                                    <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="w-4 h-4 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                                     </svg>
                                     Monthly payroll processing
                                 </li>
                                 <li class="flex items-center">
-                                    <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="w-4 h-4 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                                     </svg>
                                     Payment on last working day
                                 </li>
                                 <li class="flex items-center">
-                                    <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="w-4 h-4 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                                     </svg>
                                     Bank transfer method
@@ -687,7 +687,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                 close: true,
                 gravity: "top",
                 position: "right",
-                backgroundColor: "#10B981",
+                backgroundColor: "#E31B23",
             }).showToast();
         });
     </script>

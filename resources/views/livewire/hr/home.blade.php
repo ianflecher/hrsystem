@@ -433,10 +433,10 @@ class extends Component
         <div class="flex justify-between items-center">
             <div>
                 <h1 class="text-3xl font-bold text-gray-900">HR Dashboard</h1>
-                <p class="text-gray-700 mt-2 font-medium">Manage your human resources with eco-friendly efficiency</p>
+                <p class="text-gray-700 mt-2 font-medium">Applications, attendance, leave and payroll in one place</p>
             </div>
             <div class="flex items-center space-x-3">
-                <span class="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm font-medium shadow-sm">
+                <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium shadow-sm">
                     <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                     </svg>
@@ -454,7 +454,7 @@ class extends Component
                 <div>
                     <label class="block text-sm font-semibold text-gray-800 mb-2">📅 Date Range</label>
                     <div class="relative">
-                        <select wire:model.live="dateRange" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
+                        <select wire:model.live="dateRange" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-red-500 focus:ring-red-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
                             <option value="today">Today</option>
                             <option value="this_week">This Week</option>
                             <option value="last_week">Last Week</option>
@@ -471,7 +471,7 @@ class extends Component
                 <div>
                     <label class="block text-sm font-semibold text-gray-800 mb-2">🏢 Department</label>
                     <div class="relative">
-                        <select wire:model.live="department_id" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
+                        <select wire:model.live="department_id" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-red-500 focus:ring-red-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
                             <option value="">All Departments</option>
                             @foreach($departments as $dept)
                                 <option value="{{ $dept->department_id }}">{{ $dept->department_name }}</option>
@@ -486,7 +486,7 @@ class extends Component
                 <div>
                     <label class="block text-sm font-semibold text-gray-800 mb-2">👥 Employee Status</label>
                     <div class="relative">
-                        <select wire:model.live="employee_status" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
+                        <select wire:model.live="employee_status" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-red-500 focus:ring-red-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
                             <option value="all">All Status</option>
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
@@ -502,7 +502,7 @@ class extends Component
                 <div>
                     <label class="block text-sm font-semibold text-gray-800 mb-2">📋 Application Status</label>
                     <div class="relative">
-                        <select wire:model.live="application_status" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
+                        <select wire:model.live="application_status" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-green-500 focus:ring-green-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
                             <option value="all">All Applications</option>
                             <option value="pending">Pending</option>
                             <option value="reviewed">Reviewed</option>
@@ -518,7 +518,7 @@ class extends Component
             </div>
             
             <div class="flex items-center space-x-2">
-                <button wire:click="$refresh" class="px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors shadow-md hover:shadow-lg font-medium">
+                <button wire:click="$refresh" class="px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors shadow-md hover:shadow-lg font-medium">
                     <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
@@ -531,20 +531,20 @@ class extends Component
         <!-- Key Metrics - FIXED READABILITY -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
     <!-- Total Employees -->
-    <div class="bg-white border border-emerald-200 rounded-2xl shadow-xl p-6 text-gray-900 transform hover:scale-[1.02] transition-transform duration-300">
+    <div class="bg-white border border-red-200 rounded-2xl shadow-xl p-6 text-gray-900 transform hover:scale-[1.02] transition-transform duration-300">
         <div class="flex items-center justify-between">
             <div>
                 <p class="text-gray-600 mb-1 font-medium">Total Employees</p>
-                <p class="text-4xl font-bold text-emerald-700">{{ $totalEmployees }}</p>
+                <p class="text-4xl font-bold text-red-700">{{ $totalEmployees }}</p>
                 <div class="flex items-center mt-3">
-                    <svg class="w-4 h-4 mr-2 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                    <svg class="w-4 h-4 mr-2 text-red-600" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l4.293-4.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
                     <span class="text-sm text-gray-600">+12% from last month</span>
                 </div>
             </div>
-            <div class="p-3 rounded-full bg-emerald-100">
-                <svg class="w-8 h-8 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="p-3 rounded-full bg-red-100">
+                <svg class="w-8 h-8 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
             </div>
@@ -623,16 +623,16 @@ class extends Component
 
 <!-- Quick Actions Box -->
 <div class="mb-8 bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-    <div class="p-6 border-b border-emerald-200 bg-emerald-50">
+    <div class="p-6 border-b border-red-200 bg-red-50">
         <div class="flex items-center">
-            <div class="p-2 bg-emerald-100 rounded-lg mr-3">
-                <svg class="w-6 h-6 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="p-2 bg-red-100 rounded-lg mr-3">
+                <svg class="w-6 h-6 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
             </div>
             <div>
-                <h2 class="text-xl font-bold text-emerald-900">⚡ Quick Actions</h2>
-                <p class="text-emerald-700 mt-1">Frequently used HR operations</p>
+                <h2 class="text-xl font-bold text-red-900">⚡ Quick Actions</h2>
+                <p class="text-red-700 mt-1">Frequently used HR operations</p>
             </div>
         </div>
     </div>
@@ -640,15 +640,15 @@ class extends Component
         <div class="grid grid-cols-2 md:grid-cols-5 gap-6">
             <!-- Attendance Summary -->
             <a href="{{ route('hr.attendance') }}" class="group">
-                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-emerald-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div class="w-16 h-16 mx-auto mb-4 bg-emerald-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md">
-                        <svg class="w-8 h-8 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-red-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md">
+                        <svg class="w-8 h-8 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
                     <h3 class="font-bold text-gray-900 mb-2">Attendance</h3>
                     <p class="text-sm text-gray-700 font-medium">Today's summary</p>
-                    <div class="mt-2 text-emerald-600 text-xs font-bold">
+                    <div class="mt-2 text-green-600 text-xs font-bold">
                         {{ $attendanceToday->where('status', 'present')->count() }} present
                     </div>
                 </div>
@@ -714,7 +714,7 @@ class extends Component
         <div class="lg:col-span-2 space-y-8">
             <!-- Recruitment Overview -->
             <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-emerald-600 bg-gradient-to-r from-emerald-600 to-green-600">
+                <div class="p-6 border-b border-green-600 bg-gradient-to-r from-green-600 to-green-600">
                     <div class="flex justify-between items-center">
                         <h2 class="text-xl font-bold text-white">📊 Recruitment Overview</h2>
                         <div class="flex space-x-2">
@@ -745,9 +745,9 @@ class extends Component
                             <p class="text-2xl font-bold text-green-900">{{ $applicationStats['hired'] }}</p>
                             <p class="text-sm text-green-800 font-medium">Hired</p>
                         </div>
-                        <div class="text-center p-4 bg-red-50 rounded-xl border border-red-200">
-                            <p class="text-2xl font-bold text-red-900">{{ $applicationStats['rejected'] }}</p>
-                            <p class="text-sm text-red-800 font-medium">Rejected</p>
+                        <div class="text-center p-4 bg-green-50 rounded-xl border border-green-200">
+                            <p class="text-2xl font-bold text-green-900">{{ $applicationStats['rejected'] }}</p>
+                            <p class="text-sm text-green-800 font-medium">Rejected</p>
                         </div>
                     </div>
                     
@@ -760,10 +760,10 @@ class extends Component
 
             <!-- Recent Applications -->
             <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-emerald-600 bg-gradient-to-r from-emerald-600 to-green-600">
+                <div class="p-6 border-b border-red-600 bg-gradient-to-r from-red-600 to-red-600">
                     <div class="flex justify-between items-center">
                         <h2 class="text-xl font-bold text-white">📝 Recent Job Applications</h2>
-                        <a href="#" class="text-white hover:text-emerald-100 text-sm font-medium flex items-center">
+                        <a href="#" class="text-white hover:text-red-100 text-sm font-medium flex items-center">
                             View All 
                             <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -789,8 +789,8 @@ class extends Component
                                     <tr class="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                                         <td class="py-4 px-6">
                                             <div class="flex items-center">
-                                                <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center mr-3 border border-emerald-200">
-                                                    <span class="text-emerald-900 font-bold">
+                                                <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mr-3 border border-red-200">
+                                                    <span class="text-red-900 font-bold">
                                                         {{ substr($application->full_name, 0, 2) }}
                                                     </span>
                                                 </div>
@@ -804,7 +804,7 @@ class extends Component
                                             <span class="font-bold text-gray-900">{{ $application->position_applied }}</span>
                                         </td>
                                         <td class="py-4 px-6">
-                                            <span class="px-3 py-1 bg-emerald-100 text-emerald-900 rounded-full text-sm font-medium border border-emerald-200">
+                                            <span class="px-3 py-1 bg-red-100 text-red-900 rounded-full text-sm font-medium border border-red-200">
                                                 {{ $application->years_experience }}
                                             </span>
                                         </td>
@@ -819,7 +819,7 @@ class extends Component
                                                 @elseif($application->status == 'reviewed') bg-blue-100 text-blue-900 border border-blue-300
                                                 @elseif($application->status == 'shortlisted') bg-purple-100 text-purple-900 border border-purple-300
                                                 @elseif($application->status == 'hired') bg-green-100 text-green-900 border border-green-300
-                                                @else bg-red-100 text-red-900 border border-red-300 @endif">
+                                                @else bg-green-100 text-green-900 border border-green-300 @endif">
                                                 {{ ucfirst($application->status) }}
                                             </span>
                                         </td>
@@ -885,16 +885,16 @@ class extends Component
         <div class="space-y-8">
             <!-- Popular Positions -->
             <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-emerald-600 bg-gradient-to-r from-emerald-600 to-green-600">
+                <div class="p-6 border-b border-red-600 bg-gradient-to-r from-red-600 to-red-600">
                     <h2 class="text-xl font-bold text-white">🎯 Popular Positions</h2>
                 </div>
                 <div class="p-6">
                     <div class="space-y-4">
                         @forelse($positionStats as $position)
-                            <div class="p-4 bg-emerald-50 rounded-xl hover:bg-emerald-100 transition-colors border border-emerald-200">
+                            <div class="p-4 bg-red-50 rounded-xl hover:bg-red-100 transition-colors border border-red-200">
                                 <div class="flex justify-between items-start mb-3">
                                     <h3 class="font-bold text-gray-900">{{ $position->position_applied }}</h3>
-                                    <span class="px-3 py-1 bg-emerald-600 text-white text-xs rounded-full font-bold">
+                                    <span class="px-3 py-1 bg-green-600 text-white text-xs rounded-full font-bold">
                                         {{ $position->application_count }} apps
                                     </span>
                                 </div>
@@ -910,7 +910,7 @@ class extends Component
                                         </span>
                                     </div>
                                     <div class="pt-2">
-                                        <div class="w-full bg-emerald-200 rounded-full h-2.5">
+                                        <div class="w-full bg-red-200 rounded-full h-2.5">
                                             <div class="bg-emerald-600 h-2.5 rounded-full" style="width: {{ min(100, ($position->hired_count / max(1, $position->application_count)) * 100) }}%"></div>
                                         </div>
                                         <div class="text-xs text-gray-700 mt-1 font-medium text-right">
@@ -935,7 +935,7 @@ class extends Component
 
             <!-- Status Distribution -->
             <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-emerald-600 bg-gradient-to-r from-emerald-600 to-green-600">
+                <div class="p-6 border-b border-red-600 bg-gradient-to-r from-red-600 to-red-600">
                     <h2 class="text-xl font-bold text-white">📈 Status Distribution</h2>
                 </div>
                 <div class="p-6">
@@ -948,7 +948,7 @@ class extends Component
                                         @elseif($status->status == 'reviewed') bg-blue-500
                                         @elseif($status->status == 'shortlisted') bg-purple-500
                                         @elseif($status->status == 'hired') bg-green-500
-                                        @else bg-red-500 @endif">
+                                        @else bg-green-500 @endif">
                                     </div>
                                     <span class="font-medium text-gray-900">{{ ucfirst($status->status) }}</span>
                                 </div>
@@ -960,7 +960,7 @@ class extends Component
                                             @elseif($status->status == 'reviewed') bg-blue-600
                                             @elseif($status->status == 'shortlisted') bg-purple-600
                                             @elseif($status->status == 'hired') bg-green-600
-                                            @else bg-red-600 @endif" 
+                                            @else bg-green-600 @endif" 
                                             style="width: {{ $status->percentage }}%">
                                         </div>
                                     </div>
@@ -973,9 +973,9 @@ class extends Component
             </div>
 
             <!-- Today's Attendance Summary - COMPLETELY FIXED -->
-            <div class="bg-gradient-to-br from-emerald-700 to-emerald-800 rounded-2xl shadow-xl p-6 border border-emerald-600">
+            <div class="bg-gradient-to-br from-red-700 to-red-800 rounded-2xl shadow-xl p-6 border border-red-600">
     <div class="flex items-center mb-6">
-        <div class="p-2 bg-emerald-500 rounded-lg mr-3">
+        <div class="p-2 bg-red-500 rounded-lg mr-3">
             <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -983,24 +983,24 @@ class extends Component
         <h2 class="text-xl font-bold text-green">📅 Today's Attendance</h2>
     </div>
     <div class="space-y-4">
-        <div class="flex justify-between items-center p-3 bg-emerald-600 rounded-lg">
+        <div class="flex justify-between items-center p-3 bg-red-600 rounded-lg">
             <span class="font-medium text-white">Present</span>
             <span class="text-2xl font-bold text-white">{{ $attendanceToday->where('status', 'present')->count() }}</span>
         </div>
-        <div class="flex justify-between items-center p-3 bg-emerald-500 rounded-lg">
+        <div class="flex justify-between items-center p-3 bg-red-500 rounded-lg">
             <span class="font-medium text-white">Absent</span>
             <span class="text-2xl font-bold text-white">{{ $attendanceToday->where('status', 'absent')->count() }}</span>
         </div>
-        <div class="flex justify-between items-center p-3 bg-emerald-500 rounded-lg">
+        <div class="flex justify-between items-center p-3 bg-red-500 rounded-lg">
             <span class="font-medium text-white">Late</span>
             <span class="text-2xl font-bold text-white">{{ $attendanceToday->where('status', 'late')->count() }}</span>
         </div>
-        <div class="flex justify-between items-center p-3 bg-emerald-600 rounded-lg">
+        <div class="flex justify-between items-center p-3 bg-red-600 rounded-lg">
             <span class="font-medium text-white">On Leave</span>
             <span class="text-2xl font-bold text-white">{{ $attendanceToday->where('status', 'on_leave')->count() }}</span>
         </div>
-        <div class="pt-4 border-t border-emerald-600">
-            <div class="flex justify-between items-center p-3 bg-emerald-700 rounded-lg">
+        <div class="pt-4 border-t border-red-600">
+            <div class="flex justify-between items-center p-3 bg-red-700 rounded-lg">
                 <span class="font-bold text-white">Total Check-ins</span>
                 <span class="text-2xl font-bold text-white">{{ $attendanceToday->count() }}</span>
             </div>

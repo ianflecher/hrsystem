@@ -3,17 +3,17 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>TGIF - Thanks G Its Fries Day</title>
+    <title>Imprint Customs PH - HR Information System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
         :root {
-            --primary-green: #22c55e;
-            --dark-green: #15803d;
-            --light-green: #dcfce7;
-            --forest-green: #14532d;
-            --mint-green: #bbf7d0;
+            --primary-green: #E31B23;
+            --dark-green: #17233A;
+            --light-green: #FDECEC;
+            --forest-green: #0C1626;
+            --mint-green: #93A0B4;
         }
         
         body {
@@ -33,7 +33,7 @@
             left: 0;
             right: 0;
             z-index: 1000;
-            box-shadow: 0 2px 12px rgba(21, 128, 61, 0.2);
+            box-shadow: 0 2px 12px rgba(23, 35, 58, 0.2);
         }
         
         .header-content {
@@ -110,13 +110,13 @@
         .nav-item.active {
             background: var(--primary-green);
             color: white;
-            box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+            box-shadow: 0 2px 8px rgba(227, 27, 35, 0.3);
             animation: gentle-pulse 3s infinite;
         }
         
         @keyframes gentle-pulse {
-            0%, 100% { box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3); }
-            50% { box-shadow: 0 2px 12px rgba(34, 197, 94, 0.5); }
+            0%, 100% { box-shadow: 0 2px 8px rgba(227, 27, 35, 0.3); }
+            50% { box-shadow: 0 2px 12px rgba(227, 27, 35, 0.5); }
         }
         
         /* Auth Buttons - Matches Admin Style */
@@ -150,12 +150,12 @@
         .btn-signup {
             background: linear-gradient(135deg, var(--primary-green) 0%, var(--dark-green) 100%);
             color: white;
-            box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+            box-shadow: 0 2px 6px rgba(227, 27, 35, 0.3);
         }
         
         .btn-signup:hover {
             transform: translateY(-1px);
-            box-shadow: 0 4px 10px rgba(34, 197, 94, 0.4);
+            box-shadow: 0 4px 10px rgba(227, 27, 35, 0.4);
         }
         
         /* Mobile Toggle */
@@ -202,7 +202,7 @@
         }
         
         .mobile-nav-item:hover {
-            background: #f0fdf4;
+            background: #FDF6F6;
         }
         
         .mobile-nav-left {
@@ -257,17 +257,17 @@
             <!-- Logo - Exact match to admin -->
             <a href="{{ route('landing') }}" class="logo-container">
                 <div class="logo-icon" style="display: flex; align-items: center; justify-content: center;">
-                    @if(file_exists(public_path('TGIF.png')))
-                        <img src="{{ asset('TGIF.png') }}" alt="TGIF Logo" style="height: 100px; width: auto;">
+                    @if(file_exists(public_path('imprint-customs.jpg')))
+                        <img src="{{ asset('imprint-customs.jpg') }}" alt="Imprint Customs" style="height: 44px; width: 44px; object-fit: contain; background: #fff; border-radius: 50%; padding: 3px;">
                     @else
                         <div style="background: white; color: var(--dark-green); font-weight: bold; padding: 4px 8px; border-radius: 6px;">
-                            TGIF
+                            Imprint Customs
                         </div>
                     @endif
                 </div>
                 <div class="logo-text">
-                    <div class="company-name">Thanks G Its Fries Day</div>
-                    <div class="company-tagline">Delicious Fries & Snacks</div>
+                    <div class="company-name">Imprint Customs PH</div>
+                    <div class="company-tagline">Custom Printed Apparel</div>
                 </div>
             </a>
 
@@ -330,11 +330,11 @@
         // Wrap everything in an IIFE to avoid redeclaration
         (function() {
             // Initialize only if not already initialized
-            if (window.tgifHeaderInitialized) {
+            if (window.imprintHeaderInitialized) {
                 return;
             }
             
-            window.tgifHeaderInitialized = true;
+            window.imprintHeaderInitialized = true;
             
             // Mobile menu toggle
             const mobileToggle = document.getElementById('mobileToggle');

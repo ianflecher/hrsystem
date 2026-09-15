@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
-    <title>@yield('title', 'TGIF Careers') - Thanks G Its Fries Day</title>
+    <title>@yield('title', 'Imprint Customs Careers') - Imprint Customs PH</title>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -20,16 +20,16 @@
                 extend: {
                     colors: {
                         career: {
-                            50: '#f0fdf4',
-                            100: '#dcfce7',
-                            200: '#bbf7d0',
-                            300: '#86efac',
-                            400: '#4ade80',
-                            500: '#22c55e',
-                            600: '#16a34a',
-                            700: '#15803d',
-                            800: '#166534',
-                            900: '#14532d',
+                            50: '#FDF6F6',
+                            100: '#FDECEC',
+                            200: '#93A0B4',
+                            300: '#93A0B4',
+                            400: '#F05A60',
+                            500: '#E31B23',
+                            600: '#C8161D',
+                            700: '#17233A',
+                            800: '#0C1626',
+                            900: '#0C1626',
                         },
                         accent: {
                             50: '#fffbeb',
@@ -51,9 +51,9 @@
     
     <style>
         :root {
-            --career-green: #22c55e;
-            --career-dark-green: #15803d;
-            --career-light-green: #dcfce7;
+            --career-green: #E31B23;
+            --career-dark-green: #17233A;
+            --career-light-green: #FDECEC;
             --career-amber: #f59e0b;
         }
         
@@ -61,16 +61,16 @@
             margin: 0;
             padding: 0;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 50%);
+            background: linear-gradient(135deg, #f8fafc 0%, #FDF6F6 50%);
             min-height: 100vh;
         }
         
         /* Header */
         .applicant-header {
-            background: linear-gradient(135deg, var(--career-dark-green) 0%, #14532d 100%);
+            background: linear-gradient(135deg, var(--career-dark-green) 0%, #0C1626 100%);
             color: white;
             padding: 1rem 2rem;
-            box-shadow: 0 2px 12px rgba(34, 197, 94, 0.2);
+            box-shadow: 0 2px 12px rgba(227, 27, 35, 0.2);
             position: sticky;
             top: 0;
             z-index: 100;
@@ -112,7 +112,7 @@
         .company-tagline {
             font-size: 0.85rem;
             opacity: 0.9;
-            color: #bbf7d0;
+            color: #93A0B4;
         }
         
         /* Navigation */
@@ -140,7 +140,7 @@
         .nav-link.active {
             background: var(--career-green);
             color: white;
-            box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+            box-shadow: 0 2px 8px rgba(227, 27, 35, 0.3);
         }
         
         .nav-link.active::after {
@@ -210,9 +210,9 @@
         }
         
         .alert-success {
-            background: #f0fdf4;
+            background: #FDF6F6;
             border-left: 4px solid var(--career-green);
-            color: #166534;
+            color: #0C1626;
         }
         
         .alert-error {
@@ -273,8 +273,8 @@
         }
         
         .status-shortlisted {
-            background: #dcfce7;
-            color: #166534;
+            background: #FDECEC;
+            color: #0C1626;
         }
         
         .status-rejected {
@@ -283,9 +283,9 @@
         }
         
         .status-hired {
-            background: #f0fdf4;
-            color: #15803d;
-            border: 2px solid #86efac;
+            background: #FDF6F6;
+            color: #17233A;
+            border: 2px solid #93A0B4;
         }
         
         /* Responsive Design */
@@ -363,16 +363,16 @@
         <!-- Logo -->
         <a href="{{ route('applicant.index') }}" class="logo-container">
             <div class="logo-icon">
-                @if(file_exists(public_path('TGIF.png')))
-                    <img src="{{ asset('TGIF.png') }}" alt="TGIF Logo" style="height: 50px; width: auto;">
+                @if(file_exists(public_path('imprint-customs.jpg')))
+                    <img src="{{ asset('imprint-customs.jpg') }}" alt="Imprint Customs" style="height: 44px; width: 44px; object-fit: contain; background: #fff; border-radius: 50%; padding: 3px;">
                 @else
                     <div style="background: white; color: var(--career-dark-green); font-weight: bold; padding: 8px 12px; border-radius: 8px; font-size: 1.2rem;">
-                        TGIF
+                        Imprint Customs
                     </div>
                 @endif
             </div>
             <div class="logo-text">
-                <div class="company-name">Thanks G Its Fries Day</div>
+                <div class="company-name">Imprint Customs PH</div>
                 <div class="company-tagline">Career Portal</div>
             </div>
         </a>

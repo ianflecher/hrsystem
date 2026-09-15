@@ -182,9 +182,9 @@ new #[Layout('components.layouts.applicant')] class extends Component
         } elseif (str_contains($filetype, 'word') || str_contains($filetype, 'doc')) {
             return ['icon' => 'fas fa-file-word', 'color' => 'text-blue-600', 'bg' => 'bg-blue-100'];
         } elseif (str_contains($filetype, 'excel') || str_contains($filetype, 'sheet')) {
-            return ['icon' => 'fas fa-file-excel', 'color' => 'text-green-600', 'bg' => 'bg-green-100'];
+            return ['icon' => 'fas fa-file-excel', 'color' => 'text-red-600', 'bg' => 'bg-red-100'];
         } elseif (str_contains($filetype, 'image')) {
-            return ['icon' => 'fas fa-file-image', 'color' => 'text-green-600', 'bg' => 'bg-green-100'];
+            return ['icon' => 'fas fa-file-image', 'color' => 'text-red-600', 'bg' => 'bg-red-100'];
         } else {
             return ['icon' => 'fas fa-file', 'color' => 'text-gray-600', 'bg' => 'bg-gray-100'];
         }
@@ -208,7 +208,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
                 <p class="text-sm font-medium text-green-800">{{ session('success') }}</p>
             </div>
             <div class="ml-auto pl-3">
-                <button @click="show = false" class="text-green-500 hover:text-green-700">
+                <button @click="show = false" class="text-red-500 hover:text-red-700">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -394,11 +394,11 @@ new #[Layout('components.layouts.applicant')] class extends Component
                             <div class="mt-6 pt-6 border-t border-gray-200">
                                 <h5 class="text-sm font-medium text-gray-500 mb-2">Preparation Tips</h5>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div class="bg-green-50 p-4 rounded-lg">
+                                    <div class="bg-red-50 p-4 rounded-lg">
                                         <div class="flex items-start">
-                                            <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                                            <i class="fas fa-check-circle text-red-500 mt-1 mr-3"></i>
                                             <div>
-                                                <h6 class="font-medium text-green-800 mb-1">Be Prepared</h6>
+                                                <h6 class="font-medium text-red-800 mb-1">Be Prepared</h6>
                                                 <p class="text-sm text-green-700">Review the job description and prepare questions</p>
                                             </div>
                                         </div>
@@ -513,7 +513,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
                                 </div>
                                 <div class="ml-6">
                                     <h4 class="font-medium text-gray-800">Hired!</h4>
-                                    <p class="text-sm text-gray-600">Welcome to the TGIF team!</p>
+                                    <p class="text-sm text-gray-600">Welcome to the Imprint Customs team!</p>
                                     <p class="text-sm text-career-600 mt-1 font-medium">
                                         <i class="fas fa-party-horn mr-1"></i> Congratulations on your new position!
                                     </p>
@@ -528,7 +528,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
                                 </div>
                                 <div class="ml-6">
                                     <h4 class="font-medium text-gray-800">Application Not Successful</h4>
-                                    <p class="text-sm text-gray-600">We appreciate your interest in TGIF</p>
+                                    <p class="text-sm text-gray-600">We appreciate your interest in Imprint Customs</p>
                                     <p class="text-sm text-red-600 mt-1 font-medium">
                                         <i class="fas fa-info-circle mr-1"></i> Please check other available positions
                                     </p>

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
-    <title>@yield('title', 'HR Portal') - TGIF Human Resources</title>
+    <title>@yield('title', 'HR Portal') - Imprint Customs Human Resources</title>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -20,16 +20,16 @@
                 extend: {
                     colors: {
                         hr: {
-                            50: '#f0fdf4',
-                            100: '#dcfce7',
-                            200: '#bbf7d0',
-                            300: '#86efac',
-                            400: '#4ade80',
-                            500: '#22c55e',
-                            600: '#16a34a',
-                            700: '#15803d',
-                            800: '#166534',
-                            900: '#14532d',
+                            50: '#FDF6F6',
+                            100: '#FDECEC',
+                            200: '#93A0B4',
+                            300: '#93A0B4',
+                            400: '#F05A60',
+                            500: '#E31B23',
+                            600: '#C8161D',
+                            700: '#17233A',
+                            800: '#0C1626',
+                            900: '#0C1626',
                         },
                         accent: {
                             500: '#0ea5e9',
@@ -43,10 +43,10 @@
     
     <style>
         :root {
-            --hr-green: #22c55e;
-            --hr-dark-green: #15803d;
-            --hr-light-green: #dcfce7;
-            --hr-blue: #0ea5e9;
+            --hr-green: #E31B23;
+            --hr-dark-green: #17233A;
+            --hr-light-green: #FDECEC;
+            --hr-blue: #2563eb;
             --hr-amber: #f59e0b;
             --hr-purple: #8b5cf6;
         }
@@ -55,16 +55,16 @@
             margin: 0;
             padding: 0;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 50%);
+            background: linear-gradient(135deg, #f8fafc 0%, #FDF6F6 50%);
             min-height: 100vh;
         }
         
         /* HR Header - Green Theme */
         .hr-header {
-            background: linear-gradient(135deg, var(--hr-dark-green) 0%, #14532d 100%);
+            background: linear-gradient(135deg, var(--hr-dark-green) 0%, #0C1626 100%);
             color: white;
             padding: 1rem 2rem;
-            box-shadow: 0 2px 12px rgba(34, 197, 94, 0.2);
+            box-shadow: 0 2px 12px rgba(227, 27, 35, 0.2);
             position: sticky;
             top: 0;
         }
@@ -105,7 +105,7 @@
         .company-tagline {
             font-size: 0.85rem;
             opacity: 0.9;
-            color: #bbf7d0;
+            color: #93A0B4;
         }
         
         /* HR Navigation */
@@ -140,7 +140,7 @@
         .nav-link.active {
             background: var(--hr-green);
             color: white;
-            box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+            box-shadow: 0 2px 8px rgba(227, 27, 35, 0.3);
         }
         
         .nav-badge {
@@ -218,7 +218,7 @@
         
         .dashboard-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 8px 30px rgba(34, 197, 94, 0.15);
+            box-shadow: 0 8px 30px rgba(227, 27, 35, 0.15);
         }
         
         .card-header {
@@ -284,7 +284,7 @@
         .action-btn:hover {
             border-color: var(--hr-green);
             transform: translateY(-3px);
-            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.1);
+            box-shadow: 0 4px 15px rgba(227, 27, 35, 0.1);
         }
         
         .action-icon {
@@ -320,9 +320,9 @@
         }
         
         .alert-success {
-            background: #f0fdf4;
+            background: #FDF6F6;
             border-left: 4px solid var(--hr-green);
-            color: #166534;
+            color: #0C1626;
         }
         
         .alert-error {
@@ -355,8 +355,8 @@
         }
         
         .status-active {
-            background: #dcfce7;
-            color: #166534;
+            background: #FDECEC;
+            color: #0C1626;
         }
         
         .status-inactive {
@@ -416,12 +416,12 @@
             cursor: pointer;
             font-weight: 500;
             transition: all 0.3s ease;
-            box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+            box-shadow: 0 2px 8px rgba(227, 27, 35, 0.3);
         }
         
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+            box-shadow: 0 4px 12px rgba(227, 27, 35, 0.4);
         }
         
         .btn-secondary {
@@ -452,7 +452,7 @@
         .form-input:focus {
             outline: none;
             border-color: var(--hr-green);
-            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+            box-shadow: 0 0 0 3px rgba(227, 27, 35, 0.1);
         }
         
         .form-label {
@@ -629,16 +629,16 @@
         <!-- Logo -->
         <a href="{{ route('hr.home') }}" class="logo-container">
             <div class="logo-icon">
-                @if(file_exists(public_path('TGIF.png')))
-                    <img src="{{ asset('TGIF.png') }}" alt="TGIF Logo" style="height: 50px; width: auto;">
+                @if(file_exists(public_path('imprint-customs.jpg')))
+                    <img src="{{ asset('imprint-customs.jpg') }}" alt="Imprint Customs" style="height: 44px; width: 44px; object-fit: contain; background: #fff; border-radius: 50%; padding: 3px;">
                 @else
                     <div style="background: white; color: var(--hr-dark-green); font-weight: bold; padding: 8px 12px; border-radius: 8px; font-size: 1.2rem;">
-                        TGIF HR
+                        Imprint Customs HR
                     </div>
                 @endif
             </div>
             <div class="logo-text">
-                <div class="company-name">TGIF Human Resources</div>
+                <div class="company-name">Imprint Customs Human Resources</div>
                 <div class="company-tagline">Employee Management Portal</div>
             </div>
         </a>

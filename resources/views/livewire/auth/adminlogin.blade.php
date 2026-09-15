@@ -101,11 +101,11 @@ new #[Layout('components.layouts.employee')] class extends Component
     }
 }
 ?>
-<div class="min-h-screen bg-gradient-to-b from-white to-green-50 py-12 px-4 sm:px-6 lg:px-8" x-data="{ showPassword: false }" x-init="$refs.username.focus()">
+<div class="min-h-screen bg-gradient-to-b from-white to-red-50 py-12 px-4 sm:px-6 lg:px-8" x-data="{ showPassword: false }" x-init="$refs.username.focus()">
     <div class="max-w-md mx-auto">
         <!-- Brand Header -->
         <div class="text-center mb-8">
-            <div class="mx-auto h-20 w-20 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center mb-4 overflow-hidden border-2 border-emerald-200 shadow-lg">
+            <div class="mx-auto h-20 w-20 bg-gradient-to-r from-red-500 to-red-600 rounded-full flex items-center justify-center mb-4 overflow-hidden border-2 border-red-200 shadow-lg">
                 <i class="fas fa-crown text-3xl text-white"></i>
             </div>
             <h1 class="text-3xl font-bold text-gray-900 mb-2">HR Back Office</h1>
@@ -132,7 +132,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                                 required
                                 autofocus
                                 placeholder="admin or hr"
-                                class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none transition"
+                                class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition"
                             >
                             <div class="absolute left-3 top-3 text-gray-400">
                                 <i class="fas fa-user-tie"></i>
@@ -157,7 +157,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                                 id="password"
                                 required
                                 placeholder="••••••••"
-                                class="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none transition"
+                                class="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition"
                             >
                             <div class="absolute left-3 top-3 text-gray-400">
                                 <i class="fas fa-key"></i>
@@ -181,7 +181,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                         <button 
                             type="submit" 
                             wire:loading.attr="disabled"
-                            class="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 px-4 rounded-lg hover:from-green-700 hover:to-emerald-700 transition font-medium flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                            class="w-full bg-gradient-to-r from-red-600 to-red-600 text-white py-3 px-4 rounded-lg hover:from-red-700 hover:to-red-700 transition font-medium flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
                         >
                             <span wire:loading.remove wire:target="login">
                                 <i class="fas fa-sign-in-alt"></i>
@@ -197,10 +197,10 @@ new #[Layout('components.layouts.employee')] class extends Component
             </div>
             
             <!-- Footer -->
-            <div class="bg-gradient-to-r from-green-50 to-emerald-50 px-8 py-4 border-t border-green-100">
+            <div class="bg-gradient-to-r from-red-50 to-red-50 px-8 py-4 border-t border-red-100">
                 <div class="flex items-center justify-center">
-                    <i class="fas fa-server text-green-600 mr-2"></i>
-                    <p class="text-xs text-center text-green-800 font-medium">
+                    <i class="fas fa-server text-red-600 mr-2"></i>
+                    <p class="text-xs text-center text-red-800 font-medium">
                         HRIS - Administrator Authentication
                     </p>
                 </div>

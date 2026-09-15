@@ -12,16 +12,16 @@
                 extend: {
                     colors: {
                         primary: {
-                            50: '#f0fdf4',
-                            100: '#dcfce7',
-                            200: '#bbf7d0',
-                            300: '#86efac',
-                            400: '#4ade80',
-                            500: '#22c55e',
-                            600: '#16a34a',
-                            700: '#15803d',
-                            800: '#166534',
-                            900: '#14532d',
+                            50: '#FDF6F6',
+                            100: '#FDECEC',
+                            200: '#93A0B4',
+                            300: '#93A0B4',
+                            400: '#F05A60',
+                            500: '#E31B23',
+                            600: '#C8161D',
+                            700: '#17233A',
+                            800: '#0C1626',
+                            900: '#0C1626',
                         }
                     }
                 }
@@ -29,15 +29,15 @@
         }
     </script>
     
-    <title>Thanks G Its Fries Day</title>
+    <title>Imprint Customs PH - HR</title>
 
     <style>
         :root {
-            --primary-green: #22c55e;
-            --dark-green: #15803d;
-            --light-green: #dcfce7;
-            --forest-green: #14532d;
-            --mint-green: #bbf7d0;
+            --primary-green: #E31B23;
+            --dark-green: #17233A;
+            --light-green: #FDECEC;
+            --forest-green: #0C1626;
+            --mint-green: #93A0B4;
         }
         
         body {
@@ -50,7 +50,7 @@
             background: linear-gradient(135deg, var(--dark-green) 0%, var(--forest-green) 100%);
             color: white;
             padding: 0.8rem 1.5rem;
-            box-shadow: 0 2px 12px rgba(34, 197, 94, 0.2);
+            box-shadow: 0 2px 12px rgba(227, 27, 35, 0.2);
             position: fixed;
             top: 0;
             left: 0;
@@ -62,7 +62,7 @@
         }
         
         .sidebar {
-            background: linear-gradient(180deg, var(--forest-green) 0%, #0f4223 100%);
+            background: linear-gradient(180deg, var(--forest-green) 0%, #080F1A 100%);
             color: white;
             width: 65px; /* Compact sidebar */
             height: calc(100vh - 60px); /* Full height */
@@ -132,7 +132,7 @@
         .nav-item.active {
             background: var(--primary-green);
             color: white;
-            box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+            box-shadow: 0 2px 8px rgba(227, 27, 35, 0.3);
         }
         
         .main-content {
@@ -140,7 +140,7 @@
             margin-top: 60px; /* Match header height */
             padding: 1.5rem;
             min-height: calc(100vh - 60px);
-            background: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 50%);
+            background: linear-gradient(135deg, #f8fafc 0%, #FDF6F6 50%);
             transition: margin-left 0.3s ease;
         }
         
@@ -460,8 +460,8 @@
         
         /* Animation for active state */
         @keyframes gentle-pulse {
-            0%, 100% { box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3); }
-            50% { box-shadow: 0 2px 12px rgba(34, 197, 94, 0.5); }
+            0%, 100% { box-shadow: 0 2px 8px rgba(227, 27, 35, 0.3); }
+            50% { box-shadow: 0 2px 12px rgba(227, 27, 35, 0.5); }
         }
         
         .nav-item.active {
@@ -558,16 +558,16 @@
         <button class="menu-toggle" onclick="toggleMobileMenu()">☰</button>
         <div class="logo-container">
             <div class="logo-icon" style="display: flex; align-items: center; justify-content: center;">
-            @if(file_exists(public_path('TGIF.png')))
-                <img src="{{ asset('TGIF.png') }}" alt="TGIF Logo" style="height: 100px; width: auto;">
+            @if(file_exists(public_path('imprint-customs.jpg')))
+                <img src="{{ asset('imprint-customs.jpg') }}" alt="Imprint Customs" style="height: 44px; width: 44px; object-fit: contain; background: #fff; border-radius: 50%; padding: 3px;">
             @else
                 <div style="background: white; color: var(--dark-green); font-weight: bold; padding: 4px 8px; border-radius: 6px;">
-                    TGIF
+                    Imprint Customs
                 </div>
             @endif
         </div>
             <div class="logo-text">
-                <div class="company-name">Thanks G Its Fries Day</div>
+                <div class="company-name">Imprint Customs PH</div>
                 <div class="company-tagline">Admin Portal</div>
             </div>
         </div>
