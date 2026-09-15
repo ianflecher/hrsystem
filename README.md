@@ -12,7 +12,7 @@ and `username`.
 
 | Portal | Entry | Screens |
 | --- | --- | --- |
-| HR back office | `/admin/login` | Dashboard, Applications, Attendance, Leave, Payroll |
+| HR back office | `/admin/login` | Dashboard, Openings, Applications, Attendance, Leave, Payroll |
 | Employee self-service | `/employee/login` | Dashboard, Attendance (clock in/out), Payroll, Leave |
 | Careers / applicant | `/applicant/login` | Register, application status, document uploads |
 
@@ -55,6 +55,16 @@ All use the password `password`.
 | `admin` | Super admin |
 | `hr` | HR manager |
 | `msantos`, `jdelacruz`, `areyes`, `pgarcia` | Employees |
+
+## Job openings
+
+The careers page and the application form both read the `job_positions` table,
+managed in the HR back office at `/hr/positions`. Posting, editing or closing a
+role there changes what applicants see straight away - no code edit, and the
+two lists cannot drift apart.
+
+`JobPositionSeeder` inserts six placeholder roles so a fresh install is not
+empty. Replace them from the HR screen.
 
 ## Tests
 

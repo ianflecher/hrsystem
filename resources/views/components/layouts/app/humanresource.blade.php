@@ -656,6 +656,9 @@
             <a href="{{ route('hr.payroll') }}" class="nav-link {{ request()->routeIs('hr.payroll') ? 'active' : '' }}">
                 <i class="fas fa-money-bill-wave"></i>Payroll
             </a>
+            <a href="{{ route('hr.positions') }}" class="nav-link {{ request()->routeIs('hr.positions') ? 'active' : '' }}">
+                <i class="fas fa-bullhorn"></i>Openings
+            </a>
             <a href="{{ route('hr.applications') }}" class="nav-link {{ request()->routeIs('hr.applications') ? 'active' : '' }}">
                 <i class="fas fa-briefcase"></i>Applications
             </a>
@@ -713,6 +716,9 @@
         </a>
         <a href="{{ route('hr.payroll') }}" class="mobile-nav-link {{ request()->routeIs('hr.payroll') ? 'active' : '' }}">
             <i class="fas fa-money-bill-wave"></i>Payroll
+        </a>
+        <a href="{{ route('hr.positions') }}" class="mobile-nav-link {{ request()->routeIs('hr.positions') ? 'active' : '' }}">
+            <i class="fas fa-bullhorn"></i>Openings
         </a>
         <a href="{{ route('hr.applications') }}" class="mobile-nav-link {{ request()->routeIs('hr.applications') ? 'active' : '' }}">
             <i class="fas fa-briefcase"></i>Applications

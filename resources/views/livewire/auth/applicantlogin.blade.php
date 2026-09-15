@@ -11,6 +11,29 @@ use App\Models\User;
 
 new #[Layout('components.layouts.employee')] class extends Component
 {
+    /*
+     * Openings come from the job_positions table, which HR manages at
+     * /hr/positions. The list below the hero and the position dropdown in the
+     * application form both read this one property, so they cannot drift apart
+     * the way the two hardcoded arrays they replace did.
+     */
+    public function openPositions()
+    {
+        return DB::table('job_positions as p')
+            ->leftJoin('departments as d', 'p.department_id', '=', 'd.department_id')
+            ->where('p.is_open', true)
+            ->select('p.position_id', 'p.title', 'p.employment_type', 'p.description', 'd.department_name')
+            ->orderByDesc('p.created_at')
+            ->get();
+    }
+
+    public array $employmentTypes = [
+        'full_time'  => 'Full-time',
+        'part_time'  => 'Part-time',
+        'contract'   => 'Contract',
+        'internship' => 'Internship',
+    ];
+
     public $showLogin = true; // Toggle between login and register
     public $email = '';
     public $password = '';
@@ -196,31 +219,32 @@ new #[Layout('components.layouts.employee')] class extends Component
                 <!-- Current Openings -->
                 <div class="bg-white rounded-xl shadow-sm p-6">
                     <h2 class="text-2xl font-bold text-gray-900 mb-4">Current Openings</h2>
-                    <div class="space-y-4">
-                        @php
-                            $positions = [
-                                ['title' => 'Restaurant Manager', 'department' => 'Management', 'type' => 'Full-time'],
-                                ['title' => 'Head Chef', 'department' => 'Kitchen', 'type' => 'Full-time'],
-                                ['title' => 'Service Crew', 'department' => 'Operations', 'type' => 'Part-time'],
-                                ['title' => 'Cashier', 'department' => 'Finance', 'type' => 'Full-time'],
-                                ['title' => 'Delivery Driver', 'department' => 'Logistics', 'type' => 'Contract'],
-                                ['title' => 'Marketing Executive', 'department' => 'Marketing', 'type' => 'Full-time'],
-                            ];
-                        @endphp
-                        @foreach($positions as $position)
-                            <div class="border border-gray-200 rounded-lg p-4 hover:border-red-300 transition-colors">
-                                <div class="flex justify-between items-start">
-                                    <div>
-                                        <h3 class="font-semibold text-gray-900">{{ $position['title'] }}</h3>
-                                        <p class="text-sm text-gray-600">{{ $position['department'] }}</p>
+                    @php $openings = $this->openPositions(); @endphp
+                    @if (count($openings) === 0)
+                        <p class="text-sm text-gray-600">
+                            No openings are posted right now. Register anyway and we
+                            will keep your application on file.
+                        </p>
+                    @else
+                        <div class="space-y-4">
+                            @foreach ($openings as $position)
+                                <div class="border border-gray-200 rounded-lg p-4 hover:border-red-300 transition-colors">
+                                    <div class="flex justify-between items-start gap-3">
+                                        <div>
+                                            <h3 class="font-semibold text-gray-900">{{ $position->title }}</h3>
+                                            <p class="text-sm text-gray-600">{{ $position->department_name ?? 'Imprint Customs' }}</p>
+                                            @if ($position->description)
+                                                <p class="text-sm text-gray-500 mt-1">{{ $position->description }}</p>
+                                            @endif
+                                        </div>
+                                        <span class="shrink-0 px-3 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded-full">
+                                            {{ $employmentTypes[$position->employment_type] ?? $position->employment_type }}
+                                        </span>
                                     </div>
-                                    <span class="px-3 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded-full">
-                                        {{ $position['type'] }}
-                                    </span>
                                 </div>
-                            </div>
-                        @endforeach
-                    </div>
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
 
                 <!-- Benefits -->
@@ -473,12 +497,10 @@ new #[Layout('components.layouts.employee')] class extends Component
                                                 required
                                                 class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none">
                                             <option value="">Select Position</option>
-                                            <option value="Restaurant Manager">Restaurant Manager</option>
-                                            <option value="Head Chef">Head Chef</option>
-                                            <option value="Service Crew">Service Crew</option>
-                                            <option value="Cashier">Cashier</option>
-                                            <option value="Delivery Driver">Delivery Driver</option>
-                                            <option value="Marketing Executive">Marketing Executive</option>
+                                            {{-- Same source as the openings list above. --}}
+                                            @foreach ($this->openPositions() as $position)
+                                                <option value="{{ $position->title }}">{{ $position->title }}</option>
+                                            @endforeach
                                             <option value="Other">Other</option>
                                         </select>
                                     </div>

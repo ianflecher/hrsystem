@@ -27,6 +27,7 @@ Volt::route('/applicant/login', 'auth.applicantlogin')->name('applicant.login');
 
 Route::middleware('auth')->group(function () {
     Volt::route('/admin/hr', 'hr.home')->name('hr.home');
+    Volt::route('/hr/positions', 'hr.positions')->name('hr.positions');
     Volt::route('/hr/applications', 'hr.applications')->name('hr.applications');
     Volt::route('/hr/attendance', 'hr.attendance')->name('hr.attendance');
     Volt::route('/hr/leave', 'hr.leave')->name('hr.leave');

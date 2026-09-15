@@ -609,6 +609,7 @@
                     'admin' => [
                         ['name' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => '📊'],
                         ['name' => 'Human Resources', 'route' => 'hr.home', 'icon' => '👥'],
+                        ['name' => 'Openings', 'route' => 'hr.positions', 'icon' => '📢'],
                         ['name' => 'Applications', 'route' => 'hr.applications', 'icon' => '📄'],
                         ['name' => 'Attendance', 'route' => 'hr.attendance', 'icon' => '🕒'],
                         ['name' => 'Leave', 'route' => 'hr.leave', 'icon' => '🏖️'],
@@ -617,6 +618,7 @@
                     'hr' => [
                         ['name' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => '📊'],
                         ['name' => 'Human Resources', 'route' => 'hr.home', 'icon' => '👥'],
+                        ['name' => 'Openings', 'route' => 'hr.positions', 'icon' => '📢'],
                         ['name' => 'Applications', 'route' => 'hr.applications', 'icon' => '📄'],
                         ['name' => 'Attendance', 'route' => 'hr.attendance', 'icon' => '🕒'],
                         ['name' => 'Leave', 'route' => 'hr.leave', 'icon' => '🏖️'],
