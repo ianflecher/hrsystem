@@ -5,6 +5,7 @@ use Livewire\Attributes\Layout;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Services\DocumentVault;
 use App\Support\WorkWeek;
@@ -43,6 +44,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
      */
     public ?string $issuedPassword = null;
     public int $carriedDocuments = 0;
+
+    /** The employee waiting on the confirmation panel, and what removing them means. */
+    public ?array $removing = null;
     public ?string $issuedFor = null;
 
     public array $statuses = [
@@ -321,6 +325,99 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->loadEmployees();
     }
 
+    /**
+     * Asks first, and says what "remove" actually means for this person.
+     *
+     * It differs: somebody who has been paid cannot simply be deleted, because
+     * their payslips are records the company has to keep. They are deactivated
+     * instead - no sign-in, off the active lists, history intact. Somebody with
+     * no payroll behind them is deleted outright, which is what a wrong entry
+     * needs.
+     */
+    public function confirmRemove(int $employeeId): void
+    {
+        $row = DB::table('employees as e')
+            ->join('users as u', 'e.user_id', '=', 'u.user_id')
+            ->where('e.employee_id', $employeeId)
+            ->select('e.employee_id', 'e.status', 'u.user_id', 'u.full_name')
+            ->first();
+
+        if (! $row) {
+            return;
+        }
+
+        if ((int) $row->user_id === (int) auth()->id()) {
+            session()->flash('error', 'You cannot remove your own account.');
+
+            return;
+        }
+
+        $payslips = DB::table('hr_payroll')->where('employee_id', $employeeId)->count();
+
+        $this->removing = [
+            'employee_id' => $row->employee_id,
+            'user_id'     => $row->user_id,
+            'name'        => $row->full_name,
+            'payslips'    => $payslips,
+            'attendance'  => DB::table('hr_attendance')->where('employee_id', $employeeId)->count(),
+            'documents'   => DB::table('employee_documents')->where('employee_id', $employeeId)->count(),
+            'deletes'     => $payslips === 0,
+        ];
+    }
+
+    public function cancelRemove(): void
+    {
+        $this->removing = null;
+    }
+
+    public function remove(): void
+    {
+        if (! $this->removing) {
+            return;
+        }
+
+        $removing = $this->removing;
+
+        // Re-read rather than trusting the panel: it was filled in before, and
+        // a payslip may have been generated since.
+        if (DB::table('hr_payroll')->where('employee_id', $removing['employee_id'])->exists()) {
+            $removing['deletes'] = false;
+        }
+
+        if ($removing['deletes']) {
+            $paths = DB::table('employee_documents')->where('employee_id', $removing['employee_id'])->pluck('path');
+
+            DB::transaction(function () use ($removing) {
+                // The employee row goes with the account, and everything keyed
+                // to either follows by cascade.
+                DB::table('employees')->where('employee_id', $removing['employee_id'])->delete();
+                DB::table('users')->where('user_id', $removing['user_id'])->delete();
+            });
+
+            // Only once the rows are gone, so a failed delete leaves no orphans.
+            foreach ($paths as $path) {
+                Storage::disk('local')->delete($path);
+            }
+
+            session()->flash('success', $removing['name'].' was removed, along with their account and files.');
+        } else {
+            DB::transaction(function () use ($removing) {
+                DB::table('employees')->where('employee_id', $removing['employee_id'])
+                    ->update(['status' => 'inactive', 'updated_at' => now()]);
+                // Cannot sign in again: the password is replaced by one nobody
+                // holds, and the account is held at the change-password screen.
+                DB::table('users')->where('user_id', $removing['user_id'])
+                    ->update(['password' => Hash::make(Str::password(32)), 'must_change_password' => true, 'updated_at' => now()]);
+            });
+
+            session()->flash('success', $removing['name'].' was deactivated and can no longer sign in. Their payslips are kept.');
+        }
+
+        $this->removing = null;
+        $this->resetPage();
+        $this->loadEmployees();
+    }
+
     public function closeModal(): void
     {
         $this->showModal = false;
@@ -478,6 +575,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                                 class="px-2.5 py-1.5 text-sm text-gray-700 hover:text-gray-900" title="Issue a new password">
                                             <i class="fas fa-key"></i>
                                         </button>
+                                        <button wire:click="confirmRemove({{ $employee->employee_id }})"
+                                                class="px-2.5 py-1.5 text-sm text-gray-500 hover:text-red-600" title="Remove">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -493,6 +594,53 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             @endif
         @endif
     </div>
+
+    {{-- Asked before anything happens, and specific about what will: the two
+         outcomes are very different, and only one of them is reversible. --}}
+    @if ($removing)
+        <div class="fixed inset-0 z-50 overflow-y-auto">
+            <div class="flex min-h-screen items-center justify-center p-4">
+                <div class="fixed inset-0 bg-gray-900/50" wire:click="cancelRemove"></div>
+
+                <div class="relative w-full max-w-lg bg-white rounded-xl shadow-xl">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h2 class="text-lg font-semibold text-gray-900">
+                            Remove {{ $removing['name'] }}?
+                        </h2>
+                    </div>
+
+                    <div class="px-6 py-5 space-y-3 text-sm text-gray-700">
+                        @if ($removing['deletes'])
+                            <p>
+                                They have never been paid through this system, so this deletes them outright:
+                                the employee record, the sign-in account,
+                                {{ $removing['attendance'] }} attendance day(s) and
+                                {{ $removing['documents'] }} document(s) in their vault.
+                            </p>
+                            <p class="font-semibold text-red-700">This cannot be undone.</p>
+                        @else
+                            <p>
+                                They have {{ $removing['payslips'] }} payslip(s), which the company has to keep,
+                                so they are not deleted. They will be marked inactive and will no longer be able
+                                to sign in. Their attendance, payslips and documents stay as they are.
+                            </p>
+                            <p class="text-gray-600">Set their status back to active under Edit to undo this.</p>
+                        @endif
+                    </div>
+
+                    <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
+                        <button wire:click="cancelRemove" type="button"
+                                class="px-4 py-2 text-sm font-semibold text-gray-700 hover:text-gray-900">Cancel</button>
+                        <button wire:click="remove" type="button"
+                                class="px-4 py-2 text-sm font-semibold text-white rounded-lg"
+                                style="background: var(--brand)">
+                            {{ $removing['deletes'] ? 'Delete permanently' : 'Deactivate' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 
     @if ($showModal)
         <div class="fixed inset-0 z-50 overflow-y-auto">

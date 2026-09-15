@@ -142,6 +142,61 @@ class EmployeeAccountsTest extends TestCase
         $this->assertEquals(1, DB::table('users')->where('user_id', $user->user_id)->value('must_change_password'));
     }
 
+    public function test_removing_somebody_never_paid_deletes_them_after_confirming(): void
+    {
+        $user = $this->makeStarter();
+        $employeeId = DB::table('employees')->where('user_id', $user->user_id)->value('employee_id');
+
+        $component = Volt::actingAs($this->hr())->test('hr.employees')
+            ->call('confirmRemove', $employeeId);
+
+        // Nothing happens on asking - only on confirming.
+        $this->assertTrue($component->get('removing')['deletes']);
+        $this->assertDatabaseHas('employees', ['employee_id' => $employeeId]);
+
+        $component->call('remove')->assertSet('removing', null);
+
+        $this->assertDatabaseMissing('employees', ['employee_id' => $employeeId]);
+        $this->assertDatabaseMissing('users', ['user_id' => $user->user_id]);
+    }
+
+    public function test_somebody_with_payslips_is_deactivated_rather_than_deleted(): void
+    {
+        $user = $this->makeStarter();
+        $employeeId = DB::table('employees')->where('user_id', $user->user_id)->value('employee_id');
+
+        DB::table('hr_payroll')->insert(['employee_id' => $employeeId, 'period_start' => '2018-01-01', 'period_end' => '2018-01-15',
+            'gross_pay' => 9000, 'deductions' => 0, 'net_pay' => 9000, 'status' => 'paid', 'created_at' => now(), 'updated_at' => now()]);
+
+        Volt::actingAs($this->hr())->test('hr.employees')
+            ->call('confirmRemove', $employeeId)
+            ->assertSet('removing.deletes', false)
+            ->call('remove');
+
+        // The payslip is a record the company keeps, so the person stays too.
+        $this->assertDatabaseHas('employees', ['employee_id' => $employeeId, 'status' => 'inactive']);
+        $this->assertDatabaseHas('hr_payroll', ['employee_id' => $employeeId]);
+
+        // But the account no longer opens with the password they were given.
+        $this->assertFalse(Hash::check('IssuedPass123', $user->fresh()->password));
+    }
+
+    public function test_hr_cannot_remove_their_own_account(): void
+    {
+        $hr = $this->hr();
+        $employeeId = DB::table('employees')->where('user_id', $hr->user_id)->value('employee_id');
+
+        if (! $employeeId) {
+            $this->markTestSkipped('The seeded HR account has no employee record.');
+        }
+
+        Volt::actingAs($hr)->test('hr.employees')
+            ->call('confirmRemove', $employeeId)
+            ->assertSet('removing', null);
+
+        $this->assertDatabaseHas('users', ['user_id' => $hr->user_id]);
+    }
+
     public function test_the_employees_screen_is_closed_to_guests(): void
     {
         $this->get('/hr/employees')->assertRedirect('/admin/login');
