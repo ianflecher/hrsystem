@@ -106,8 +106,89 @@ new #[Layout('components.layouts.landing')] class extends Component
 }
 }
 ?>
-<div class="min-h-screen bg-gradient-to-b from-white to-red-50 py-12 px-4 sm:px-6 lg:px-8" x-data="{ showPassword: false }" x-init="$refs.username.focus()">
-    <div class="max-w-md mx-auto">
+<div class="auth-split" x-data="{ showPassword: false }" x-init="$refs.username.focus()">
+    <style>
+        /* Two columns rather than a form floating on the photograph: inputs
+           need a dependable surface behind them, and a scrim strong enough to
+           make a form legible would have buried the picture anyway. */
+        .auth-split {
+            min-height: calc(100vh - 64px);
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .auth-split__form {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 24px;
+            background: #fff;
+        }
+
+        .auth-split__inner { width: 100%; max-width: 26rem; }
+
+        .auth-split__aside {
+            position: relative;
+            display: none;
+            background-image: url("{{ asset('hero-staff.jpg') }}");
+            background-size: cover;
+            background-position: center right;
+        }
+
+        /* The photograph is lit dark on its left edge, so the caption sits
+           there and the scrim only has to deepen what is already dark. */
+        .auth-split__aside::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(80deg,
+                rgba(12, 22, 38, .90) 0%,
+                rgba(12, 22, 38, .55) 45%,
+                rgba(12, 22, 38, .20) 100%);
+        }
+
+        .auth-split__caption {
+            position: absolute;
+            inset: auto 0 0 0;
+            z-index: 1;
+            padding: 44px 44px 48px;
+            color: #fff;
+        }
+
+        .auth-split__caption h2 {
+            margin: 0 0 8px;
+            font-family: var(--font-head, "Space Grotesk", system-ui, sans-serif);
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .auth-split__caption p {
+            margin: 0;
+            max-width: 26rem;
+            color: #A9B4C6;
+            font-size: .9375rem;
+            line-height: 1.6;
+        }
+
+        @media (min-width: 1024px) {
+            .auth-split { grid-template-columns: 1fr 1.05fr; align-items: start; }
+
+            /* The form column is taller than the viewport, and a grid stretches
+               both columns to match it - which pushed the photograph's caption
+               below the fold. Pinning the picture keeps it, and the caption, in
+               view while the form scrolls beside it. */
+            .auth-split__aside {
+                display: block;
+                position: sticky;
+                top: 64px;
+                height: calc(100vh - 64px);
+            }
+        }
+    </style>
+
+    <div class="auth-split__form">
+        <div class="auth-split__inner">
         <!-- Brand Header -->
         <div class="text-center mb-8">
             <div class="mx-auto h-20 w-20 bg-red-500 rounded-full flex items-center justify-center mb-4 overflow-hidden border-2 border-gray-200 shadow-sm">
@@ -297,6 +378,17 @@ new #[Layout('components.layouts.landing')] class extends Component
                 <i class="fas fa-headset"></i>
                 <span>Support: <span class="font-medium">hr@imprintcustoms.ph</span> | IT: <span class="font-medium">it@imprintcustoms.ph</span></span>
             </div>
+        </div>
+        </div>
+    </div>
+
+    <div class="auth-split__aside">
+        <div class="auth-split__caption">
+            <h2>Your workday, in one place</h2>
+            <p>
+                Clock in, check your payslips and file leave without chasing
+                anyone for a form.
+            </p>
         </div>
     </div>
 </div>

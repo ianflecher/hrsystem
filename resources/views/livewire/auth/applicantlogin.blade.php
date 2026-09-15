@@ -114,13 +114,80 @@ new #[Layout('components.layouts.employee')] class extends Component
 <div class="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-7xl mx-auto">
         <!-- Hero Section -->
-        <div class="text-center mb-12">
-            <h1 class="text-4xl font-bold text-gray-900 mb-4">
-                Join Our Team at <span class="text-red-600">Imprint Customs</span>
-            </h1>
-            <p class="text-lg text-gray-600 max-w-2xl mx-auto">
-                Looking for an exciting career opportunity? Apply now to become part of our growing team!
-            </p>
+        <div class="careers-hero">
+            <style>
+                /* This photograph is a bright studio shot, so it takes a light
+                   scrim and dark type. The dark treatment used on the staff
+                   sign-in would fight the picture rather than sit on it. */
+                .careers-hero {
+                    position: relative;
+                    overflow: hidden;
+                    margin-bottom: 3rem;
+                    border-radius: 16px;
+                    border: 1px solid #E5E9F0;
+                    background-color: #F4F6F9;
+                    background-image: url("{{ asset('hero-careers.jpg') }}");
+                    background-size: cover;
+                    background-position: center right;
+                    min-height: 300px;
+                    display: flex;
+                    align-items: center;
+                }
+
+                .careers-hero::before {
+                    content: "";
+                    position: absolute;
+                    inset: 0;
+                    background: linear-gradient(90deg,
+                        rgba(255, 255, 255, .97) 0%,
+                        rgba(255, 255, 255, .92) 38%,
+                        rgba(255, 255, 255, .55) 62%,
+                        rgba(255, 255, 255, .10) 100%);
+                }
+
+                .careers-hero__copy {
+                    position: relative;
+                    z-index: 1;
+                    max-width: 32rem;
+                    padding: 48px 44px;
+                }
+
+                .careers-hero__copy h1 {
+                    margin: 0 0 12px;
+                    font-family: var(--font-head, "Space Grotesk", system-ui, sans-serif);
+                    font-size: clamp(1.75rem, 3.4vw, 2.5rem);
+                    font-weight: 700;
+                    line-height: 1.12;
+                    letter-spacing: -0.02em;
+                    color: #17202E;
+                }
+
+                .careers-hero__copy p {
+                    margin: 0;
+                    color: #566172;
+                    font-size: 1.0625rem;
+                    line-height: 1.6;
+                }
+
+                @media (max-width: 860px) {
+                    /* Narrow screens put the type over the middle of the frame,
+                       where a left-weighted scrim leaves it unreadable. */
+                    .careers-hero::before {
+                        background: linear-gradient(180deg,
+                            rgba(255, 255, 255, .95) 0%,
+                            rgba(255, 255, 255, .88) 100%);
+                    }
+                    .careers-hero__copy { padding: 32px 24px; }
+                }
+            </style>
+
+            <div class="careers-hero__copy">
+                <h1>Join our team at <span style="color:#E31B23;">Imprint Customs</span></h1>
+                <p>
+                    Looking for an exciting career opportunity? Apply now to
+                    become part of our growing team.
+                </p>
+            </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
@@ -530,7 +597,10 @@ new #[Layout('components.layouts.employee')] class extends Component
 
         <!-- Bottom Info -->
         <div class="mt-12 text-center">
-            <div class="inline-flex items-center space-x-6 text-gray-600">
+            {{-- inline-flex with a fixed gap cannot shrink, so these three
+                 items forced ~460px and gave the whole page a horizontal
+                 scrollbar on a phone. Wrapping instead. --}}
+            <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-gray-600">
                 <div class="flex items-center">
                     <i class="fas fa-shield-alt text-red-600 mr-2"></i>
                     <span>Secure Application Process</span>
