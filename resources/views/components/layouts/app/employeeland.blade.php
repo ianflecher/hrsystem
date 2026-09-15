@@ -638,7 +638,7 @@
             <li>
                 <a href="{{ route('employee.dashboard') }}"
                    class="nav-item {{ request()->routeIs('employee.dashboard') ? 'active' : '' }}">
-                    <span class="module-icon">📊</span>
+                    <span class="module-icon"><i class="fas fa-gauge-high"></i></span>
                     <span class="nav-text">Dashboard</span>
                     <span class="nav-tooltip">Dashboard</span>
                     <span class="employee-badge"
@@ -653,7 +653,7 @@
             <li>
                 <a href="{{ route('employee.attendance') }}"
                    class="nav-item {{ request()->routeIs('employee.attendance.*') ? 'active' : '' }}">
-                    <span class="module-icon">🕒</span>
+                    <span class="module-icon"><i class="fas fa-clock"></i></span>
                     <span class="nav-text">Attendance</span>
                     <span class="nav-tooltip">Attendance Tracking</span>
                 </a>
@@ -663,7 +663,7 @@
             <li>
                 <a href="{{ route('employee.payroll') }}"
                    class="nav-item {{ request()->routeIs('employee.payroll.*') ? 'active' : '' }}">
-                    <span class="module-icon">💰</span>
+                    <span class="module-icon"><i class="fas fa-money-bill-wave"></i></span>
                     <span class="nav-text">Payroll</span>
                     <span class="nav-tooltip">Payroll & Payslips</span>
                 </a>
@@ -673,9 +673,18 @@
             <li>
                 <a href="{{ route('employee.leave') }}"
                    class="nav-item {{ request()->routeIs('employee.leave.*') ? 'active' : '' }}">
-                    <span class="module-icon">🏖️</span>
+                    <span class="module-icon"><i class="fas fa-umbrella-beach"></i></span>
                     <span class="nav-text">Leave</span>
                     <span class="nav-tooltip">Leave Management</span>
+                </a>
+            </li>
+
+            <li>
+                <a href="{{ route('account.edit') }}"
+                   class="nav-item {{ request()->routeIs('account.edit') ? 'active' : '' }}">
+                    <span class="module-icon"><i class="fas fa-id-card"></i></span>
+                    <span class="nav-text">My account</span>
+                    <span class="nav-tooltip">My account</span>
                 </a>
             </li>
 

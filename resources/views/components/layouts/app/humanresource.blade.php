@@ -857,6 +857,14 @@
             <a href="{{ route('hr.leave') }}" class="nav-link {{ request()->routeIs('hr.leave') ? 'active' : '' }}">
                 <i class="fas fa-chart-bar"></i>Leave
             </a>
+
+            {{-- Under its own heading: the list above is what HR administers,
+                 this is the one entry that is about the person using it. --}}
+            <div class="hr-sidebar__label">You</div>
+
+            <a href="{{ route('account.edit') }}" class="nav-link {{ request()->routeIs('account.edit') ? 'active' : '' }}">
+                <i class="fas fa-id-card"></i>My account
+            </a>
         </nav>
 
         <div class="hr-sidebar__foot">
