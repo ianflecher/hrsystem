@@ -107,264 +107,296 @@ new #[Layout('components.layouts.landing')] class extends Component
 }
 }
 ?>
-<div class="auth-split" x-data="{ showPassword: false }" x-init="$refs.username.focus()">
-    <style>
-        /* Two columns rather than a form floating on the photograph: inputs
-           need a dependable surface behind them, and a scrim strong enough to
-           make a form legible would have buried the picture anyway. */
-        .auth-split {
-            min-height: calc(100vh - 64px);
-            display: grid;
-            grid-template-columns: 1fr;
-        }
 
-        .auth-split__form {
+<div class="staff-hero" x-data="{ showPassword: false }" x-init="$refs.username.focus()">
+    <style>
+        /* The same treatment as the landing page: one photograph edge to edge,
+           a navy scrim weighted towards the type, and the content on glass.
+           A white card here would have been a hole punched through the frame. */
+        .staff-hero {
+            position: relative;
+            isolation: isolate;
+            min-height: calc(100vh - 64px);
             display: flex;
             align-items: center;
-            justify-content: center;
-            padding: 48px 24px;
-            /* The sign-in card is white, so the panel behind it cannot be.
-               White on white left the card with nothing to sit against and the
-               column read as one flat wall beside the photograph; an off-white
-               was too slight to register. Navy matches the header above and the
-               picture alongside, and gives the card something to sit on. */
-            background: var(--sidebar-bg, #0C1626);
+            padding: 48px 0;
+            background: #0C1626;
+            overflow: hidden;
         }
 
-        /* Only three things sit directly on that panel - the brand header, the
-           card, and the support line - so just those need light type. Anything
-           inside the white card keeps its own colours. */
-        .auth-split__inner > .text-center h1 { color: #fff; }
-        .auth-split__inner > .text-center p  { color: #A9B4C6; }
-        .auth-split__inner > .mt-8,
-        .auth-split__inner > .mt-8 * { color: #7E8CA0; }
-
-        /* The brand disc was ringed in a light grey that only made sense on a
-           white ground. */
-        .auth-split__inner > .text-center > div:first-child {
-            border-color: rgba(255, 255, 255, .14) !important;
-        }
-
-        .auth-split__inner { width: 100%; max-width: 26rem; }
-
-        .auth-split__aside {
-            position: relative;
-            display: none;
-            background-image: url("{{ asset('hero-staff.jpg') }}");
-            background-size: cover;
-            /* Centred, not right-aligned: this frame has people across its
-               width and a right crop would cut the group in half. */
-            background-position: center;
-        }
-
-        /* Bottom-weighted, because the caption sits along the bottom and the
-           faces are in the upper half. A side gradient would have dimmed the
-           people and left the type on a busy tabletop. */
-        .auth-split__aside::after {
+        .staff-hero::before {
             content: "";
             position: absolute;
             inset: 0;
-            background: linear-gradient(to top,
-                rgba(12, 22, 38, .92) 0%,
-                rgba(12, 22, 38, .72) 22%,
-                rgba(12, 22, 38, .28) 48%,
-                rgba(12, 22, 38, .12) 100%);
+            z-index: -2;
+            background-image: url("{{ asset('hero-staff.jpg') }}");
+            background-size: cover;
+            background-position: center right;
         }
 
-        .auth-split__caption {
+        .staff-hero::after {
+            content: "";
             position: absolute;
-            inset: auto 0 0 0;
-            z-index: 1;
-            padding: 44px 44px 48px;
+            inset: 0;
+            z-index: -1;
+            background: linear-gradient(100deg,
+                rgba(12, 22, 38, .97) 0%,
+                rgba(12, 22, 38, .94) 34%,
+                rgba(12, 22, 38, .74) 56%,
+                rgba(12, 22, 38, .42) 100%);
+        }
+
+        @media (max-width: 900px) {
+            /* Narrow screens put the type over the middle of the frame, where a
+               left-weighted scrim leaves it unreadable. */
+            .staff-hero::after {
+                background: linear-gradient(180deg,
+                    rgba(12, 22, 38, .95) 0%,
+                    rgba(12, 22, 38, .90) 100%);
+            }
+        }
+
+        .staff-hero__inner {
+            width: 100%;
+            max-width: 72rem;
+            margin: 0 auto;
+            padding: 0 32px;
+        }
+
+        .staff-hero__copy { max-width: 30rem; margin-bottom: 26px; }
+
+        .staff-hero__eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .3125rem .75rem;
+            border-radius: 999px;
+            background: rgba(227, 27, 35, .16);
+            border: 1px solid rgba(227, 27, 35, .38);
+            color: #FCA5A9;
+            font-size: .75rem;
+            font-weight: 600;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+
+        .staff-hero__title {
+            margin: 16px 0 10px;
             color: #fff;
-        }
-
-        .auth-split__caption h2 {
-            margin: 0 0 8px;
             font-family: var(--font-head, "Space Grotesk", system-ui, sans-serif);
-            font-size: 1.75rem;
+            font-size: clamp(2rem, 4.2vw, 2.9rem);
             font-weight: 700;
-            letter-spacing: -0.02em;
+            line-height: 1.08;
+            letter-spacing: -0.025em;
         }
 
-        .auth-split__caption p {
+        .staff-hero__lede {
             margin: 0;
-            max-width: 26rem;
             color: #A9B4C6;
-            font-size: .9375rem;
+            font-size: 1.0625rem;
             line-height: 1.6;
         }
 
-        @media (min-width: 1024px) {
-            .auth-split { grid-template-columns: 1fr 1.05fr; align-items: start; }
+        /* The glass panel, matching the portal cards on the landing page. */
+        .staff-hero__card {
+            max-width: 27rem;
+            padding: 26px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, .07);
+            border: 1px solid rgba(255, 255, 255, .16);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+        }
 
-            /* The form column is taller than the viewport, and a grid stretches
-               both columns to match it - which pushed the photograph's caption
-               below the fold. Pinning the picture keeps it, and the caption, in
-               view while the form scrolls beside it. */
-            .auth-split__aside {
-                display: block;
-                position: sticky;
-                top: 64px;
-                height: calc(100vh - 64px);
-            }
+        /* Form controls, restated for a dark panel. The inherited Tailwind
+           classes assume a white card: grey-700 labels and grey-300 borders
+           disappear against glass. */
+        .staff-hero__card label {
+            color: #D6DDE8 !important;
+            font-weight: 600;
+        }
+
+        .staff-hero__card input[type="text"],
+        .staff-hero__card input[type="password"] {
+            background: rgba(255, 255, 255, .06);
+            border-color: rgba(255, 255, 255, .22);
+            color: #fff;
+        }
+
+        .staff-hero__card input::placeholder { color: #8795A8; }
+
+        .staff-hero__card input[type="text"]:focus,
+        .staff-hero__card input[type="password"]:focus {
+            background: rgba(255, 255, 255, .10);
+            border-color: #E31B23;
+            box-shadow: 0 0 0 3px rgba(227, 27, 35, .25);
+        }
+
+        /* The icons inside the fields, and the reveal toggle. */
+        .staff-hero__card .absolute { color: #8795A8 !important; }
+
+        .staff-hero__list {
+            margin-top: 22px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, .14);
+        }
+
+        .staff-hero__list h2 {
+            margin: 0 0 12px;
+            color: #8795A8;
+            font-family: var(--font-body, system-ui, sans-serif);
+            font-size: .6875rem;
+            font-weight: 600;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .staff-hero__list ul { margin: 0; padding: 0; list-style: none; }
+
+        .staff-hero__list li {
+            display: flex;
+            align-items: flex-start;
+            gap: .625rem;
+            margin-bottom: .5rem;
+            color: #C6CFDC;
+            font-size: .875rem;
+            line-height: 1.5;
+        }
+
+        .staff-hero__list li i {
+            color: #F05A60;
+            margin-top: .2rem;
+            width: 1rem;
+            text-align: center;
+        }
+
+        .staff-hero__support {
+            margin: 22px 0 0;
+            max-width: 27rem;
+            color: #7E8CA0;
+            font-size: .8125rem;
+        }
+
+        .staff-hero__support a { color: #A9B4C6; text-decoration: none; }
+        .staff-hero__support a:hover { text-decoration: underline; }
+
+        @media (max-width: 640px) {
+            .staff-hero { min-height: 0; padding: 32px 0; }
+            .staff-hero__inner { padding: 0 20px; }
+            .staff-hero__card { max-width: none; padding: 20px; }
         }
     </style>
 
-    <div class="auth-split__form">
-        <div class="auth-split__inner">
-        <!-- Brand Header -->
-        <div class="text-center mb-8">
-            <div class="mx-auto h-20 w-20 bg-red-500 rounded-full flex items-center justify-center mb-4 overflow-hidden border-2 border-gray-200 shadow-sm">
-                <i class="fas fa-users text-3xl text-white"></i>
-            </div>
-            <h1 class="text-3xl font-bold text-gray-900 mb-2">Staff Portal</h1>
-            <p class="text-gray-600">Employee, Supervisor &amp; Leader Access</p>
+    <div class="staff-hero__inner">
+        <div class="staff-hero__copy">
+            <span class="staff-hero__eyebrow">Imprint Customs PH</span>
+            <h1 class="staff-hero__title">Staff Portal</h1>
+            <p class="staff-hero__lede">Employee, Supervisor &amp; Leader Access</p>
         </div>
 
-        <!-- Login Card -->
-        <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
-            <div class="p-8">
-                <form wire:submit.prevent="login" class="space-y-6">
-                    @csrf
+        <div class="staff-hero__card">
+            <form wire:submit.prevent="login" class="space-y-6">
+                                @csrf
                     
-                    <!-- Username/Email -->
-                    <div>
-                        <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
-                            Staff ID / Email
-                        </label>
-                        <div class="relative">
-                            <input 
-                                type="text" 
-                                wire:model="username" 
-                                id="username"
-                                x-ref="username"
-                                required
-                                autofocus
-                                placeholder="staff@imprintcustoms.ph"
-                                class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition"
-                            >
-                            <div class="absolute left-3 top-3 text-gray-400">
-                                <i class="fas fa-id-badge"></i>
-                            </div>
-                        </div>
-                        @error('username')
-                            <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
+                                <!-- Username/Email -->
+                                <div>
+                                    <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
+                                        Staff ID / Email
+                                    </label>
+                                    <div class="relative">
+                                        <input 
+                                            type="text" 
+                                            wire:model="username" 
+                                            id="username"
+                                            x-ref="username"
+                                            required
+                                            autofocus
+                                            placeholder="staff@imprintcustoms.ph"
+                                            class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition"
+                                        >
+                                        <div class="absolute left-3 top-3 text-gray-400">
+                                            <i class="fas fa-id-badge"></i>
+                                        </div>
+                                    </div>
+                                    @error('username')
+                                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
 
-                    <!-- Password -->
-                    <div>
-                        <div class="flex items-center justify-between mb-2">
-                            <label for="password" class="block text-sm font-medium text-gray-700">
-                                Password
-                            </label>
-                            <a href="#" class="text-sm text-red-600 hover:text-red-700 font-medium">
-                                Forgot password?
-                            </a>
-                        </div>
-                        <div class="relative">
-                            <input 
-                                :type="showPassword ? 'text' : 'password'"
-                                wire:model="password" 
-                                id="password"
-                                required
-                                placeholder="••••••••"
-                                class="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition"
-                            >
-                            <div class="absolute left-3 top-3 text-gray-400">
-                                <i class="fas fa-lock"></i>
-                            </div>
-                            <button 
-                                type="button" 
-                                class="absolute right-3 top-3 text-gray-400 hover:text-gray-600" 
-                                @click="showPassword = !showPassword"
-                            >
-                                <i class="fas" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
-                            </button>
-                        </div>
-                        @error('password')
-                            <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
+                                <!-- Password -->
+                                <div>
+                                    <div class="flex items-center justify-between mb-2">
+                                        <label for="password" class="block text-sm font-medium text-gray-700">
+                                            Password
+                                        </label>
+                                        <a href="#" class="text-sm text-red-600 hover:text-red-700 font-medium">
+                                            Forgot password?
+                                        </a>
+                                    </div>
+                                    <div class="relative">
+                                        <input 
+                                            :type="showPassword ? 'text' : 'password'"
+                                            wire:model="password" 
+                                            id="password"
+                                            required
+                                            placeholder="••••••••"
+                                            class="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition"
+                                        >
+                                        <div class="absolute left-3 top-3 text-gray-400">
+                                            <i class="fas fa-lock"></i>
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            class="absolute right-3 top-3 text-gray-400 hover:text-gray-600" 
+                                            @click="showPassword = !showPassword"
+                                        >
+                                            <i class="fas" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                        </button>
+                                    </div>
+                                    @error('password')
+                                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
 
-                    <!-- Submit Button -->
-                    <div>
-                        <button 
-                            type="submit" 
-                            wire:loading.attr="disabled"
-                            class="w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:from-red-700 hover:to-indigo-700 transition font-medium flex items-center justify-center gap-2 shadow-sm hover:shadow-sm transform hover:-translate-y-0.5 transition-all duration-200"
-                        >
-                            <span wire:loading.remove wire:target="login">
-                                <i class="fas fa-sign-in-alt"></i>
-                                Sign In
-                            </span>
-                            <span wire:loading wire:target="login">
-                                <i class="fas fa-spinner fa-spin"></i>
-                                Verifying...
-                            </span>
-                        </button>
-                    </div>
-                </form>
+                                <!-- Submit Button -->
+                                <div>
+                                    <button 
+                                        type="submit" 
+                                        wire:loading.attr="disabled"
+                                        class="w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:from-red-700 hover:to-indigo-700 transition font-medium flex items-center justify-center gap-2 shadow-sm hover:shadow-sm transform hover:-translate-y-0.5 transition-all duration-200"
+                                    >
+                                        <span wire:loading.remove wire:target="login">
+                                            <i class="fas fa-sign-in-alt"></i>
+                                            Sign In
+                                        </span>
+                                        <span wire:loading wire:target="login">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            Verifying...
+                                        </span>
+                                    </button>
+                                </div>
+                            </form>
 
-                {{-- What this portal actually does.
-
-                     It used to advertise two roles with three features each:
-                     Employee got Attendance, Tasks and Orders; a manager tier
-                     that does not exist here got Reports, Approvals and Team.
-                     Six claims, one of them true.
-                     Tasks and Orders belong to the projects and ERP modules,
-                     which are not part of the HRIS, and every staff tier
-                     lands on the same dashboard. --}}
-                <div class="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
-                        In this portal
-                    </p>
-                    <ul class="space-y-2">
-                        <li class="flex items-start gap-2 text-sm text-gray-700">
-                            <i class="fas fa-clock text-red-600 mt-0.5 w-4 text-center"></i>
-                            <span>Clock in and out, and review your attendance</span>
-                        </li>
-                        <li class="flex items-start gap-2 text-sm text-gray-700">
-                            <i class="fas fa-money-bill-wave text-red-600 mt-0.5 w-4 text-center"></i>
-                            <span>View your payslips</span>
-                        </li>
-                        <li class="flex items-start gap-2 text-sm text-gray-700">
-                            <i class="fas fa-umbrella-beach text-red-600 mt-0.5 w-4 text-center"></i>
-                            <span>File leave requests and track their status</span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-            
-            <!-- Footer -->
-            <div class="bg-gray-50 px-8 py-4 border-t border-gray-200">
-                <div class="flex items-center justify-center">
-                    <i class="fas fa-building text-red-600 mr-2"></i>
-                    <p class="text-xs text-center text-red-800 font-medium">
-                        Imprint Customs Staff Portal
-                    </p>
-                </div>
+            <div class="staff-hero__list">
+                {{-- What this portal actually does. It used to advertise two
+                     roles with three features each: Employee got Attendance,
+                     Tasks and Orders; a manager tier that does not exist here
+                     got Reports, Approvals and Team. Six claims, one of them
+                     true. Tasks and Orders belong to the projects and ERP
+                     modules, which are not part of the HRIS, and every staff
+                     tier lands on the same dashboard. --}}
+                <h2>In this portal</h2>
+                <ul>
+                    <li><i class="fas fa-clock"></i><span>Clock in and out, and review your attendance</span></li>
+                    <li><i class="fas fa-money-bill-wave"></i><span>View your payslips</span></li>
+                    <li><i class="fas fa-umbrella-beach"></i><span>File leave requests and track their status</span></li>
+                </ul>
             </div>
         </div>
 
-        <!-- Support Information -->
-        <div class="mt-8 text-center">
-            <div class="inline-flex items-center gap-2 text-sm text-gray-500">
-                <i class="fas fa-headset"></i>
-                <span>Support: <span class="font-medium">hr@imprintcustoms.ph</span> | IT: <span class="font-medium">it@imprintcustoms.ph</span></span>
-            </div>
-        </div>
-        </div>
-    </div>
-
-    <div class="auth-split__aside">
-        <div class="auth-split__caption">
-            <h2>Your workday, in one place</h2>
-            <p>
-                Clock in, check your payslips and file leave without chasing
-                anyone for a form.
-            </p>
-        </div>
+        <p class="staff-hero__support">
+            Support: <a href="mailto:hr@imprintcustoms.ph">hr@imprintcustoms.ph</a>
+            &nbsp;|&nbsp; IT: <a href="mailto:it@imprintcustoms.ph">it@imprintcustoms.ph</a>
+        </p>
     </div>
 </div>

@@ -134,78 +134,159 @@ new #[Layout('components.layouts.employee')] class extends Component
 }
 ?>
 
-<div class="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-    <div class="max-w-7xl mx-auto">
+<div class="careers-page">
+    <div class="careers-page__inner">
         <!-- Hero Section -->
         <div class="careers-hero">
             <style>
                 /* This photograph is a bright studio shot, so it takes a light
                    scrim and dark type. The dark treatment used on the staff
                    sign-in would fight the picture rather than sit on it. */
-                .careers-hero {
+                /* The landing page treatment: one photograph, a navy scrim
+                   weighted towards the type, and everything else on glass. */
+                .careers-page {
                     position: relative;
-                    overflow: hidden;
-                    margin-bottom: 3rem;
-                    border-radius: 16px;
-                    border: 1px solid #E5E9F0;
-                    background-color: #F4F6F9;
-                    background-image: url("{{ asset('hero-careers.jpg') }}");
-                    background-size: cover;
-                    background-position: center right;
-                    min-height: 300px;
-                    display: flex;
-                    align-items: center;
+                    isolation: isolate;
+                    min-height: calc(100vh - 64px);
+                    padding: 0 0 64px;
+                    background: #0C1626;
                 }
 
-                .careers-hero::before {
+                .careers-page::before {
                     content: "";
                     position: absolute;
-                    inset: 0;
-                    background: linear-gradient(90deg,
-                        rgba(255, 255, 255, .97) 0%,
-                        rgba(255, 255, 255, .92) 38%,
-                        rgba(255, 255, 255, .55) 62%,
-                        rgba(255, 255, 255, .10) 100%);
+                    inset: 0 0 auto 0;
+                    height: 560px;
+                    z-index: -2;
+                    background-image: url("{{ asset('hero-careers.jpg') }}");
+                    background-size: cover;
+                    background-position: center 35%;
                 }
 
-                .careers-hero__copy {
-                    position: relative;
-                    z-index: 1;
-                    max-width: 32rem;
-                    padding: 48px 44px;
+                .careers-page::after {
+                    content: "";
+                    position: absolute;
+                    inset: 0 0 auto 0;
+                    height: 560px;
+                    z-index: -1;
+                    background: linear-gradient(100deg,
+                            rgba(12, 22, 38, .96) 0%,
+                            rgba(12, 22, 38, .92) 34%,
+                            rgba(12, 22, 38, .72) 58%,
+                            rgba(12, 22, 38, .40) 100%),
+                        linear-gradient(to bottom,
+                            rgba(12, 22, 38, 0) 55%,
+                            rgba(12, 22, 38, 1) 100%);
+                }
+
+                .careers-hero {
+                    padding: 72px 0 56px;
+                }
+
+                .careers-hero__copy { max-width: 34rem; }
+
+                .careers-hero__eyebrow {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: .5rem;
+                    padding: .3125rem .75rem;
+                    border-radius: 999px;
+                    background: rgba(227, 27, 35, .16);
+                    border: 1px solid rgba(227, 27, 35, .38);
+                    color: #FCA5A9;
+                    font-size: .75rem;
+                    font-weight: 600;
+                    letter-spacing: .04em;
+                    text-transform: uppercase;
                 }
 
                 .careers-hero__copy h1 {
-                    margin: 0 0 12px;
+                    margin: 16px 0 12px;
                     font-family: var(--font-head, "Space Grotesk", system-ui, sans-serif);
-                    font-size: clamp(1.75rem, 3.4vw, 2.5rem);
+                    font-size: clamp(2rem, 4.4vw, 3rem);
                     font-weight: 700;
-                    line-height: 1.12;
-                    letter-spacing: -0.02em;
-                    color: #17202E;
+                    line-height: 1.08;
+                    letter-spacing: -0.025em;
+                    color: #fff;
                 }
 
                 .careers-hero__copy p {
                     margin: 0;
-                    color: #566172;
+                    color: #A9B4C6;
                     font-size: 1.0625rem;
                     line-height: 1.6;
                 }
 
+                /* Panels, matching the portal cards on the landing page. */
+                .careers-page .panel {
+                    padding: 26px;
+                    border-radius: 14px;
+                    background: rgba(255, 255, 255, .07);
+                    border: 1px solid rgba(255, 255, 255, .16);
+                    -webkit-backdrop-filter: blur(12px);
+                    backdrop-filter: blur(12px);
+                }
+
+                /* Type and controls restated for a dark panel: the inherited
+                   Tailwind classes all assume a white card. */
+                .careers-page .panel h2 { color: #fff; }
+                .careers-page .panel h3 { color: #fff; }
+                .careers-page .panel label { color: #D6DDE8 !important; }
+                .careers-page .panel p,
+                .careers-page .panel span:not([class*="bg-"]) { color: #C6CFDC; }
+
+                .careers-page .panel input,
+                .careers-page .panel select,
+                .careers-page .panel textarea {
+                    background: rgba(255, 255, 255, .06) !important;
+                    border-color: rgba(255, 255, 255, .22) !important;
+                    color: #fff !important;
+                }
+
+                .careers-page .panel input::placeholder,
+                .careers-page .panel textarea::placeholder { color: #8795A8 !important; }
+
+                .careers-page .panel input:focus,
+                .careers-page .panel select:focus,
+                .careers-page .panel textarea:focus {
+                    background: rgba(255, 255, 255, .10) !important;
+                    border-color: #E31B23 !important;
+                    box-shadow: 0 0 0 3px rgba(227, 27, 35, .25) !important;
+                }
+
+                .careers-page .panel select option { background: #0C1626; color: #fff; }
+
+                /* The listed openings sit on the panel, so their own borders
+                   have to come up off white too. */
+                .careers-page .panel .border-gray-200 { border-color: rgba(255, 255, 255, .16) !important; }
+
+                .careers-page__inner {
+                    width: 100%;
+                    max-width: 72rem;
+                    margin: 0 auto;
+                    padding: 0 32px;
+                }
+
+                .careers-page__footnote { color: #7E8CA0; }
+
                 @media (max-width: 860px) {
                     /* Narrow screens put the type over the middle of the frame,
                        where a left-weighted scrim leaves it unreadable. */
-                    .careers-hero::before {
+                    .careers-page::after {
                         background: linear-gradient(180deg,
-                            rgba(255, 255, 255, .95) 0%,
-                            rgba(255, 255, 255, .88) 100%);
+                            rgba(12, 22, 38, .94) 0%,
+                            rgba(12, 22, 38, .92) 55%,
+                            rgba(12, 22, 38, 1) 100%);
                     }
-                    .careers-hero__copy { padding: 32px 24px; }
+                    .careers-hero { padding: 48px 0 36px; }
+                    .careers-page__inner { padding: 0 20px; }
                 }
+
             </style>
 
             <div class="careers-hero__copy">
-                <h1>Join our team at <span style="color:#E31B23;">Imprint Customs</span></h1>
+                <span class="careers-hero__eyebrow">Careers</span>
+                <h1>Join our team at <span style="color:#F05A60;">Imprint Customs</span></h1>
                 <p>
                     Looking for an exciting career opportunity? Apply now to
                     become part of our growing team.
@@ -217,7 +298,7 @@ new #[Layout('components.layouts.employee')] class extends Component
             <!-- Left Column: Info Cards -->
             <div class="space-y-6">
                 <!-- Current Openings -->
-                <div class="bg-white rounded-xl shadow-sm p-6">
+                <div class="panel">
                     <h2 class="text-2xl font-bold text-gray-900 mb-4">Current Openings</h2>
                     @php $openings = $this->openPositions(); @endphp
                     @if (count($openings) === 0)
@@ -250,7 +331,7 @@ new #[Layout('components.layouts.employee')] class extends Component
             </div>
 
             <!-- Right Column: Auth Form -->
-            <div class="bg-white rounded-xl shadow-sm p-8">
+            <div class="panel">
                 <!-- Form Toggle -->
                 <div class="flex mb-8">
                     <button wire:click="toggleForm" 
@@ -592,7 +673,7 @@ new #[Layout('components.layouts.employee')] class extends Component
             {{-- inline-flex with a fixed gap cannot shrink, so these three
                  items forced ~460px and gave the whole page a horizontal
                  scrollbar on a phone. Wrapping instead. --}}
-            <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-gray-600">
+            <div class="careers-page__footnote flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
                 <div class="flex items-center">
                     <i class="fas fa-shield-alt text-red-600 mr-2"></i>
                     <span>Secure Application Process</span>
