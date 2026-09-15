@@ -299,6 +299,66 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     /**
      * What the buttons should offer for the period currently selected.
      */
+    /**
+     * Days in this cutoff where somebody has no attendance at all.
+     *
+     * A missed day is now money, and the usual reason for a gap is not that
+     * nobody came in - it is that the scanner was off, or a sync was never run.
+     * So the gaps are counted and shown before anything is generated, because
+     * once a payslip is approved and paid the money has gone.
+     */
+    public function getAttendanceGapsProperty(): array
+    {
+        $start = $this->period()->start;
+        $end   = min($this->period()->end, today()->toDateString());
+
+        if ($end < $start) {
+            return ['days' => 0, 'people' => 0];
+        }
+
+        $holidays = DB::table('holidays')->whereBetween('date', [$start, $end])->pluck('date')
+            ->map(fn ($date) => substr((string) $date, 0, 10))->all();
+
+        $employees = DB::table('employees')->where('status', 'active')->where('salary', '>', 0)
+            ->select('employee_id', 'rest_days', 'hire_date')->get();
+
+        $present = DB::table('hr_attendance')->whereBetween('date', [$start, $end])->whereNotNull('time_in')
+            ->get(['employee_id', 'date'])
+            ->map(fn ($row) => $row->employee_id.'|'.substr((string) $row->date, 0, 10))->flip();
+
+        $leaves = DB::table('leaves')->where('status', 'approved')
+            ->where('start_date', '<=', $end)->where('end_date', '>=', $start)->get();
+
+        $days = 0;
+        $people = [];
+
+        foreach ($employees as $employee) {
+            for ($day = \Carbon\Carbon::parse($start); $day->lte(\Carbon\Carbon::parse($end)); $day->addDay()) {
+                $date = $day->toDateString();
+
+                if (in_array($date, $holidays, true)
+                    || \App\Support\WorkWeek::restsOn($employee->rest_days, $day)
+                    || ($employee->hire_date && $date < substr((string) $employee->hire_date, 0, 10))
+                    || $present->has($employee->employee_id.'|'.$date)) {
+                    continue;
+                }
+
+                $onLeave = $leaves->contains(fn ($leave) => $leave->employee_id === $employee->employee_id
+                    && substr((string) $leave->start_date, 0, 10) <= $date
+                    && substr((string) $leave->end_date, 0, 10) >= $date);
+
+                if ($onLeave) {
+                    continue;
+                }
+
+                $days++;
+                $people[$employee->employee_id] = true;
+            }
+        }
+
+        return ['days' => $days, 'people' => count($people)];
+    }
+
     public function getPeriodCountsProperty(): array
     {
         $periodStart = $this->period()->start;
@@ -488,6 +548,18 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         @if (session('info'))
             <div class="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
                 <p class="text-sm text-blue-800">{{ session('info') }}</p>
+            </div>
+        @endif
+
+        {{-- Said before generating, not after: a missed day now costs a day's pay,
+             and the usual cause of a gap is a scanner that was off rather than
+             somebody who stayed home. --}}
+        @if ($this->attendanceGaps['days'] > 0)
+            <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <strong>{{ $this->attendanceGaps['days'] }} day(s) with no attendance record</strong>
+                across {{ $this->attendanceGaps['people'] }} employee(s) in this cutoff.
+                Each will be treated as a day missed and deducted.
+                If the scanner was down, sync or correct attendance before generating.
             </div>
         @endif
 

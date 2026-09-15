@@ -125,26 +125,35 @@ class PayrollCalculator
 
         $parts[] = 'Tax: PHP '.number_format($c['tax'], 2);
 
-        // $c['late'] is the two together, capped at the day rate, so each is
-        // named from its own figure rather than by subtracting one from the
-        // other - which would misreport a day where the cap bit.
+        // $c['late'] is every time deduction together. Each is named from its
+        // own figure so nothing on the payslip is an unexplained sum.
         if ($c['late'] > 0) {
-            $lateDays = (int) ($time['lateDays'] ?? 0);
-            $undertimeDays = (int) ($time['undertimeDays'] ?? 0);
+            $named = 0.0;
 
-            if ($lateDays > 0) {
-                $parts[] = 'Late ('.$lateDays.' day'.($lateDays === 1 ? '' : 's').'): PHP '
-                    .number_format((float) ($time['late'] ?? 0), 2);
+            foreach ([
+                'absentDays'      => ['Absent', 'absence'],
+                'unpaidLeaveDays' => ['Unpaid leave', 'unpaidLeave'],
+                'lateDays'        => ['Late', 'late'],
+                'undertimeDays'   => ['Undertime', 'undertime'],
+            ] as $dayKey => [$label, $amountKey]) {
+                $days = (int) ($time[$dayKey] ?? 0);
+
+                if ($days === 0) {
+                    continue;
+                }
+
+                $amount = (float) ($time[$amountKey] ?? 0);
+                $named += $amount;
+                $parts[] = $label.' ('.$days.' day'.($days === 1 ? '' : 's').'): PHP '.number_format($amount, 2);
             }
 
-            if ($undertimeDays > 0) {
-                $parts[] = 'Undertime ('.$undertimeDays.' day'.($undertimeDays === 1 ? '' : 's').'): PHP '
-                    .number_format((float) ($time['undertime'] ?? 0), 2);
+            if (round($named, 2) < $c['late']) {
+                $parts[] = 'Other time deductions: PHP '.number_format($c['late'] - round($named, 2), 2);
             }
+        }
 
-            if ($lateDays === 0 && $undertimeDays === 0) {
-                $parts[] = 'Time deductions: PHP '.number_format($c['late'], 2);
-            }
+        if (($time['leaveDays'] ?? 0) > 0) {
+            $parts[] = 'Paid leave: '.$time['leaveDays'].' day'.($time['leaveDays'] === 1 ? '' : 's');
         }
 
         if ($c['sss'] == 0 && $c['philhealth'] == 0 && $c['pagibig'] == 0) {

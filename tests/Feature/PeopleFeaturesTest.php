@@ -41,6 +41,20 @@ class PeopleFeaturesTest extends TestCase
         return $user;
     }
 
+    /**
+     * A clean day worked for every date in the range, so a test about something
+     * else is not swamped by absence deductions.
+     */
+    private function attend(int $employeeId, string $from, string $to): void
+    {
+        for ($day = \Carbon\Carbon::parse($from); $day->lte(\Carbon\Carbon::parse($to)); $day->addDay()) {
+            DB::table('hr_attendance')->updateOrInsert(
+                ['employee_id' => $employeeId, 'date' => $day->toDateString()],
+                ['time_in' => $day->toDateString().' 08:00:00', 'time_out' => $day->toDateString().' 17:00:00',
+                 'status' => 'present', 'created_at' => now(), 'updated_at' => now()]);
+        }
+    }
+
     public function test_all_feature_pages_render_for_the_correct_portal(): void
     {
         foreach (PeopleController::MODULES as $module => $label) {
@@ -181,15 +195,15 @@ class PeopleFeaturesTest extends TestCase
         DB::table('employees')->where('employee_id', $this->employeeId)
             ->update(['shift_start' => '08:00:00', 'shift_end' => '17:00:00', 'rest_days' => null, 'salary' => 22000]);
 
+        $this->attend($this->employeeId, '2018-01-01', '2018-01-15');
+
         // On time in, half an hour early out.
-        DB::table('hr_attendance')->insert(['employee_id' => $this->employeeId, 'date' => '2018-01-03',
-            'time_in' => '2018-01-03 08:00:00', 'time_out' => '2018-01-03 16:30:00', 'status' => 'present',
-            'created_at' => now(), 'updated_at' => now()]);
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-01-03')
+            ->update(['time_out' => '2018-01-03 16:30:00']);
 
         // A day with no clock-out at all must cost nothing.
-        DB::table('hr_attendance')->insert(['employee_id' => $this->employeeId, 'date' => '2018-01-04',
-            'time_in' => '2018-01-04 08:00:00', 'time_out' => null, 'status' => 'present',
-            'created_at' => now(), 'updated_at' => now()]);
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-01-04')
+            ->update(['time_out' => null]);
 
         (new PayrollRun)->generate($this->employeeId, PayPeriod::fromStart('2018-01-01'));
         $payslip = DB::table('hr_payroll')->where('employee_id', $this->employeeId)->first();
@@ -205,10 +219,11 @@ class PeopleFeaturesTest extends TestCase
         DB::table('employees')->where('employee_id', $this->employeeId)
             ->update(['shift_start' => '08:00:00', 'shift_end' => '17:00:00', 'rest_days' => null, 'salary' => 22000]);
 
+        $this->attend($this->employeeId, '2018-01-01', '2018-01-15');
+
         // An hour late and an hour early: half a day each.
-        DB::table('hr_attendance')->insert(['employee_id' => $this->employeeId, 'date' => '2018-01-03',
-            'time_in' => '2018-01-03 09:00:00', 'time_out' => '2018-01-03 16:00:00', 'status' => 'late',
-            'created_at' => now(), 'updated_at' => now()]);
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-01-03')
+            ->update(['time_in' => '2018-01-03 09:00:00', 'time_out' => '2018-01-03 16:00:00', 'status' => 'late']);
 
         (new PayrollRun)->generate($this->employeeId, PayPeriod::fromStart('2018-01-01'));
         $payslip = DB::table('hr_payroll')->where('employee_id', $this->employeeId)->first();
@@ -222,15 +237,144 @@ class PeopleFeaturesTest extends TestCase
         $this->assertEquals($expected['net'], (float) $payslip->net_pay);
     }
 
+    private function payslip(string $start = '2018-01-01'): object
+    {
+        (new PayrollRun)->generate($this->employeeId, PayPeriod::fromStart($start));
+
+        return DB::table('hr_payroll')->where('employee_id', $this->employeeId)->where('period_start', $start)->first();
+    }
+
+    public function test_a_day_missed_costs_the_day(): void
+    {
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'rest_days' => null, 'salary' => 22000, 'hire_date' => '2017-01-01']);
+
+        $this->attend($this->employeeId, '2018-01-01', '2018-01-15');
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->whereIn('date', ['2018-01-04', '2018-01-05'])->delete();
+
+        $payslip = $this->payslip();
+
+        $day = round(22000 / 22, 2);
+        $this->assertStringContainsString('Absent (2 days): PHP '.number_format($day * 2, 2), $payslip->notes);
+
+        $expected = PayrollCalculator::forCutoff(22000, round($day * 2, 2), false);
+        $this->assertEquals($expected['net'], (float) $payslip->net_pay);
+    }
+
+    public function test_a_day_marked_absent_counts_the_same_as_no_record(): void
+    {
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'rest_days' => null, 'salary' => 22000, 'hire_date' => '2017-01-01']);
+
+        $this->attend($this->employeeId, '2018-01-01', '2018-01-15');
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-01-04')
+            ->update(['time_in' => null, 'time_out' => null, 'status' => 'absent']);
+
+        $this->assertStringContainsString('Absent (1 day)', $this->payslip()->notes);
+    }
+
+    public function test_approved_leave_is_paid_and_not_counted_absent(): void
+    {
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'rest_days' => null, 'salary' => 22000, 'hire_date' => '2017-01-01']);
+
+        $this->attend($this->employeeId, '2018-01-01', '2018-01-15');
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->whereIn('date', ['2018-01-04', '2018-01-05'])->delete();
+
+        DB::table('leaves')->insert(['employee_id' => $this->employeeId, 'leave_type' => 'vacation',
+            'start_date' => '2018-01-04', 'end_date' => '2018-01-05', 'total_days' => 2, 'reason' => 'Family matters',
+            'status' => 'approved', 'created_at' => now(), 'updated_at' => now()]);
+
+        $payslip = $this->payslip();
+
+        $this->assertStringNotContainsString('Absent', $payslip->notes);
+        $this->assertStringContainsString('Paid leave: 2 days', $payslip->notes);
+
+        // Nothing at all comes off for those days.
+        $expected = PayrollCalculator::forCutoff(22000, 0.0, false);
+        $this->assertEquals($expected['net'], (float) $payslip->net_pay);
+    }
+
+    public function test_leave_that_is_only_requested_does_not_excuse_the_day(): void
+    {
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'rest_days' => null, 'salary' => 22000, 'hire_date' => '2017-01-01']);
+
+        $this->attend($this->employeeId, '2018-01-01', '2018-01-15');
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-01-04')->delete();
+
+        DB::table('leaves')->insert(['employee_id' => $this->employeeId, 'leave_type' => 'vacation',
+            'start_date' => '2018-01-04', 'end_date' => '2018-01-04', 'total_days' => 1, 'reason' => 'Asked for',
+            'status' => 'pending', 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->assertStringContainsString('Absent (1 day)', $this->payslip()->notes,
+            'a pending request is not a day off yet, or approving it would mean nothing');
+    }
+
+    public function test_unpaid_leave_costs_the_day_but_is_named_as_leave(): void
+    {
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'rest_days' => null, 'salary' => 22000, 'hire_date' => '2017-01-01']);
+
+        $this->attend($this->employeeId, '2018-01-01', '2018-01-15');
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-01-04')->delete();
+
+        DB::table('leaves')->insert(['employee_id' => $this->employeeId, 'leave_type' => 'unpaid',
+            'start_date' => '2018-01-04', 'end_date' => '2018-01-04', 'total_days' => 1, 'reason' => 'Personal',
+            'status' => 'approved', 'created_at' => now(), 'updated_at' => now()]);
+
+        $notes = $this->payslip()->notes;
+
+        $this->assertStringContainsString('Unpaid leave (1 day)', $notes);
+        $this->assertStringNotContainsString('Absent', $notes);
+    }
+
+    public function test_rest_days_holidays_and_days_before_hiring_are_never_absences(): void
+    {
+        // Sundays off, hired on the 8th, and the 10th is a holiday.
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'rest_days' => '7', 'salary' => 22000, 'hire_date' => '2018-01-08']);
+        DB::table('holidays')->insert(['date' => '2018-01-10', 'name' => 'Founding Day', 'type' => 'regular',
+            'created_at' => now(), 'updated_at' => now()]);
+
+        $this->attend($this->employeeId, '2018-01-08', '2018-01-15');
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-01-10')->delete();
+
+        $payslip = $this->payslip();
+
+        // The 1st to the 7th predate the hire, the 7th and 14th are Sundays,
+        // and the 10th is the holiday - none of them are missed days.
+        $this->assertStringNotContainsString('Absent', $payslip->notes);
+    }
+
+    public function test_the_rest_of_the_cutoff_is_not_charged_before_it_happens(): void
+    {
+        // A cutoff running now: the days still to come cannot be absences.
+        $period = PayPeriod::recent(1)[0];
+
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'rest_days' => null, 'salary' => 22000, 'hire_date' => '2017-01-01']);
+        $this->attend($this->employeeId, $period->start, today()->toDateString());
+
+        (new PayrollRun)->generate($this->employeeId, $period);
+        $payslip = DB::table('hr_payroll')->where('employee_id', $this->employeeId)->where('period_start', $period->start)->first();
+
+        $this->assertStringNotContainsString('Absent', $payslip->notes ?? '');
+
+        DB::table('hr_payroll')->where('payroll_id', $payslip->payroll_id)->delete();
+    }
+
     public function test_nobody_is_late_on_a_rest_day_or_a_holiday(): void
     {
         DB::table('employees')->where('employee_id', $this->employeeId)
             ->update(['shift_start' => '08:00:00', 'rest_days' => '7', 'salary' => 22000]);
         DB::table('holidays')->insert(['date' => '2018-01-08', 'name' => 'Founding Day', 'type' => 'regular', 'created_at' => now(), 'updated_at' => now()]);
 
+        $this->attend($this->employeeId, '2018-01-01', '2018-01-15');
+
         foreach (['2018-01-07', '2018-01-08'] as $date) {
-            DB::table('hr_attendance')->insert(['employee_id' => $this->employeeId, 'date' => $date,
-                'time_in' => $date.' 10:30:00', 'status' => 'late', 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', $date)
+                ->update(['time_in' => $date.' 10:30:00', 'status' => 'late']);
         }
 
         (new PayrollRun)->generate($this->employeeId, PayPeriod::fromStart('2018-01-01'));
@@ -316,6 +460,7 @@ class PeopleFeaturesTest extends TestCase
         $loan = DB::table('employee_loans')->where('employee_id', $this->employeeId)->value('id');
         $this->actingAs($this->hr)->post('/hr/people/loans/'.$loan, ['action' => 'approve'])->assertRedirect();
         $this->post('/hr/people/loans/'.$loan, ['action' => 'disburse'])->assertRedirect();
+        $this->attend($this->employeeId, '2018-01-01', '2018-01-31');
         $service = app(PayrollRun::class);
         $payroll = $service->generate($this->employeeId, PayPeriod::fromStart('2018-01-01'));
         $this->assertDatabaseHas('hr_payroll', ['payroll_id' => $payroll, 'overtime_pay' => 300, 'loan_deduction' => 600]);

@@ -31,6 +31,9 @@ class PayrollRunTest extends TestCase
             DB::table('hr_payroll')->whereIn('employee_id', function ($q) use ($id) {
                 $q->select('employee_id')->from('employees')->where('user_id', $id);
             })->delete();
+            DB::table('hr_attendance')->whereIn('employee_id', function ($q) use ($id) {
+                $q->select('employee_id')->from('employees')->where('user_id', $id);
+            })->delete();
             DB::table('employees')->where('user_id', $id)->delete();
             DB::table('users')->where('user_id', $id)->delete();
         }
@@ -62,7 +65,7 @@ class PayrollRunTest extends TestCase
         ]);
         $this->createdUserIds[] = $user->user_id;
 
-        return DB::table('employees')->insertGetId([
+        $employeeId = DB::table('employees')->insertGetId([
             'user_id'    => $user->user_id,
             'job_title'  => 'Subject',
             'hire_date'  => '2019-01-01',
@@ -71,6 +74,29 @@ class PayrollRunTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        // These tests are about contributions and tax, so the person turns up
+        // every day: absence is charged now, and a subject with no attendance
+        // at all would have most of the payslip eaten before tax was reached.
+        $this->attend($employeeId, '2019-03-01', '2019-03-31');
+
+        return $employeeId;
+    }
+
+    /** A clean day worked, for every date in the range. */
+    private function attend(int $employeeId, string $from, string $to): void
+    {
+        for ($day = \Carbon\Carbon::parse($from); $day->lte(\Carbon\Carbon::parse($to)); $day->addDay()) {
+            DB::table('hr_attendance')->insert([
+                'employee_id' => $employeeId,
+                'date'        => $day->toDateString(),
+                'time_in'     => $day->toDateString().' 08:00:00',
+                'time_out'    => $day->toDateString().' 17:00:00',
+                'status'      => 'present',
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ]);
+        }
     }
 
     private function screen()
@@ -156,15 +182,11 @@ class PayrollRunTest extends TestCase
         $id = $this->employee(22000);
         DB::table('employees')->where('employee_id', $id)->update(['shift_start' => '08:00:00']);
 
+        // The fixture already has them turning up on time every day; these
+        // three arrivals replace the clean ones.
         foreach (['2019-03-18 08:08:00', '2019-03-19 08:40:00', '2019-03-20 08:03:00'] as $arrival) {
-            DB::table('hr_attendance')->insert([
-                'employee_id' => $id,
-                'date'        => substr($arrival, 0, 10),
-                'time_in'     => $arrival,
-                'status'      => 'present',
-                'created_at'  => now(),
-                'updated_at'  => now(),
-            ]);
+            DB::table('hr_attendance')->where('employee_id', $id)->where('date', substr($arrival, 0, 10))
+                ->update(['time_in' => $arrival, 'updated_at' => now()]);
         }
 
         $this->screen()->call('generatePeriod');
@@ -175,6 +197,22 @@ class PayrollRunTest extends TestCase
             'the third arrival was inside the grace period');
 
         DB::table('hr_attendance')->where('employee_id', $id)->delete();
+    }
+
+    public function test_the_screen_warns_about_missing_attendance_before_generating(): void
+    {
+        $id = $this->employee(22000);
+        DB::table('employees')->where('employee_id', $id)->update(['rest_days' => null]);
+
+        // The fixture attends every day, so there is nothing to warn about yet.
+        $this->assertSame(0, $this->screen()->get('attendanceGaps')['days']);
+
+        DB::table('hr_attendance')->where('employee_id', $id)
+            ->whereIn('date', ['2019-03-18', '2019-03-19'])->delete();
+
+        $gaps = $this->screen()->get('attendanceGaps');
+        $this->assertSame(2, $gaps['days']);
+        $this->assertSame(1, $gaps['people']);
     }
 
     public function test_a_second_run_does_not_duplicate_anyone(): void
