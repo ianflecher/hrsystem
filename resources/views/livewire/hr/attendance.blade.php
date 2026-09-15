@@ -450,7 +450,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         </button>
                                         @if(!$record->time_out && $record->time_in)
                                             <button wire:click="markTimeOut('{{ $record->attendance_id }}')" 
-                                                    class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors">
+                                                    class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100 transition-colors">
                                                 <i class="fas fa-sign-out-alt mr-1"></i>Time Out
                                             </button>
                                         @endif
@@ -509,11 +509,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         </div>
                         <div class="grid grid-cols-2 gap-2">
                             <button wire:click="markAttendance('{{ $employee->employee_id }}', 'present')"
-                                    class="px-3 py-2 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 flex items-center justify-center">
+                                    class="px-3 py-2 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100 flex items-center justify-center">
                                 <i class="fas fa-check mr-1"></i>Present
                             </button>
                             <button wire:click="markAttendance('{{ $employee->employee_id }}', 'absent')"
-                                    class="px-3 py-2 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 flex items-center justify-center">
+                                    class="px-3 py-2 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100 flex items-center justify-center">
                                 <i class="fas fa-times mr-1"></i>Absent
                             </button>
                             <button wire:click="markAttendance('{{ $employee->employee_id }}', 'late')"

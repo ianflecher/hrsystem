@@ -20,7 +20,7 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background: #f8fafc;
+            background: #0C1626;
         }
         
         /* Compact Header - Matches Admin Design Exactly */
@@ -327,7 +327,7 @@
 </div>
 
     <!-- Main Content Area -->
-    <main class="pt-16">
+    <main style="padding-top: 60px;">
         {{ $slot }}
     </main>
 

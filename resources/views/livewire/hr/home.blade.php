@@ -541,7 +541,7 @@ class extends Component
                      headcount actually did. --}}
             </div>
             <div class="p-3 rounded-full bg-slate-100">
-                <svg class="w-8 h-8 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
             </div>
@@ -562,7 +562,7 @@ class extends Component
                 </div>
             </div>
             <div class="p-3 rounded-full bg-slate-100">
-                <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
             </div>
@@ -583,7 +583,7 @@ class extends Component
                 </div>
             </div>
             <div class="p-3 rounded-full bg-slate-100">
-                <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
             </div>
@@ -610,7 +610,7 @@ class extends Component
                 </div>
             </div>
             <div class="p-3 rounded-full bg-slate-100">
-                <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
             </div>
@@ -623,7 +623,7 @@ class extends Component
     <div class="p-6 border-b border-gray-200 bg-gray-50">
         <div class="flex items-center">
             <div class="p-2 bg-slate-100 rounded-lg mr-3">
-                <svg class="w-6 h-6 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
             </div>
@@ -639,7 +639,7 @@ class extends Component
             <a href="{{ route('hr.attendance') }}" class="group">
                 <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-blue-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
                     <div class="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-xl flex items-center justify-center transition-transform duration-300">
-                        <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
@@ -655,7 +655,7 @@ class extends Component
             <a href="{{ route('hr.applications') }}" class="group">
                 <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-blue-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
                     <div class="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-xl flex items-center justify-center transition-transform duration-300">
-                        <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                     </div>
@@ -671,7 +671,7 @@ class extends Component
             <a href="{{ route('hr.payroll') }}" class="group">
                 <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-teal-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
                     <div class="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-xl flex items-center justify-center transition-transform duration-300">
-                        <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
@@ -687,7 +687,7 @@ class extends Component
             <a href="{{ route('hr.leave') }}" class="group">
                 <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-purple-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
                     <div class="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-xl flex items-center justify-center transition-transform duration-300">
-                        <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
@@ -888,7 +888,7 @@ class extends Component
                 <div class="p-6">
                     <div class="space-y-4">
                         @forelse($positionStats as $position)
-                            <div class="p-4 bg-red-50 rounded-xl hover:bg-red-100 transition-colors border border-gray-200">
+                            <div class="p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors border border-gray-200">
                                 <div class="flex justify-between items-start mb-3">
                                     <h3 class="font-bold text-gray-900">{{ $position->position_applied }}</h3>
                                     <span class="px-3 py-1 bg-green-600 text-white text-xs rounded-full font-bold">

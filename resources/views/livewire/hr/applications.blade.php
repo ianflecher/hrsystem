@@ -1037,7 +1037,7 @@ public function updateApplicationStatus($applicationId, $status)
                                                 </button>
                                                 <button wire:click="cancelInterview('{{ $application->application_id }}')" 
                                                         onclick="return confirm('Are you sure you want to cancel this interview?')"
-                                                        class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">
+                                                        class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100">
                                                     <i class="fas fa-times mr-1"></i>Cancel
                                                 </button>
                                             @else
@@ -1056,7 +1056,7 @@ public function updateApplicationStatus($applicationId, $status)
                                                     <i class="fas fa-user-tie mr-1"></i>Hire
                                                 </button>
                                                 <button wire:click="updateApplicationStatus('{{ $application->application_id }}', 'rejected')" 
-                                                        class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100"
+                                                        class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100"
                                                         onclick="return confirm('Reject {{ $application->full_name }}?')">
                                                     <i class="fas fa-times mr-1"></i>Reject
                                                 </button>

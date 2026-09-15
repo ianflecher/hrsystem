@@ -217,7 +217,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
     @endif
 
     @if (session()->has('error'))
-    <div class="mb-6 p-4 bg-red-50 border border-gray-200 rounded-lg" 
+    <div class="mb-6 p-4 bg-slate-50 border border-gray-200 rounded-lg" 
          x-data="{ show: true }" 
          x-show="show" 
          x-transition
@@ -669,7 +669,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
                             </a>
                             <button wire:click="deleteDocument({{ $document->id }})"
                                     onclick="return confirm('Are you sure you want to delete \"{{ $document->filename }}\"?')"
-                                    class="inline-flex items-center px-3 py-2 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
+                                    class="inline-flex items-center px-3 py-2 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-slate-100 transition-colors"
                                     title="Delete document">
                                 <i class="fas fa-trash mr-1"></i> Delete
                             </button>

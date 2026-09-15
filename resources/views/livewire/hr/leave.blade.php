@@ -684,12 +684,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         @if($leave->status === 'pending')
                                             <button wire:click="approveLeave('{{ $leave->leave_id }}')" 
                                                     onclick="return confirm('Approve leave request for {{ $leave->full_name }}?')"
-                                                    class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">
+                                                    class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100">
                                                 <i class="fas fa-check mr-1"></i>Approve
                                             </button>
                                             
                                             <button wire:click="viewLeave('{{ $leave->leave_id }}')" 
-                                                    class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">
+                                                    class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100">
                                                 <i class="fas fa-times mr-1"></i>Reject
                                             </button>
                                             
@@ -843,7 +843,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         @if($selectedLeave->status === 'rejected' && $selectedLeave->rejection_reason)
                         <div class="md:col-span-2 border-t pt-4">
                             <h4 class="text-sm font-medium text-gray-700 mb-3">Rejection Information</h4>
-                            <div class="p-4 bg-red-50 rounded-lg">
+                            <div class="p-4 bg-slate-50 rounded-lg">
                                 <p class="text-red-700 whitespace-pre-wrap">{{ $selectedLeave->rejection_reason }}</p>
                             </div>
                         </div>
