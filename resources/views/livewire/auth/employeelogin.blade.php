@@ -123,7 +123,26 @@ new #[Layout('components.layouts.landing')] class extends Component
             align-items: center;
             justify-content: center;
             padding: 48px 24px;
-            background: #fff;
+            /* The sign-in card is white, so the panel behind it cannot be.
+               White on white left the card with nothing to sit against and the
+               column read as one flat wall beside the photograph; an off-white
+               was too slight to register. Navy matches the header above and the
+               picture alongside, and gives the card something to sit on. */
+            background: var(--sidebar-bg, #0C1626);
+        }
+
+        /* Only three things sit directly on that panel - the brand header, the
+           card, and the support line - so just those need light type. Anything
+           inside the white card keeps its own colours. */
+        .auth-split__inner > .text-center h1 { color: #fff; }
+        .auth-split__inner > .text-center p  { color: #A9B4C6; }
+        .auth-split__inner > .mt-8,
+        .auth-split__inner > .mt-8 * { color: #7E8CA0; }
+
+        /* The brand disc was ringed in a light grey that only made sense on a
+           white ground. */
+        .auth-split__inner > .text-center > div:first-child {
+            border-color: rgba(255, 255, 255, .14) !important;
         }
 
         .auth-split__inner { width: 100%; max-width: 26rem; }
@@ -200,7 +219,7 @@ new #[Layout('components.layouts.landing')] class extends Component
         </div>
 
         <!-- Login Card -->
-        <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 hover:shadow-sm transition-all duration-300">
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
             <div class="p-8">
                 <form wire:submit.prevent="login" class="space-y-6">
                     @csrf
