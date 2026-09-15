@@ -247,28 +247,6 @@ new #[Layout('components.layouts.employee')] class extends Component
                     @endif
                 </div>
 
-                <!-- Benefits -->
-                <div class="bg-white rounded-xl shadow-sm p-6">
-                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Why Join Imprint Customs?</h2>
-                    <div class="grid grid-cols-2 gap-4">
-                        @php
-                            $benefits = [
-                                ['icon' => 'fa-money-bill-wave', 'title' => 'Competitive Salary', 'color' => 'text-red-600'],
-                                ['icon' => 'fa-utensils', 'title' => 'Free Meals', 'color' => 'text-amber-600'],
-                                ['icon' => 'fa-heartbeat', 'title' => 'Health Insurance', 'color' => 'text-red-600'],
-                                ['icon' => 'fa-graduation-cap', 'title' => 'Training Programs', 'color' => 'text-blue-600'],
-                                ['icon' => 'fa-calendar-alt', 'title' => 'Flexible Schedule', 'color' => 'text-purple-600'],
-                                ['icon' => 'fa-trophy', 'title' => 'Career Growth', 'color' => 'text-indigo-600'],
-                            ];
-                        @endphp
-                        @foreach($benefits as $benefit)
-                            <div class="text-center p-4 rounded-lg bg-gray-50">
-                                <i class="fas {{ $benefit['icon'] }} {{ $benefit['color'] }} text-2xl mb-2"></i>
-                                <p class="text-sm font-medium text-gray-900">{{ $benefit['title'] }}</p>
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
             </div>
 
             <!-- Right Column: Auth Form -->
@@ -355,14 +333,6 @@ new #[Layout('components.layouts.employee')] class extends Component
                             </button>
                         </form>
 
-                        <!-- Demo Credentials -->
-                        <div class="mt-8 p-4 bg-gray-50 rounded-lg">
-                            <h4 class="font-medium text-gray-900 mb-2">Demo Credentials:</h4>
-                            <div class="text-sm text-gray-600 space-y-1">
-                                <p>Email: applicant@example.com</p>
-                                <p>Password: password</p>
-                            </div>
-                        </div>
                     </div>
                 @else
                     <!-- Registration Form -->

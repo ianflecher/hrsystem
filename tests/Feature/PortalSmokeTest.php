@@ -13,6 +13,19 @@ use Tests\TestCase;
  */
 class PortalSmokeTest extends TestCase
 {
+    /** @var array<int, int> */
+    private array $temporaryUserIds = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->temporaryUserIds as $id) {
+            DB::table('employees')->where('user_id', $id)->delete();
+            DB::table('users')->where('user_id', $id)->delete();
+        }
+
+        parent::tearDown();
+    }
+
     public static function publicPages(): array
     {
         return [
@@ -77,12 +90,12 @@ class PortalSmokeTest extends TestCase
     #[DataProvider('employeePages')]
     public function test_employee_pages_render_for_employee(string $uri): void
     {
-        $this->actingAs($this->userWithUsername('msantos'))->get($uri)->assertOk();
+        $this->actingAs($this->temporaryEmployee())->get($uri)->assertOk();
     }
 
     public function test_applicant_page_renders_for_signed_in_user(): void
     {
-        $this->actingAs($this->userWithUsername('msantos'))->get('/applicant')->assertOk();
+        $this->actingAs($this->temporaryEmployee())->get('/applicant')->assertOk();
     }
 
     private function userWithUsername(string $username): User
@@ -92,6 +105,38 @@ class PortalSmokeTest extends TestCase
         if (! $user) {
             $this->markTestSkipped("Seeded user [{$username}] not found; run `php artisan db:seed`.");
         }
+
+        return $user;
+    }
+
+    /**
+     * The employee screens need somebody with an employee record behind them.
+     * The suite makes its own and removes it again rather than depending on
+     * sample staff in the database: invented people are indistinguishable from
+     * real ones once seeded, and they show up in headcounts.
+     */
+    private function temporaryEmployee(): User
+    {
+        $n = random_int(100000, 999999);
+
+        $user = User::create([
+            'full_name' => 'Smoke Test Employee',
+            'username'  => "smoketest{$n}",
+            'email'     => "smoketest{$n}@example.test",
+            'password'  => 'Password!2345',
+            'role'      => 'employee',
+        ]);
+
+        DB::table('employees')->insert([
+            'user_id'    => $user->user_id,
+            'job_title'  => 'Smoke Test',
+            'hire_date'  => now()->toDateString(),
+            'status'     => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->temporaryUserIds[] = $user->user_id;
 
         return $user;
     }

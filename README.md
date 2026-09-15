@@ -46,15 +46,19 @@ php artisan serve
 `storage:link` is required — the careers portal writes application documents to
 the `public` disk.
 
-### Seeded accounts
+### Accounts
 
-All use the password `password`.
+Seeding creates two sign-in accounts and nothing else - no sample departments,
+employees or openings. Invented records are hard to tell apart from real ones
+once they are in the database, and they turn up in headcounts and reports as if
+they meant something. Everything else is entered through the app.
 
 | Username | Role |
 | --- | --- |
 | `admin` | Super admin |
 | `hr` | HR manager |
-| `msantos`, `jdelacruz`, `areyes`, `pgarcia` | Employees |
+
+Both start with the password `password`. **Change them after the first sign-in.**
 
 ## Job openings
 
@@ -62,9 +66,6 @@ The careers page and the application form both read the `job_positions` table,
 managed in the HR back office at `/hr/positions`. Posting, editing or closing a
 role there changes what applicants see straight away - no code edit, and the
 two lists cannot drift apart.
-
-`JobPositionSeeder` inserts six placeholder roles so a fresh install is not
-empty. Replace them from the HR screen.
 
 ## Tests
 

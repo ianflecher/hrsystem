@@ -207,21 +207,5 @@ new #[Layout('components.layouts.employee')] class extends Component
             </div>
         </div>
 
-        <!-- Default Credentials -->
-        <div class="mt-8 text-center">
-            <details class="inline-block">
-                <summary class="text-sm text-gray-500 cursor-pointer hover:text-gray-700">
-                    <i class="fas fa-key mr-1"></i>
-                    Available Logins (Password: password)
-                </summary>
-                <div class="mt-2 p-3 bg-gray-50 rounded-lg text-left">
-                    <div class="grid grid-cols-2 gap-2">
-                        <div class="text-xs"><strong>admin</strong> → Super Admin</div>
-                        <div class="text-xs"><strong>hr</strong> → HR</div>
-                    </div>
-                    <p class="text-xs text-gray-500 mt-2 italic">All passwords: "password"</p>
-                </div>
-            </details>
-        </div>
     </div>
 </div>

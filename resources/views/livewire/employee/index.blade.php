@@ -42,7 +42,6 @@ new #[Layout('components.layouts.employeeland')] class extends Component
         $this->loadPendingLeave();
         $this->loadUpcomingLeave();
         $this->loadPayrollInfo();
-        $this->loadDepartmentAnnouncements();
     }
     
     private function loadAttendanceStats()
@@ -112,24 +111,13 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             ->first();
     }
     
-    private function loadDepartmentAnnouncements()
-    {
-        // This would come from an announcements table
-        // For now, we'll create some dummy data
-        $this->departmentAnnouncements = [
-            [
-                'title' => 'Department Meeting',
-                'content' => 'Monthly department meeting scheduled for Friday at 2 PM.',
-                'date' => Carbon::tomorrow()->format('Y-m-d')
-            ],
-            [
-                'title' => 'Training Session',
-                'content' => 'Mandatory security training on Wednesday next week.',
-                'date' => Carbon::now()->addDays(5)->format('Y-m-d')
-            ]
-        ];
-    }
-    
+    /*
+     * There is no announcements table yet, so there is nothing to load and the
+     * panel shows its empty state. It previously invented two - a department
+     * meeting and a security training - which staff could mistake for real
+     * notices they were expected to act on.
+     */
+
     public function clockIn()
     {
         $today = Carbon::today();

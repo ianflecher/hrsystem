@@ -536,12 +536,9 @@ class extends Component
             <div>
                 <p class="text-gray-600 mb-1 font-medium">Total Employees</p>
                 <p class="text-4xl font-bold text-gray-900">{{ $totalEmployees }}</p>
-                <div class="flex items-center mt-3">
-                    <svg class="w-4 h-4 mr-2 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l4.293-4.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                    </svg>
-                    <span class="text-sm text-gray-600">+12% from last month</span>
-                </div>
+                {{-- No trend here: "+12% from last month" was a fixed string,
+                     not a calculation, so it reported growth whatever the
+                     headcount actually did. --}}
             </div>
             <div class="p-3 rounded-full bg-red-50">
                 <svg class="w-8 h-8 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
