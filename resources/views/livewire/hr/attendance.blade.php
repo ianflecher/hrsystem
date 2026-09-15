@@ -181,8 +181,23 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         session()->flash('success', 'Attendance marked successfully!');
     }
 
+    public bool $showTrail = false;
+
+    public function toggleTrail(): void
+    {
+        $this->showTrail = ! $this->showTrail;
+    }
+
+    /** Recent changes to attendance and pay, newest first. */
+    public function getTrailProperty()
+    {
+        return \App\Services\Auditor::recent(['hr_attendance', 'hr_payroll', 'payroll_corrections', 'leaves'], 30);
+    }
+
     public function markTimeOut($attendanceId)
     {
+        $before = DB::table('hr_attendance')->where('attendance_id', $attendanceId)->first();
+
         DB::table('hr_attendance')
             ->where('attendance_id', $attendanceId)
             ->update([
@@ -190,6 +205,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'notes' => 'Corrected by HR',
                 'updated_at' => now()
             ]);
+
+        // Hours are money now, so who changed them is part of the record.
+        \App\Services\Auditor::record('update', 'hr_attendance', $attendanceId,
+            ['time_out' => $before->time_out ?? null], ['time_out' => now()->toDateTimeString()]);
 
         $this->loadAttendance();
         session()->flash('success', 'Time out recorded successfully!');
@@ -218,6 +237,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
     public function editAttendance($attendanceId, $status, $timeIn = null, $timeOut = null, $notes = null)
     {
+        $before = DB::table('hr_attendance')->where('attendance_id', $attendanceId)->first();
+
         DB::table('hr_attendance')
             ->where('attendance_id', $attendanceId)
             ->update([
@@ -227,6 +248,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'notes' => $notes,
                 'updated_at' => now()
             ]);
+
+        // The edit that a disputed deduction usually turns on.
+        \App\Services\Auditor::record('update', 'hr_attendance', $attendanceId,
+            $before ? ['status' => $before->status, 'time_in' => $before->time_in, 'time_out' => $before->time_out] : null,
+            ['status' => $status, 'time_in' => $timeIn, 'time_out' => $timeOut]);
 
         $this->loadAttendance();
         session()->flash('success', 'Attendance updated successfully!');
@@ -417,6 +443,54 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     </div>
                     <button wire:click="dismissSync" class="text-green-700 hover:text-green-900"><i class="fas fa-times"></i></button>
                 </div>
+            </div>
+        @endif
+    </div>
+
+    {{-- Who changed what. Attendance decides pay, so an edit here is a change
+     to somebody's money and needs to be answerable later. --}}
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5 mb-6">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h2 class="text-base font-semibold text-gray-900">Change history</h2>
+                <p class="text-sm text-gray-600 mt-1">Edits to attendance, payroll and leave, with who made them.</p>
+            </div>
+            <button wire:click="toggleTrail" class="btn-secondary">{{ $showTrail ? 'Hide' : 'Show' }}</button>
+        </div>
+
+        @if ($showTrail)
+            <div class="mt-4 overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-gray-600 border-b border-gray-200">
+                            <th class="py-2">When</th>
+                            <th class="py-2">Who</th>
+                            <th class="py-2">What</th>
+                            <th class="py-2">Change</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($this->trail as $entry)
+                            <tr class="border-b border-gray-100 align-top">
+                                <td class="py-2 whitespace-nowrap text-gray-600">
+                                    {{ \Illuminate\Support\Carbon::parse($entry->created_at)->format('j M Y, g:i A') }}
+                                </td>
+                                <td class="py-2">{{ $entry->full_name ?? 'System' }}</td>
+                                <td class="py-2 text-gray-600">
+                                    {{ str_replace(['hr_', '_'], ['', ' '], $entry->table_name) }} #{{ $entry->record_id }}
+                                </td>
+                                <td class="py-2 text-gray-600">
+                                    @if ($entry->old_values)
+                                        <span class="line-through text-gray-400">{{ Str::limit($entry->old_values, 70) }}</span>
+                                    @endif
+                                    <span class="block">{{ Str::limit((string) $entry->new_values, 70) }}</span>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="4" class="py-3 text-gray-500">Nothing has been changed yet.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
         @endif
     </div>

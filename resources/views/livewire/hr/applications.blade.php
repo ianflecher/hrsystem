@@ -657,28 +657,12 @@ public function updateApplicationStatus($applicationId, $status)
         $this->loadData();
     }
 
-    public function downloadResume($applicationId)
-    {
-        $application = DB::table('job_applications')
-            ->where('application_id', $applicationId)
-            ->first();
-
-        if ($application && $application->resume_data) {
-            $resumeData = base64_decode($application->resume_data);
-            session()->flash('info', 'Resume download would start here.');
-        }
-    }
-
-    public function downloadDocument($documentId)
-    {
-        $document = DB::table('application_documents')
-            ->where('id', $documentId)
-            ->first();
-
-        if ($document) {
-            session()->flash('info', 'Document download would start here.');
-        }
-    }
+    /*
+     * downloadResume() and downloadDocument() used to flash "download would
+     * start here" and do nothing at all. They are real routes now - see
+     * ApplicationFileController - because a file nobody can open may as well
+     * not have been uploaded.
+     */
 
     public function deleteDepartment($departmentId)
     {
@@ -1064,10 +1048,10 @@ public function updateApplicationStatus($applicationId, $status)
                                         @endif
 
                                         @if($application->resume_data ?? false)
-                                            <button wire:click="downloadResume('{{ $application->application_id }}')" 
+                                            <a href="{{ route('applications.resume', $application->application_id) }}" target="_blank" 
                                                     class="px-3 py-1 text-xs bg-gray-50 text-gray-600 rounded hover:bg-gray-100">
                                                 <i class="fas fa-download mr-1"></i>Resume
-                                            </button>
+                                            </a>
                                         @endif
                                     </div>
                                 </td>
@@ -1448,10 +1432,10 @@ public function updateApplicationStatus($applicationId, $status)
                                             Uploaded: {{ date('M d, Y h:i A', strtotime($document->uploaded_at)) }}
                                         </div>
                                         <div class="flex gap-2">
-                                            <button wire:click="downloadDocument('{{ $document->id }}')" 
+                                            <a href="{{ route('applications.document', $document->id) }}" target="_blank" 
                                                     class="px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 flex-1">
                                                 <i class="fas fa-download mr-1"></i>Download
-                                            </button>
+                                            </a>
                                         </div>
                                     </div>
                                 @endforeach

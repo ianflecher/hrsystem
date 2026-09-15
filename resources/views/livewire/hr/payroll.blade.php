@@ -275,10 +275,17 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         $periodStart = $this->period()->start;
 
+        $ids = DB::table('hr_payroll')->where('period_start', $periodStart)
+            ->where('status', 'calculated')->pluck('payroll_id');
+
         $n = DB::table('hr_payroll')
-            ->where('period_start', $periodStart)
-            ->where('status', 'calculated')
+            ->whereIn('payroll_id', $ids)
             ->update(['status' => 'approved', 'updated_at' => now()]);
+
+        foreach ($ids as $id) {
+            \App\Services\Auditor::record('update', 'hr_payroll', $id,
+                ['status' => 'calculated'], ['status' => 'approved']);
+        }
 
         session()->flash(
             $n ? 'success' : 'info',
@@ -292,7 +299,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $periodStart = $this->period()->start;
 
         \App\Support\PeopleAccess::hr();
+
+        $ids = DB::table('hr_payroll')->where('period_start', $periodStart)
+            ->where('status', 'approved')->pluck('payroll_id');
+
         $n = app(\App\Services\PayrollRun::class)->markPaid($periodStart);
+
+        foreach ($ids as $id) {
+            \App\Services\Auditor::record('update', 'hr_payroll', $id,
+                ['status' => 'approved'], ['status' => 'paid']);
+        }
         session()->flash(
             $n ? 'success' : 'info',
             $n ? 'Marked '.$n.' payslip'.($n === 1 ? '' : 's').' as paid.'
@@ -303,6 +319,86 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     /**
      * What the buttons should offer for the period currently selected.
      */
+    public ?int $answering = null;
+    public string $resolutionNotes = '';
+
+    /**
+     * Disputes about a payslip.
+     *
+     * Employees could raise these and nothing ever showed them: the rows went
+     * into payroll_corrections and no screen read the table. Payroll takes real
+     * money off people now, so this is the channel they push back through, and
+     * it has to end somewhere a person is looking.
+     */
+    public function getCorrectionsProperty()
+    {
+        return DB::table('payroll_corrections as c')
+            ->join('employees as e', 'e.employee_id', '=', 'c.employee_id')
+            ->join('users as u', 'u.user_id', '=', 'e.user_id')
+            ->leftJoin('hr_payroll as p', 'p.payroll_id', '=', 'c.payroll_id')
+            ->orderByRaw("CASE WHEN c.status = 'pending' THEN 0 ELSE 1 END")
+            ->orderByDesc('c.correction_id')
+            ->limit(25)
+            ->select('c.*', 'u.full_name', 'p.period_start', 'p.period_end', 'p.net_pay', 'p.notes as payslip_notes')
+            ->get();
+    }
+
+    public function getPendingCorrectionsProperty(): int
+    {
+        return DB::table('payroll_corrections')->where('status', 'pending')->count();
+    }
+
+    public function answerCorrection(int $id): void
+    {
+        $this->answering = $id;
+        $this->resolutionNotes = '';
+        $this->resetErrorBag();
+    }
+
+    public function cancelAnswer(): void
+    {
+        $this->answering = null;
+        $this->resolutionNotes = '';
+    }
+
+    /**
+     * Closes a dispute, either way. A note is required for both: "rejected"
+     * with no reason is how somebody ends up asking again.
+     */
+    public function closeCorrection(string $outcome): void
+    {
+        $this->validate([
+            'resolutionNotes' => ['required', 'string', 'min:5', 'max:2000'],
+        ], [], ['resolutionNotes' => 'reply']);
+
+        // The column's own words: approved means the payslip was wrong and has
+        // been put right, rejected means it was not.
+        abort_unless(in_array($outcome, ['approved', 'rejected'], true), 422);
+
+        $correction = DB::table('payroll_corrections')->where('correction_id', $this->answering)->first();
+
+        if (! $correction || $correction->status !== 'pending') {
+            session()->flash('error', 'That request has already been answered.');
+            $this->cancelAnswer();
+
+            return;
+        }
+
+        DB::table('payroll_corrections')->where('correction_id', $this->answering)->update([
+            'status'           => $outcome,
+            'resolution_notes' => $this->resolutionNotes,
+            'resolved_by'      => auth()->id(),
+            'resolved_at'      => now(),
+            'updated_at'       => now(),
+        ]);
+
+        \App\Services\Auditor::record('update', 'payroll_corrections', $this->answering,
+            ['status' => 'pending'], ['status' => $outcome, 'resolution_notes' => $this->resolutionNotes]);
+
+        $this->cancelAnswer();
+        session()->flash('success', 'The employee can see your reply on their payroll screen.');
+    }
+
     public function getThirteenthRowsProperty(): array
     {
         return (new \App\Services\ThirteenthMonth)->forYear($this->thirteenthYearOrNow());
@@ -469,7 +565,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         if ($payroll && $payroll->status === 'calculated') {
             DB::table('hr_payroll')
                 ->where('payroll_id', $payroll->payroll_id)
-                ->update(['status' => 'approved']);
+                ->update(['status' => 'approved', 'updated_at' => now()]);
+
+            \App\Services\Auditor::record('update', 'hr_payroll', $payroll->payroll_id,
+                ['status' => 'calculated'], ['status' => 'approved']);
                 
             session()->flash('success', 'Payroll approved successfully!');
             
@@ -485,15 +584,20 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->where('period_start', '=', $this->payPeriod)
             ->first();
             
-        if ($payroll && $payroll->status === 'calculated') {
-            DB::table('hr_payroll')
-                ->where('payroll_id', $payroll->payroll_id)
-                ->update(['status' => 'paid']);
-                
+        // This used to take a payslip straight from calculated to paid, skipping
+        // approval and skipping PayrollRun::markPaid - so a loan installment
+        // reserved against that payslip was never settled and the loan never
+        // closed. Paid means approved first, and through the service.
+        if ($payroll && $payroll->status === 'approved') {
+            app(\App\Services\PayrollRun::class)->markPaid($payroll->period_start);
+
+            \App\Services\Auditor::record('update', 'hr_payroll', $payroll->payroll_id,
+                ['status' => 'approved'], ['status' => 'paid']);
+
             session()->flash('success', 'Payroll marked as paid!');
-            
-            // Refresh the view
             $this->viewPayrollDetails($employeeId);
+        } elseif ($payroll) {
+            session()->flash('error', 'Approve the payslip before marking it paid.');
         }
     }
     
@@ -599,6 +703,78 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 If the scanner was down, sync or correct attendance before generating.
             </div>
         @endif
+
+        {{-- Where a dispute lands. --}}
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5 mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">
+                        Correction requests
+                        @if ($this->pendingCorrections > 0)
+                            <span class="ml-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold align-middle">
+                                {{ $this->pendingCorrections }} waiting
+                            </span>
+                        @endif
+                    </h2>
+                    <p class="text-sm text-gray-600 mt-1">Payslips an employee has questioned.</p>
+                </div>
+            </div>
+
+            @forelse ($this->corrections as $correction)
+                <div class="mt-4 rounded-lg border {{ $correction->status === 'pending' ? 'border-amber-200 bg-amber-50' : 'border-gray-200' }} p-4">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <strong class="text-gray-900">{{ $correction->full_name }}</strong>
+                            <span class="text-sm text-gray-600">
+                                @if ($correction->period_start)
+                                    · {{ \Illuminate\Support\Carbon::parse($correction->period_start)->format('j M Y') }}
+                                    &ndash; {{ \Illuminate\Support\Carbon::parse($correction->period_end)->format('j M Y') }}
+                                    · net PHP {{ number_format((float) $correction->net_pay, 2) }}
+                                @endif
+                            </span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold
+                            @if ($correction->status === 'pending') bg-amber-100 text-amber-800
+                            @elseif ($correction->status === 'approved') bg-green-100 text-green-800
+                            @else bg-gray-100 text-gray-700 @endif">
+                            {{ $correction->status === 'approved' ? 'Corrected' : ucfirst($correction->status) }}
+                        </span>
+                    </div>
+
+                    <p class="mt-2 text-sm text-gray-800">{{ $correction->description }}</p>
+
+                    @if ($correction->payslip_notes)
+                        <p class="mt-1 text-xs text-gray-500">Payslip said: {{ $correction->payslip_notes }}</p>
+                    @endif
+
+                    @if ($correction->resolution_notes)
+                        <p class="mt-2 text-sm text-gray-700"><strong>Reply:</strong> {{ $correction->resolution_notes }}</p>
+                    @endif
+
+                    @if ($correction->status === 'pending')
+                        @if ($answering === (int) $correction->correction_id)
+                            <div class="mt-3">
+                                <textarea wire:model="resolutionNotes" rows="3"
+                                          placeholder="What you found, and what you did about it."
+                                          class="form-input w-full"></textarea>
+                                @error('resolutionNotes') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <button wire:click="closeCorrection('approved')" class="btn-primary">Corrected</button>
+                                    <button wire:click="closeCorrection('rejected')" class="btn-secondary">No change needed</button>
+                                    <button wire:click="cancelAnswer" class="btn-secondary">Cancel</button>
+                                </div>
+                            </div>
+                        @else
+                            <button wire:click="answerCorrection({{ $correction->correction_id }})" class="btn-secondary mt-3">
+                                Answer
+                            </button>
+                        @endif
+                    @endif
+                </div>
+            @empty
+                <p class="mt-4 text-sm text-gray-500">Nobody has questioned a payslip.</p>
+            @endforelse
+        </div>
 
         {{-- 13th month pay: a twelfth of the basic salary actually earned over
              the year, so absence and unpaid leave reduce it, and overtime and

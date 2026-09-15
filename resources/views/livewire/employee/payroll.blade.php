@@ -161,36 +161,87 @@ new #[Layout('components.layouts.employeeland')] class extends Component
      * page now, printed or saved as PDF by the browser - see routes/web.php.
      */
 
-    public function requestCorrection($payrollId)
+    public $correctionFor = null;
+    public string $correctionDescription = '';
+
+    public function openCorrection($payrollId): void
     {
+        $this->correctionFor = $payrollId;
+        $this->correctionDescription = '';
+        $this->resetErrorBag();
+    }
+
+    public function cancelCorrection(): void
+    {
+        $this->correctionFor = null;
+        $this->correctionDescription = '';
+    }
+
+    /**
+     * Raises a dispute about a payslip.
+     *
+     * It used to file a row saying "Payroll correction requested by employee"
+     * and nothing else, which told HR only that somebody was unhappy. The
+     * person disputing it is the one who knows what is wrong, so they say so.
+     */
+    public function requestCorrection(): void
+    {
+        $this->validate([
+            'correctionDescription' => ['required', 'string', 'min:10', 'max:2000'],
+        ], [], ['correctionDescription' => 'description']);
+
         $payroll = DB::table('hr_payroll')
-            ->where('payroll_id', $payrollId)
+            ->where('payroll_id', $this->correctionFor)
             ->where('employee_id', $this->employee->employee_id)
             ->first();
-            
-        if (!$payroll) {
+
+        if (! $payroll) {
             session()->flash('error', 'Payroll record not found!');
+            $this->cancelCorrection();
+
             return;
         }
-        
-        // Create a payroll correction request
-        try {
-            DB::table('payroll_corrections')->insert([
-                'payroll_id' => $payrollId,
-                'employee_id' => $this->employee->employee_id,
-                'requested_by' => $this->employee->user_id,
-                'status' => 'pending',
-                'description' => 'Payroll correction requested by employee',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            
-            session()->flash('success', 'Payroll correction request has been submitted for review.');
-        } catch (\Exception $e) {
-            session()->flash('error', 'Error submitting request: ' . $e->getMessage());
+
+        $open = DB::table('payroll_corrections')
+            ->where('payroll_id', $payroll->payroll_id)
+            ->where('status', 'pending')
+            ->exists();
+
+        if ($open) {
+            session()->flash('error', 'You already have a request open on this payslip.');
+            $this->cancelCorrection();
+
+            return;
         }
+
+        DB::table('payroll_corrections')->insert([
+            'payroll_id'   => $payroll->payroll_id,
+            'employee_id'  => $this->employee->employee_id,
+            'requested_by' => $this->employee->user_id,
+            'status'       => 'pending',
+            'description'  => $this->correctionDescription,
+            'created_at'   => now(),
+            'updated_at'   => now(),
+        ]);
+
+        \App\Services\Auditor::record('create', 'payroll_corrections', $payroll->payroll_id,
+            null, ['status' => 'pending', 'description' => $this->correctionDescription]);
+
+        $this->cancelCorrection();
+        session()->flash('success', 'Your request has been sent to HR. You can see its progress below.');
     }
-    
+
+    /** Requests this employee has raised, newest first. */
+    public function getCorrectionsProperty()
+    {
+        return DB::table('payroll_corrections as c')
+            ->leftJoin('hr_payroll as p', 'p.payroll_id', '=', 'c.payroll_id')
+            ->where('c.employee_id', $this->employee->employee_id)
+            ->orderByDesc('c.correction_id')
+            ->select('c.*', 'p.period_start', 'p.period_end')
+            ->limit(10)->get();
+    }
+
     // Calculate Philippines-specific deductions from your HR code
     private function calculateSSS($salary)
     {
@@ -480,13 +531,40 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                 @endif
                                 
                                 @if($currentPayroll->status === 'paid')
-                                    <button wire:click="requestCorrection({{ $currentPayroll->payroll_id }})" 
-                                            onclick="return confirm('Are you sure you want to request a correction for this payroll?')"
+                                    <button wire:click="openCorrection({{ $currentPayroll->payroll_id }})" 
                                             class="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700">
                                         Request Correction
                                     </button>
                                 @endif
                             </div>
+
+                            {{-- What is actually wrong, in their words. The row
+                                 used to carry a fixed sentence, which told HR
+                                 only that somebody was unhappy. --}}
+                            @if ($correctionFor)
+                                <div class="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                                    <label for="correctionDescription" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        What looks wrong on this payslip?
+                                    </label>
+                                    <textarea id="correctionDescription" wire:model="correctionDescription" rows="3"
+                                              placeholder="For example: I was here on 8 May but it is counted as absent."
+                                              class="mt-2 w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 px-3 py-2 text-sm"></textarea>
+                                    @error('correctionDescription')
+                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                    @enderror
+                                    <div class="mt-3 flex gap-2">
+                                        <button wire:click="requestCorrection"
+                                                class="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
+                                            Send to HR
+                                        </button>
+                                        <button wire:click="cancelCorrection" type="button"
+                                                class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            @endif
+
                         </div>
 
                         <!-- Notes -->
@@ -587,6 +665,35 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                 </div>
                             </div>
                         @endif
+
+                @if ($this->corrections->isNotEmpty())
+                    <div class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Your correction requests</h4>
+                        <ul class="space-y-3">
+                            @foreach ($this->corrections as $correction)
+                                <li class="text-sm">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="font-medium text-gray-900 dark:text-white">
+                                            {{ $correction->period_start ? \Illuminate\Support\Carbon::parse($correction->period_start)->format('j M Y') : 'Payslip' }}
+                                        </span>
+                                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold
+                                            @if ($correction->status === 'pending') bg-amber-100 text-amber-800
+                                            @elseif ($correction->status === 'approved') bg-green-100 text-green-800
+                                            @else bg-gray-100 text-gray-700 @endif">
+                                            {{ $correction->status === 'approved' ? 'Corrected' : ucfirst($correction->status) }}
+                                        </span>
+                                    </div>
+                                    <p class="text-gray-600 dark:text-gray-400 mt-1">{{ $correction->description }}</p>
+                                    @if ($correction->resolution_notes)
+                                        <p class="text-gray-700 dark:text-gray-300 mt-1">
+                                            <strong>HR:</strong> {{ $correction->resolution_notes }}
+                                        </p>
+                                    @endif
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
                         
                         <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
                             <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">Payment Schedule</h4>

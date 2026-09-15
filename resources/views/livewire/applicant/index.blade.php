@@ -654,14 +654,17 @@ new #[Layout('components.layouts.applicant')] class extends Component
                                 </div>
                             </div>
                         </div>
+                        {{-- Through the route rather than Storage::url: these sit on
+                             the public disk, where the URL is guessable by anybody.
+                             The route checks who is asking. --}}
                         <div class="flex items-center space-x-2">
-                            <a href="{{ Storage::url($document->filepath) }}" 
+                            <a href="{{ route('applications.document', $document->id) }}"
                                target="_blank"
                                class="inline-flex items-center px-3 py-2 text-sm bg-career-50 text-career-700 rounded-lg hover:bg-career-100 transition-colors"
                                title="View document">
                                 <i class="fas fa-eye mr-1"></i> View
                             </a>
-                            <a href="{{ Storage::url($document->filepath) }}" 
+                            <a href="{{ route('applications.document', $document->id) }}"
                                download="{{ $document->filename }}"
                                class="inline-flex items-center px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
                                title="Download document">

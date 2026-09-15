@@ -168,6 +168,36 @@ managed in the HR back office at `/hr/positions`. Posting, editing or closing a
 role there changes what applicants see straight away - no code edit, and the
 two lists cannot drift apart.
 
+## Backups
+
+Payroll history cannot be reconstructed from anything else, so there is a dump command:
+
+```
+php artisan db:backup
+```
+
+It writes a `.sql` file to `storage/app/backups` and keeps the last 14 (`--keep=`).
+`mysqldump` is usually not on PATH on Windows; set its full path in `.env`:
+
+```
+DB_DUMP_BINARY="C:/xampp/mysql/bin/mysqldump.exe"
+```
+
+A nightly run at 01:30 is already scheduled, but the scheduler has to be running for
+that to mean anything: on Windows, a Task Scheduler entry running
+`php artisan schedule:run` every minute; on Linux, the usual cron line.
+
+**These dumps are not off-site.** A file beside the database survives a mistaken
+`DROP` or a bad migration. It does not survive the disk dying or the office
+flooding. Copy them somewhere else as well.
+
+## Who changed what
+
+Edits to attendance, payroll approvals and answers to correction requests are
+written to `audit_logs` with who made them. The trail is on the Attendance screen
+under "Change history". Attendance decides pay, so an edit there is a change to
+somebody's money and should be answerable later.
+
 ## Tests
 
 ```bash
