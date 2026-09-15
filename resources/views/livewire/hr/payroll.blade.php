@@ -11,6 +11,11 @@ use Livewire\WithPagination;
 new #[Layout('components.layouts.humanresource')] class extends Component
 {
     use WithPagination;
+
+    public function boot(): void
+    {
+        \App\Support\PeopleAccess::hr();
+    }
     
     public $search = '';
     public $departmentFilter = '';
@@ -187,61 +192,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     
     public function processPayroll($employeeId)
     {
-        // Check if payroll already exists for this period
-        $existingPayroll = DB::table('hr_payroll')
-            ->where('employee_id', $employeeId)
-            ->where('period_start', '=', $this->payPeriod)
-            ->first();
-        
-        if ($existingPayroll) {
-            session()->flash('error', 'Payroll already exists for this period!');
-            return;
-        }
-        
-        try {
-            // Get employee basic salary
-            $employee = DB::table('employees')
-                ->where('employee_id', $employeeId)
-                ->first();
-            
-            $basicSalary = $employee->salary;
-
-            // Shared with the period run, so a payslip generated singly and one
-            // generated in bulk cannot disagree. It also taxes income after the
-            // statutory contributions; this block used to tax the gross.
-            $periodStart = $this->period()->start;
-            $periodEnd = $this->period()->end;
-            $late = $this->lateDeductionFor((int) $employeeId, (float) $basicSalary, $periodStart, $periodEnd);
-
-            $calc = $this->computePayroll((float) $basicSalary, $late['amount']);
-            $totalDeductions = $calc['deductions'];
-            $netPay = $calc['net'];
-            $notes = $this->breakdownNote($calc, $late['days']);
-
-            // Create payroll record
-            DB::table('hr_payroll')->insert([
-                'employee_id' => $employeeId,
-                'period_start' => $this->payPeriod . '-01',
-                'period_end' => date('Y-m-t', strtotime($this->payPeriod . '-01')),
-                'gross_pay' => $calc['gross'],
-                'deductions' => $totalDeductions,
-                'net_pay' => $netPay,
-                'status' => 'calculated',
-                'notes' => $notes,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            
-            session()->flash('success', 'Payroll processed successfully!');
-            
-            // Refresh the view
-            $this->viewPayrollDetails($employeeId);
-            
-        } catch (\Exception $e) {
-            session()->flash('error', 'Error processing payroll: ' . $e->getMessage());
-        }
+        \App\Support\PeopleAccess::hr();
+        $id = app(\App\Services\PayrollRun::class)->generate((int) $employeeId, $this->period());
+        session()->flash($id ? 'success' : 'info', $id ? 'Payroll processed successfully!' : 'Payroll already exists or this employee is not eligible.');
+        if ($id) $this->viewPayrollDetails($employeeId);
     }
-    
     /**
      * The statutory deductions for one monthly salary.
      *
@@ -328,37 +283,17 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             return;
         }
 
-        $rows = [];
-        foreach ($employees as $employee) {
-            $late = $this->lateDeductionFor(
-                (int) $employee->employee_id,
-                (float) $employee->salary,
-                $periodStart,
-                $periodEnd
-            );
-
-            $c = $this->computePayroll((float) $employee->salary, $late['amount']);
-
-            $rows[] = [
-                'employee_id'  => $employee->employee_id,
-                'period_start' => $periodStart,
-                'period_end'   => $periodEnd,
-                'gross_pay'    => $c['gross'],
-                'deductions'   => $c['deductions'],
-                'net_pay'      => $c['net'],
-                'status'       => 'calculated',
-                'notes'        => $this->breakdownNote($c, $late['days']),
-                'created_at'   => now(),
-                'updated_at'   => now(),
-            ];
-        }
-
-        // All or nothing: a half-finished payroll run is worse than none.
-        DB::transaction(fn () => DB::table('hr_payroll')->insert($rows));
-
+        \App\Support\PeopleAccess::hr();
+        $generated = DB::transaction(function () use ($employees) {
+            $count = 0;
+            foreach ($employees as $employee) {
+                if (app(\App\Services\PayrollRun::class)->generate((int) $employee->employee_id, $this->period())) $count++;
+            }
+            return $count;
+        });
         $skipped = DB::table('employees')->where('status', 'active')->where('salary', '<=', 0)->count();
 
-        $message = 'Generated '.count($rows).' payslip'.(count($rows) === 1 ? '' : 's')
+        $message = 'Generated '.$generated.' payslip'.($generated === 1 ? '' : 's')
             .' for '.$this->period()->label().'. They are calculated, not yet approved.';
 
         if ($skipped > 0) {
@@ -393,11 +328,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         $periodStart = $this->period()->start;
 
-        $n = DB::table('hr_payroll')
-            ->where('period_start', $periodStart)
-            ->where('status', 'approved')
-            ->update(['status' => 'paid', 'updated_at' => now()]);
-
+        \App\Support\PeopleAccess::hr();
+        $n = app(\App\Services\PayrollRun::class)->markPaid($periodStart);
         session()->flash(
             $n ? 'success' : 'info',
             $n ? 'Marked '.$n.' payslip'.($n === 1 ? '' : 's').' as paid.'
@@ -478,7 +410,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->where('period_start', '=', $this->payPeriod)
             ->first();
             
-        if ($payroll) {
+        if ($payroll && $payroll->status === 'calculated') {
             DB::table('hr_payroll')
                 ->where('payroll_id', $payroll->payroll_id)
                 ->update(['status' => 'approved']);
@@ -497,7 +429,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->where('period_start', '=', $this->payPeriod)
             ->first();
             
-        if ($payroll) {
+        if ($payroll && $payroll->status === 'calculated') {
             DB::table('hr_payroll')
                 ->where('payroll_id', $payroll->payroll_id)
                 ->update(['status' => 'paid']);

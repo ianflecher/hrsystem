@@ -83,6 +83,31 @@ is held at a change-password screen until it is replaced. The flag driving this
 (`users.must_change_password`) defaults to false, so accounts that already
 existed are unaffected.
 
+## Biometric attendance
+
+Run `php artisan migrate` to add the unique, optional scanner ID field. Set each
+employee's Scanner ID under Employees to match their device enrolment number.
+On Attendance, upload a CSV with `User ID,Date/Time` headers or a tab-separated
+device `.dat` export (ID, timestamp, or ID, date, time).
+
+For network pulls, enable PHP's sockets extension and set `ZKTECO_HOST` and
+`ZKTECO_PORT` (default 4370) in `.env`. The server must reach the scanner's office
+network. Clear cached configuration after changing these settings.
+
+The same import is available from the command line:
+
+```bash
+php artisan attendance:sync
+php artisan attendance:sync --file=attendance.csv
+```
+
+The earliest and latest scans on each calendar day become arrival and departure.
+A single scan leaves departure empty. Incremental imports preserve earlier scans;
+HR corrections are kept unless “Replace days entered by hand” or `--overwrite`
+is selected. Unknown IDs are reported for linking and re-importing. Overnight
+shifts are not grouped across midnight. Network pulls still need verification
+against the actual scanner; no automatic schedule is enabled.
+
 ## Running payroll
 
 Staff are paid twice a month: the 1st to the 15th, and the 16th to the end of

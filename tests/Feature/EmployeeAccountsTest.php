@@ -57,6 +57,7 @@ class EmployeeAccountsTest extends TestCase
             ->set('username', "starter{$n}")
             ->set('email', "starter{$n}@example.test")
             ->set('job_title', 'Screen Printing Operator')
+            ->set('biometric_id', "starter{$n}")
             ->set('hire_date', now()->toDateString())
             ->set('salary', '18000')
             ->set('status', 'active')
@@ -69,6 +70,7 @@ class EmployeeAccountsTest extends TestCase
         $this->assertDatabaseHas('employees', [
             'user_id'   => $user->user_id,
             'job_title' => 'Screen Printing Operator',
+            'biometric_id' => "starter{$n}",
             'status'    => 'active',
         ]);
 

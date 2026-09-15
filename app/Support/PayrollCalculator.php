@@ -27,8 +27,9 @@ class PayrollCalculator
         float $monthlySalary,
         float $lateDeduction = 0.0,
         bool $isSecondCutoff = true,
+        float $overtimePay = 0.0,
     ): array {
-        $gross = round($monthlySalary / 2, 2);
+        $gross = round($monthlySalary / 2 + $overtimePay, 2);
 
         // Contributions are monthly amounts, taken whole on one cutoff.
         $sss        = $isSecondCutoff ? self::sss($monthlySalary) : 0.0;
@@ -45,6 +46,7 @@ class PayrollCalculator
 
         return [
             'gross'      => $gross,
+            'overtime'   => round($overtimePay, 2),
             'sss'        => round($sss, 2),
             'philhealth' => round($philhealth, 2),
             'pagibig'    => round($pagibig, 2),

@@ -30,6 +30,12 @@ Volt::route('/applicant/login', 'auth.applicantlogin')->name('applicant.login');
 */
 
 Route::middleware('auth')->group(function () {
+    Route::get('/people/documents/{id}/download', [\App\Http\Controllers\PeopleController::class, 'download'])->whereNumber('id')->name('people.documents.download');
+    foreach (['hr', 'employee'] as $portal) {
+        Route::get('/'.$portal.'/people/{module}', [\App\Http\Controllers\PeopleController::class, 'index'])->name('people.'.$portal);
+        Route::post('/'.$portal.'/people/{module}', [\App\Http\Controllers\PeopleController::class, 'store'])->name('people.'.$portal.'.store');
+        Route::post('/'.$portal.'/people/{module}/{id}', [\App\Http\Controllers\PeopleController::class, 'action'])->whereNumber('id')->name('people.'.$portal.'.action');
+    }
     // Reachable by any signed-in account, because anyone HR creates lands here
     // before they can reach their own portal.
     Volt::route('/password/change', 'auth.change-password')->name('password.change');

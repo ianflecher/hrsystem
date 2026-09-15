@@ -858,6 +858,10 @@
                 <i class="fas fa-chart-bar"></i>Leave
             </a>
 
+            @foreach(\App\Http\Controllers\PeopleController::MODULES as $key => $label)
+                <a href="{{ route('people.hr', $key) }}" class="nav-link {{ request()->routeIs('people.hr') && request()->route('module') === $key ? 'active' : '' }}"><i class="fas fa-{{ ['documents'=>'folder-open','overtime'=>'clock','shifts'=>'calendar-days','checklists'=>'list-check','reviews'=>'star','loans'=>'wallet'][$key] }}"></i>{{ $label }}</a>
+            @endforeach
+
             {{-- Under its own heading: the list above is what HR administers,
                  this is the one entry that is about the person using it. --}}
             <div class="hr-sidebar__label">You</div>

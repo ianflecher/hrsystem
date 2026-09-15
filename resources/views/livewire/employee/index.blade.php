@@ -15,7 +15,6 @@ new #[Layout('components.layouts.employeeland')] class extends Component
     public $upcomingLeave = [];
     public $leaveBalance = 0;
     public $payrollInfo = [];
-    public $departmentAnnouncements = [];
     
     public function mount()
     {
@@ -112,13 +111,6 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             ->first();
     }
     
-    /*
-     * There is no announcements table yet, so there is nothing to load and the
-     * panel shows its empty state. It previously invented two - a department
-     * meeting and a security training - which staff could mistake for real
-     * notices they were expected to act on.
-     */
-
     public function clockIn()
     {
         $today = Carbon::today();
@@ -395,30 +387,6 @@ new #[Layout('components.layouts.employeeland')] class extends Component
 
         <!-- Sidebar -->
         <div class="space-y-6">
-            <!-- Announcements -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Announcements</h2>
-                </div>
-                <div class="p-6">
-                    @if(count($departmentAnnouncements) > 0)
-                        <div class="space-y-4">
-                            @foreach($departmentAnnouncements as $announcement)
-                                <div class="border-l-4 border-blue-500 pl-4">
-                                    <h3 class="font-medium text-gray-900 dark:text-white">{{ $announcement['title'] }}</h3>
-                                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{{ $announcement['content'] }}</p>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                                        {{ \Carbon\Carbon::parse($announcement['date'])->format('M d, Y') }}
-                                    </p>
-                                </div>
-                            @endforeach
-                        </div>
-                    @else
-                        <p class="text-center text-gray-600 dark:text-gray-400 py-4">No announcements</p>
-                    @endif
-                </div>
-            </div>
-
             <!-- Quick Links -->
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
                 <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">

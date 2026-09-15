@@ -670,6 +670,9 @@
             </li>
 
             <!-- Leave -->
+            @foreach(\App\Http\Controllers\PeopleController::MODULES as $key => $label)
+                <li><a href="{{ route('people.employee', $key) }}" class="nav-item {{ request()->routeIs('people.employee') && request()->route('module') === $key ? 'active' : '' }}"><span class="module-icon"><i class="fas fa-{{ ['documents'=>'folder-open','overtime'=>'clock','shifts'=>'calendar-days','checklists'=>'list-check','reviews'=>'star','loans'=>'wallet'][$key] }}"></i></span><span class="nav-text">{{ $label }}</span><span class="nav-tooltip">{{ $label }}</span></a></li>
+            @endforeach
             <li>
                 <a href="{{ route('employee.leave') }}"
                    class="nav-item {{ request()->routeIs('employee.leave.*') ? 'active' : '' }}">

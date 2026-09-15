@@ -1,12 +1,23 @@
 <!-- attendance.blade.php -->
 <?php
 
+use App\Services\Attendance\PunchFileReader;
+use App\Services\Attendance\PunchImporter;
+use App\Services\Attendance\ZktecoPuller;
 use Livewire\Volt\Component;
 use Livewire\Attributes\Layout;
+use Livewire\WithFileUploads;
 use Illuminate\Support\Facades\DB;
 
 new #[Layout('components.layouts.humanresource')] class extends Component
 {
+    use WithFileUploads;
+
+    public $punchFile;
+    public ?array $syncSummary = null;
+    public ?string $syncError = null;
+    public bool $overwriteManual = false;
+
     public $selectedDate;
     public $attendanceRecords = [];
     public $employees = [];
@@ -150,6 +161,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 ->update([
                     'status' => $status,
                     'time_in' => $status === 'present' ? now() : null,
+                    'notes' => 'Corrected by HR',
                     'updated_at' => now()
                 ]);
         } else {
@@ -173,6 +185,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->where('attendance_id', $attendanceId)
             ->update([
                 'time_out' => now(),
+                'notes' => 'Corrected by HR',
                 'updated_at' => now()
             ]);
 
@@ -227,6 +240,73 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         $this->loadData();
     }
+
+    /**
+     * Whether a pull is even possible. Without an address configured the button
+     * would only ever produce the same error, so it is not offered.
+     */
+    public function getDeviceConfiguredProperty(): bool
+    {
+        return (bool) config('attendance.zkteco.host');
+    }
+
+    /**
+     * Fetch straight from the scanner over the network.
+     */
+    public function syncFromDevice(PunchImporter $importer): void
+    {
+        $this->syncError = null;
+        $this->syncSummary = null;
+
+        try {
+            $punches = ZktecoPuller::fromConfig()->punches();
+        } catch (\Throwable $e) {
+            // The causes are mundane - device off, wrong address, different
+            // subnet - so the message says which rather than "sync failed".
+            $this->syncError = $e->getMessage();
+
+            return;
+        }
+
+        $this->syncSummary = $importer->import($punches, $this->overwriteManual) + ['source' => 'the scanner'];
+        $this->loadAttendance();
+        $this->loadStats();
+    }
+
+    /**
+     * The fallback: an export from the scanner's own software. Always available,
+     * because it needs nothing of the network.
+     */
+    public function importFile(PunchImporter $importer): void
+    {
+        $this->syncError = null;
+        $this->syncSummary = null;
+
+        $this->validate([
+            'punchFile' => ['required', 'file', 'max:10240'],
+        ], [], ['punchFile' => 'file']);
+
+        try {
+            $read = (new PunchFileReader)->read($this->punchFile->getRealPath());
+        } catch (\Throwable $e) {
+            $this->syncError = $e->getMessage();
+
+            return;
+        }
+
+        $this->syncSummary = $importer->import($read['punches'], $this->overwriteManual)
+            + ['source' => 'the file', 'unreadable' => $read['unreadable']];
+
+        $this->reset('punchFile');
+        $this->loadAttendance();
+        $this->loadStats();
+    }
+
+    public function dismissSync(): void
+    {
+        $this->syncSummary = null;
+        $this->syncError = null;
+    }
 }
 ?>
 
@@ -249,6 +329,94 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 <i class="fas fa-plus mr-2"></i>Manual Entry
             </button>
         </div>
+    </div>
+
+
+    {{-- Bringing attendance in from the fingerprint scanner.
+
+         Two ways on purpose. The pull is the one to use day to day, but it
+         depends on the device being reachable from this server - and when it is
+         not, attendance still has to get in somehow, so an export from the
+         scanner's own software can be uploaded instead. --}}
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5 mb-6">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h2 class="text-base font-semibold text-gray-900">Biometric scanner</h2>
+                <p class="text-sm text-gray-600 mt-1">
+                    Scans become attendance days: first of the day in, last of the day out.
+                </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                @if ($this->deviceConfigured)
+                    <button wire:click="syncFromDevice" wire:loading.attr="disabled" class="btn-primary">
+                        <span wire:loading.remove wire:target="syncFromDevice">
+                            <i class="fas fa-rotate"></i> Sync from device
+                        </span>
+                        <span wire:loading wire:target="syncFromDevice">Reading the scanner...</span>
+                    </button>
+                @else
+                    <span class="text-sm text-gray-500">
+                        <i class="fas fa-circle-info"></i>
+                        Device connection is not set up. Ask your administrator to connect the scanner.
+                    </span>
+                @endif
+            </div>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-gray-200">
+            <label class="form-label" for="punchFile">Or upload an export from the scanner</label>
+            <div class="flex flex-wrap items-center gap-3">
+                <input id="punchFile" type="file" wire:model="punchFile" accept=".csv,.txt,.dat"
+                       class="block text-sm text-gray-700
+                              file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0
+                              file:text-sm file:font-semibold file:bg-slate-100 file:text-gray-700
+                              hover:file:bg-slate-200">
+                <button wire:click="importFile" wire:loading.attr="disabled" @disabled(! $punchFile) class="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed">
+                    Import file
+                </button>
+                <label class="flex items-center gap-2 text-sm text-gray-600">
+                    <input type="checkbox" wire:model="overwriteManual" class="rounded border-gray-300">
+                    Replace days entered by hand
+                </label>
+            </div>
+            @error('punchFile') <p class="mt-2 text-sm text-red-600">{{ $message }}</p> @enderror
+            <p class="mt-2 text-xs text-gray-500">
+                CSV or the device's own .dat. Days somebody typed in are kept unless you tick the box.
+            </p>
+        </div>
+
+        @if ($syncError)
+            <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                <p class="text-sm text-red-800">{{ $syncError }}</p>
+            </div>
+        @endif
+
+        @if ($syncSummary)
+            <div class="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="text-sm text-green-900">
+                        Read {{ $syncSummary['days'] }} day(s) for
+                        {{ $syncSummary['employees'] }} employee(s) from {{ $syncSummary['source'] }}.
+
+                        @if (($syncSummary['unreadable'] ?? 0) > 0)
+                            <span class="block mt-1 text-amber-800">
+                                {{ $syncSummary['unreadable'] }} row(s) could not be read and were left out.
+                            </span>
+                        @endif
+
+                        @if (! empty($syncSummary['unknown']))
+                            <span class="block mt-1 text-amber-800">
+                                These scanner IDs are not linked to anybody, so their scans were ignored:
+                                <strong>{{ implode(', ', $syncSummary['unknown']) }}</strong>.
+                                Set them on the employee under Employees.
+                            </span>
+                        @endif
+                    </div>
+                    <button wire:click="dismissSync" class="text-green-700 hover:text-green-900"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+        @endif
     </div>
 
     <!-- Filters -->
