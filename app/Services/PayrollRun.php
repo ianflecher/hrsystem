@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Support\PayPeriod;
 use App\Support\PayrollCalculator;
 use App\Support\Tardiness;
+use App\Support\WorkWeek;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -19,10 +20,15 @@ class PayrollRun
             if (DB::table('hr_payroll')->where('employee_id', $employeeId)->where('period_start', $period->start)->exists()) return null;
             $late = 0;
             $lateDays = 0;
-            $shifts = DB::table('shift_assignments')->where('employee_id', $employeeId)->whereBetween('work_date', [$period->start, $period->end])->get()->keyBy('work_date');
+            // Nobody is late on a day they were not due in: their own rest days,
+            // and the holidays, both count as not due.
+            $holidays = DB::table('holidays')->whereBetween('date', [$period->start, $period->end])->pluck('date')
+                ->map(fn ($date) => substr((string) $date, 0, 10))->all();
             foreach (DB::table('hr_attendance')->where('employee_id', $employeeId)->whereBetween('date', [$period->start, $period->end])->whereNotNull('time_in')->get() as $attendance) {
-                $shift = $shifts->get($attendance->date);
-                $start = $shift ? ($shift->rest_day ? null : $shift->starts_at) : $employee->shift_start;
+                $date = Carbon::parse($attendance->date);
+                $due = ! in_array($date->toDateString(), $holidays, true)
+                    && ! WorkWeek::restsOn($employee->rest_days, $date);
+                $start = $due ? $employee->shift_start : null;
                 $cost = $start ? Tardiness::deduction(Tardiness::minutesLate(Carbon::parse($attendance->time_in), $start), (float) $employee->salary) : 0;
                 $late += $cost;
                 if ($cost > 0) $lateDays++;

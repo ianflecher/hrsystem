@@ -47,7 +47,7 @@ class PeopleController extends Controller
         $query = null;
         $extra = [];
         $tables = ['documents' => 'employee_documents', 'overtime' => 'overtime_requests',
-            'shifts' => 'shift_assignments', 'checklists' => 'employee_checklists',
+            'checklists' => 'employee_checklists',
             'reviews' => 'performance_reviews', 'loans' => 'employee_loans'];
         if (isset($tables[$module])) {
             $query = DB::table($tables[$module].' as r')
@@ -72,8 +72,15 @@ class PeopleController extends Controller
             }
         }
         if ($module === 'shifts') {
-            $query->whereBetween('r.work_date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()]);
-            $extra['calendar'] = (clone $query)->orderBy('u.full_name')->get()->groupBy('work_date');
+            // Nothing is assigned per date any more: the calendar is drawn from
+            // each person's own shift and rest days, and the holidays on top.
+            $extra['holidays'] = DB::table('holidays')
+                ->whereBetween('date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+                ->orderBy('date')->get()->keyBy('date');
+            $extra['staff'] = DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
+                ->when($hr, fn ($q) => $q->where('e.status', 'active'), fn ($q) => $q->where('e.employee_id', $employeeId))
+                ->select('e.employee_id', 'e.shift_start', 'e.shift_end', 'e.rest_days', 'u.full_name')
+                ->orderBy('u.full_name')->get();
         }
         // Onboarding and offboarding is a roster, not a queue: HR is looking at
         // people, so everybody is listed - including whoever has no checklist
@@ -129,7 +136,7 @@ class PeopleController extends Controller
         if (! in_array($module, ['overtime', 'loans'], true)) PeopleAccess::hr();
         // Loans are requested from the employee portal only - see the view.
         abort_if($hr && in_array($module, ['loans', 'overtime'], true), 403, 'This is requested by the employee.');
-        if (in_array($module, ['documents', 'shifts', 'checklists', 'reviews'], true) && $hr) {
+        if (in_array($module, ['documents', 'checklists', 'reviews'], true) && $hr) {
             $request->validate(['employee_id' => 'required|integer|exists:employees,employee_id']);
             $employeeId = (int) $request->input('employee_id');
         }
@@ -166,23 +173,15 @@ class PeopleController extends Controller
                 });
                 break;
             case 'shifts':
-                $data = $request->validate(['label' => 'required|string|max:80', 'from' => 'required|date_format:Y-m-d', 'to' => 'required|date_format:Y-m-d|after_or_equal:from',
-                    'weekdays' => 'required|array|min:1', 'weekdays.*' => 'integer|between:1,7', 'rest_day' => 'nullable|boolean',
-                    'starts_at' => 'required_unless:rest_day,1|nullable|date_format:H:i', 'ends_at' => 'required_unless:rest_day,1|nullable|date_format:H:i']);
-                $start = Carbon::parse($data['from']);
-                $end = Carbon::parse($data['to']);
-                if ($start->diffInDays($end) > 92) throw ValidationException::withMessages(['to' => 'Assign up to 93 days at a time.']);
-                if (! $request->boolean('rest_day') && $data['starts_at'] === $data['ends_at']) throw ValidationException::withMessages(['ends_at' => 'Start and end must differ.']);
-                DB::transaction(function () use ($data, $start, $end, $employeeId, $request) {
-                    for ($day = $start->copy(); $day->lte($end); $day->addDay()) {
-                        if (! in_array($day->dayOfWeekIso, $data['weekdays'])) continue;
-                        DB::table('shift_assignments')->updateOrInsert(['employee_id' => $employeeId, 'work_date' => $day->toDateString()], [
-                            'label' => $data['label'], 'rest_day' => $request->boolean('rest_day'),
-                            'starts_at' => $request->boolean('rest_day') ? null : $data['starts_at'],
-                            'ends_at' => $request->boolean('rest_day') ? null : $data['ends_at'], 'created_at' => now(), 'updated_at' => now(),
-                        ]);
-                    }
-                });
+                // A holiday is the company's, not any one employee's, so this is
+                // the whole of the input for the calendar.
+                $data = $request->validate([
+                    'date' => 'required|date_format:Y-m-d',
+                    'name' => 'required|string|max:120',
+                    'type' => ['required', Rule::in(['regular', 'special'])],
+                ]);
+                DB::table('holidays')->updateOrInsert(['date' => $data['date']],
+                    ['name' => $data['name'], 'type' => $data['type'], 'created_at' => now(), 'updated_at' => now()]);
                 break;
             case 'checklists':
                 $data = $request->validate(['type' => ['required', Rule::in(['onboarding', 'offboarding'])], 'due_on' => 'required|date_format:Y-m-d']);
@@ -215,11 +214,20 @@ class PeopleController extends Controller
         $this->context($request);
         $action = $request->input('action');
         $tables = ['overtime' => 'overtime_requests', 'loans' => 'employee_loans',
-            'checklists' => 'employee_checklists', 'reviews' => 'performance_reviews', 'shifts' => 'shift_assignments', 'documents' => 'employee_documents'];
+            'checklists' => 'employee_checklists', 'reviews' => 'performance_reviews', 'shifts' => 'holidays', 'documents' => 'employee_documents'];
         abort_unless(isset($tables[$module]), 404);
         DB::transaction(function () use ($request, $module, $id, $action, $tables) {
             $row = DB::table($tables[$module])->where('id', $id)->lockForUpdate()->first();
             abort_unless($row, 404);
+            if ($module === 'shifts') {
+                // A holiday belongs to no employee, so it is handled before any
+                // of the ownership checks below - there is no owner to check.
+                PeopleAccess::hr();
+                abort_unless($action === 'delete', 422);
+                DB::table('holidays')->where('id', $id)->delete();
+
+                return;
+            }
             if ($module === 'overtime' || $module === 'loans') {
                 if ($action === 'cancel') {
                     PeopleAccess::ownOrHr((int) $row->employee_id);

@@ -6,6 +6,7 @@ use Livewire\WithPagination;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use App\Support\WorkWeek;
 use Illuminate\Validation\Rule;
 
 new #[Layout('components.layouts.humanresource')] class extends Component
@@ -25,6 +26,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public string $email = '';
     public string $job_title = '';
     public string $shift_start = '';
+    public string $shift_end = '';
+    public array $rest_days = [];
     public string $biometric_id = '';
     public $department_id = '';
     public string $hire_date = '';
@@ -155,6 +158,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->email         = $row->email;
         $this->job_title     = $row->job_title;
         $this->shift_start   = $row->shift_start ? substr($row->shift_start, 0, 5) : '';
+        $this->shift_end     = $row->shift_end ? substr($row->shift_end, 0, 5) : '';
+        $this->rest_days     = WorkWeek::days($row->rest_days);
         $this->biometric_id  = (string) ($row->biometric_id ?? '');
         $this->department_id = $row->department_id ?? '';
         $this->hire_date     = $row->hire_date;
@@ -176,6 +181,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'email'         => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($userId, 'user_id')],
             'job_title'     => ['required', 'string', 'max:100'],
             'shift_start'   => ['nullable', 'date_format:H:i'],
+            'shift_end'     => ['nullable', 'date_format:H:i'],
+            'rest_days'     => ['array'],
+            'rest_days.*'   => ['integer', 'between:1,7'],
             'biometric_id'  => ['nullable', 'string', 'max:50',
                                 Rule::unique('employees', 'biometric_id')->ignore($this->editingId, 'employee_id')],
             'department_id' => ['nullable'],
@@ -189,13 +197,17 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         // Left null when blank: somebody with no shift set cannot be judged
         // late, which is the right answer until their hours are known.
         $shiftStart = ($data['shift_start'] ?? '') !== '' ? $data['shift_start'].':00' : null;
+        $shiftEnd = ($data['shift_end'] ?? '') !== '' ? $data['shift_end'].':00' : null;
+        // The calendar is drawn from these, so they are the whole schedule:
+        // no rest day set means the person is shown as working every day.
+        $restDays = WorkWeek::store($data['rest_days'] ?? []);
         // Null rather than empty string: the column is unique, and two blanks
         // would collide where two unenrolled people should not.
         $biometricId = ($data['biometric_id'] ?? '') !== '' ? $data['biometric_id'] : null;
         $salary = $data['salary'] === '' || $data['salary'] === null ? 0 : $data['salary'];
 
         if ($this->editingId) {
-            DB::transaction(function () use ($data, $departmentId, $shiftStart, $biometricId, $salary, $userId) {
+            DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $biometricId, $salary, $userId) {
                 DB::table('users')->where('user_id', $userId)->update([
                     'full_name'  => $data['full_name'],
                     'username'   => $data['username'],
@@ -207,6 +219,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 DB::table('employees')->where('employee_id', $this->editingId)->update([
                     'job_title'     => $data['job_title'],
                     'shift_start'   => $shiftStart,
+                    'shift_end'     => $shiftEnd,
+                    'rest_days'     => $restDays,
                     'biometric_id'  => $biometricId,
                     'department_id' => $departmentId,
                     'hire_date'     => $data['hire_date'],
@@ -229,7 +243,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         // house default, and the account must replace it at first sign-in.
         $password = Str::password(12, symbols: false);
 
-        DB::transaction(function () use ($data, $departmentId, $shiftStart, $biometricId, $salary, $password) {
+        DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $biometricId, $salary, $password) {
             $newUserId = DB::table('users')->insertGetId([
                 'full_name'            => $data['full_name'],
                 'username'             => $data['username'],
@@ -245,6 +259,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'user_id'       => $newUserId,
                 'job_title'     => $data['job_title'],
                 'shift_start'   => $shiftStart,
+                'shift_end'     => $shiftEnd,
+                'rest_days'     => $restDays,
                 'biometric_id'  => $biometricId,
                 'department_id' => $departmentId,
                 'hire_date'     => $data['hire_date'],
@@ -311,6 +327,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->email         = '';
         $this->job_title     = '';
         $this->shift_start   = '';
+        $this->shift_end     = '';
+        $this->rest_days     = [];
         $this->biometric_id  = '';
         $this->department_id = '';
         $this->hire_date     = now()->toDateString();
@@ -514,6 +532,26 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     Lateness is measured from this. Leave blank and they are never marked late.
                                 </p>
                                 @error('shift_start') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="shift_end">Shift ends</label>
+                                <input id="shift_end" type="time" wire:model="shift_end" class="form-input">
+                                @error('shift_end') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div class="md:col-span-2">
+                                <span class="form-label">Rest days</span>
+                                <div class="flex flex-wrap gap-3 mt-1">
+                                    @foreach (WorkWeek::DAYS as $number => $name)
+                                        <label class="flex items-center gap-2 text-sm text-gray-700">
+                                            <input type="checkbox" value="{{ $number }}" wire:model="rest_days" class="rounded border-gray-300">
+                                            {{ substr($name, 0, 3) }}
+                                        </label>
+                                    @endforeach
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">
+                                    The shift calendar is drawn from these, so nothing is entered per date.
+                                </p>
+                                @error('rest_days') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
 
                             <div>

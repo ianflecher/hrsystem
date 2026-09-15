@@ -100,15 +100,52 @@ class PeopleFeaturesTest extends TestCase
         $this->post('/employee/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 300])->assertRedirect();
     }
 
-    public function test_calendar_assigns_recurring_shifts_and_rest_days(): void
+    public function test_the_calendar_draws_itself_from_the_employee_and_the_holidays(): void
     {
-        $this->actingAs($this->hr)->post('/hr/people/shifts', ['employee_id' => $this->employeeId, 'label' => 'Evening',
-            'from' => '2018-01-01', 'to' => '2018-01-07', 'weekdays' => [1, 3, 5], 'starts_at' => '22:00', 'ends_at' => '06:00'])->assertRedirect()->assertSessionHasNoErrors();
-        $this->assertSame(3, DB::table('shift_assignments')->where('employee_id', $this->employeeId)->count());
-        $this->post('/hr/people/shifts', ['employee_id' => $this->employeeId, 'label' => 'Rest', 'from' => '2018-01-01', 'to' => '2018-01-01', 'weekdays' => [1], 'rest_day' => 1])->assertRedirect()->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('shift_assignments', ['employee_id' => $this->employeeId, 'work_date' => '2018-01-01', 'rest_day' => 1, 'starts_at' => null]);
-        $this->actingAs($this->staff)->get('/employee/people/shifts?month=2018-01')->assertOk()->assertSee('Evening')->assertSee('Rest');
-        $this->actingAs($this->other)->get('/employee/people/shifts?month=2018-01')->assertDontSee('Evening');
+        // Sunday off, no assignment entered anywhere.
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'shift_end' => '17:00:00', 'rest_days' => '7']);
+
+        // 2018-01-07 was a Sunday, 2018-01-08 a Monday.
+        $this->actingAs($this->staff)->get('/employee/people/shifts?month=2018-01')
+            ->assertOk()->assertSee('08:00')->assertSee('Rest day')->assertSee('Sunday');
+
+        // The holiday is the only thing HR enters, and it covers everybody.
+        $this->actingAs($this->hr)->post('/hr/people/shifts',
+            ['date' => '2018-01-08', 'name' => 'Founding Day', 'type' => 'special'])->assertRedirect()->assertSessionHasNoErrors();
+        $this->get('/hr/people/shifts?month=2018-01')->assertOk()->assertSee('Founding Day');
+        $this->actingAs($this->staff)->get('/employee/people/shifts?month=2018-01')->assertOk()->assertSee('Founding Day');
+
+        // Entering the same date again replaces it rather than colliding.
+        $this->actingAs($this->hr)->post('/hr/people/shifts',
+            ['date' => '2018-01-08', 'name' => 'Founding Day (moved)', 'type' => 'regular'])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(1, DB::table('holidays')->where('date', '2018-01-08')->count());
+
+        // An employee can neither add nor remove one.
+        $id = DB::table('holidays')->where('date', '2018-01-08')->value('id');
+        $this->actingAs($this->staff)->post('/employee/people/shifts', ['date' => '2018-01-09', 'name' => 'Mine', 'type' => 'regular'])->assertForbidden();
+        $this->post('/employee/people/shifts/'.$id, ['action' => 'delete'])->assertForbidden();
+
+        $this->actingAs($this->hr)->post('/hr/people/shifts/'.$id, ['action' => 'delete'])->assertRedirect();
+        $this->assertDatabaseMissing('holidays', ['id' => $id]);
+    }
+
+    public function test_nobody_is_late_on_a_rest_day_or_a_holiday(): void
+    {
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'rest_days' => '7', 'salary' => 22000]);
+        DB::table('holidays')->insert(['date' => '2018-01-08', 'name' => 'Founding Day', 'type' => 'regular', 'created_at' => now(), 'updated_at' => now()]);
+
+        foreach (['2018-01-07', '2018-01-08'] as $date) {
+            DB::table('hr_attendance')->insert(['employee_id' => $this->employeeId, 'date' => $date,
+                'time_in' => $date.' 10:30:00', 'status' => 'late', 'created_at' => now(), 'updated_at' => now()]);
+        }
+
+        (new PayrollRun)->generate($this->employeeId, PayPeriod::fromStart('2018-01-01'));
+        $notes = DB::table('hr_payroll')->where('employee_id', $this->employeeId)->value('notes');
+
+        // Two and a half hours late on each - but neither was a day they were due.
+        $this->assertStringNotContainsString('Late', $notes);
     }
 
     public function test_the_checklist_screen_lists_the_people_who_need_one(): void
