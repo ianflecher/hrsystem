@@ -24,6 +24,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public string $username = '';
     public string $email = '';
     public string $job_title = '';
+    public string $shift_start = '';
     public $department_id = '';
     public string $hire_date = '';
     public $salary = '';
@@ -152,6 +153,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->username      = $row->username;
         $this->email         = $row->email;
         $this->job_title     = $row->job_title;
+        $this->shift_start   = $row->shift_start ? substr($row->shift_start, 0, 5) : '';
         $this->department_id = $row->department_id ?? '';
         $this->hire_date     = $row->hire_date;
         $this->salary        = $row->salary;
@@ -171,6 +173,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'username'      => ['required', 'string', 'max:100', Rule::unique('users', 'username')->ignore($userId, 'user_id')],
             'email'         => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($userId, 'user_id')],
             'job_title'     => ['required', 'string', 'max:100'],
+            'shift_start'   => ['nullable', 'date_format:H:i'],
             'department_id' => ['nullable'],
             'hire_date'     => ['required', 'date'],
             'salary'        => ['nullable', 'numeric', 'min:0'],
@@ -179,10 +182,13 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         ]);
 
         $departmentId = $data['department_id'] !== '' ? (int) $data['department_id'] : null;
+        // Left null when blank: somebody with no shift set cannot be judged
+        // late, which is the right answer until their hours are known.
+        $shiftStart = ($data['shift_start'] ?? '') !== '' ? $data['shift_start'].':00' : null;
         $salary = $data['salary'] === '' || $data['salary'] === null ? 0 : $data['salary'];
 
         if ($this->editingId) {
-            DB::transaction(function () use ($data, $departmentId, $salary, $userId) {
+            DB::transaction(function () use ($data, $departmentId, $shiftStart, $salary, $userId) {
                 DB::table('users')->where('user_id', $userId)->update([
                     'full_name'  => $data['full_name'],
                     'username'   => $data['username'],
@@ -193,6 +199,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
                 DB::table('employees')->where('employee_id', $this->editingId)->update([
                     'job_title'     => $data['job_title'],
+                    'shift_start'   => $shiftStart,
                     'department_id' => $departmentId,
                     'hire_date'     => $data['hire_date'],
                     'salary'        => $salary,
@@ -214,7 +221,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         // house default, and the account must replace it at first sign-in.
         $password = Str::password(12, symbols: false);
 
-        DB::transaction(function () use ($data, $departmentId, $salary, $password) {
+        DB::transaction(function () use ($data, $departmentId, $shiftStart, $salary, $password) {
             $newUserId = DB::table('users')->insertGetId([
                 'full_name'            => $data['full_name'],
                 'username'             => $data['username'],
@@ -229,6 +236,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             DB::table('employees')->insert([
                 'user_id'       => $newUserId,
                 'job_title'     => $data['job_title'],
+                'shift_start'   => $shiftStart,
                 'department_id' => $departmentId,
                 'hire_date'     => $data['hire_date'],
                 'salary'        => $salary,
@@ -293,6 +301,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->username      = '';
         $this->email         = '';
         $this->job_title     = '';
+        $this->shift_start   = '';
         $this->department_id = '';
         $this->hire_date     = now()->toDateString();
         $this->salary        = '';
@@ -488,6 +497,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <input id="email" type="email" wire:model="email" class="form-input">
                                 @error('email') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
+                            <div>
+                                <label class="form-label" for="shift_start">Shift starts</label>
+                                <input id="shift_start" type="time" wire:model="shift_start" class="form-input">
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Lateness is measured from this. Leave blank and they are never marked late.
+                                </p>
+                                @error('shift_start') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+
                             <div>
                                 <label class="form-label" for="department_id">Department</label>
                                 <select id="department_id" wire:model="department_id" class="form-input">

@@ -2,6 +2,9 @@
 
 use Livewire\Volt\Component;
 use Livewire\Attributes\Layout;
+use App\Support\PayPeriod;
+use App\Support\PayrollCalculator;
+use App\Support\Tardiness;
 use Illuminate\Support\Facades\DB;
 use Livewire\WithPagination;
 
@@ -28,24 +31,23 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     
     public function mount()
     {
-        // Set default pay period to current month
-        $this->payPeriod = date('Y-m');
+        // The cutoff today falls in: the 1st-15th, or the 16th to month end.
+        $this->payPeriod = PayPeriod::recent(1)[0]->start;
     }
     
     public function getPayPeriods()
     {
-        // Generate last 12 months for dropdown
-        $periods = [];
-        for ($i = 0; $i < 12; $i++) {
-            $date = date('Y-m', strtotime("-$i months"));
-            $periods[] = [
-                'value' => $date,
-                'label' => date('F Y', strtotime($date))
-            ];
-        }
-        return $periods;
+        return array_map(
+            fn (PayPeriod $p) => ['value' => $p->start, 'label' => $p->label()],
+            PayPeriod::recent(12)
+        );
     }
-    
+
+    private function period(): PayPeriod
+    {
+        return PayPeriod::fromStart($this->payPeriod);
+    }
+
     public function getEmployeesProperty()
     {
         return DB::table('employees')
@@ -53,7 +55,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->leftJoin('departments', 'employees.department_id', '=', 'departments.department_id')
             ->leftJoin('hr_payroll', function($join) {
                 $join->on('employees.employee_id', '=', 'hr_payroll.employee_id')
-                    ->where('hr_payroll.period_start', 'LIKE', $this->payPeriod . '%');
+                    ->where('hr_payroll.period_start', '=', $this->payPeriod);
             })
             ->select(
                 'employees.employee_id',
@@ -102,7 +104,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         return DB::table('employees')
             ->join('hr_payroll', function($join) {
                 $join->on('employees.employee_id', '=', 'hr_payroll.employee_id')
-                    ->where('hr_payroll.period_start', 'LIKE', $this->payPeriod . '%')
+                    ->where('hr_payroll.period_start', '=', $this->payPeriod)
                     ->where('hr_payroll.status', 'paid');
             })
             ->select(
@@ -121,7 +123,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->leftJoin('departments', 'employees.department_id', '=', 'departments.department_id')
             ->leftJoin('hr_payroll', function($join) {
                 $join->on('employees.employee_id', '=', 'hr_payroll.employee_id')
-                    ->where('hr_payroll.period_start', 'LIKE', $this->payPeriod . '%');
+                    ->where('hr_payroll.period_start', '=', $this->payPeriod);
             })
             ->select(
                 'employees.employee_id',
@@ -188,7 +190,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         // Check if payroll already exists for this period
         $existingPayroll = DB::table('hr_payroll')
             ->where('employee_id', $employeeId)
-            ->where('period_start', 'LIKE', $this->payPeriod . '%')
+            ->where('period_start', '=', $this->payPeriod)
             ->first();
         
         if ($existingPayroll) {
@@ -207,17 +209,21 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             // Shared with the period run, so a payslip generated singly and one
             // generated in bulk cannot disagree. It also taxes income after the
             // statutory contributions; this block used to tax the gross.
-            $calc = $this->computePayroll((float) $basicSalary);
+            $periodStart = $this->period()->start;
+            $periodEnd = $this->period()->end;
+            $late = $this->lateDeductionFor((int) $employeeId, (float) $basicSalary, $periodStart, $periodEnd);
+
+            $calc = $this->computePayroll((float) $basicSalary, $late['amount']);
             $totalDeductions = $calc['deductions'];
             $netPay = $calc['net'];
-            $notes = $this->breakdownNote($calc);
+            $notes = $this->breakdownNote($calc, $late['days']);
 
             // Create payroll record
             DB::table('hr_payroll')->insert([
                 'employee_id' => $employeeId,
                 'period_start' => $this->payPeriod . '-01',
                 'period_end' => date('Y-m-t', strtotime($this->payPeriod . '-01')),
-                'gross_pay' => $basicSalary,
+                'gross_pay' => $calc['gross'],
                 'deductions' => $totalDeductions,
                 'net_pay' => $netPay,
                 'status' => 'calculated',
@@ -244,38 +250,50 @@ new #[Layout('components.layouts.humanresource')] class extends Component
      * maximum. Check these against the current SSS, PhilHealth and BIR tables
      * before anyone is paid from them.
      */
-    private function computePayroll(float $monthlySalary): array
+    private function computePayroll(float $monthlySalary, float $lateDeduction = 0.0): array
     {
-        $sss        = $this->calculateSSS($monthlySalary);
-        $philhealth = $this->calculatePhilHealth($monthlySalary);
-        $pagibig    = 100.0;
-
-        // Tax is charged on what is left after the statutory contributions,
-        // not on the gross - they are deductible from taxable income. The
-        // previous version taxed the gross, which over-withheld from everyone
-        // earning above the exemption.
-        $taxableIncome = max(0, $monthlySalary - ($sss + $philhealth + $pagibig));
-        $tax = $this->calculateTax($taxableIncome);
-
-        $total = $sss + $philhealth + $pagibig + $tax;
-
-        return [
-            'sss'        => round($sss, 2),
-            'philhealth' => round($philhealth, 2),
-            'pagibig'    => round($pagibig, 2),
-            'tax'        => round($tax, 2),
-            'taxable'    => round($taxableIncome, 2),
-            'deductions' => round($total, 2),
-            'net'        => round($monthlySalary - $total, 2),
-        ];
+        return PayrollCalculator::forCutoff($monthlySalary, $lateDeduction, $this->period()->isSecondCutoff);
     }
 
-    private function breakdownNote(array $c): string
+    /**
+     * What lateness cost this employee over the cutoff.
+     *
+     * Only days with a clock-in count. An employee with no shift set cannot be
+     * judged late at all - see the migration that added the column.
+     */
+    private function lateDeductionFor(int $employeeId, float $salary, string $periodStart, string $periodEnd): array
     {
-        return 'SSS: PHP '.number_format($c['sss'], 2)
-            .' | PhilHealth: PHP '.number_format($c['philhealth'], 2)
-            .' | Pag-IBIG: PHP '.number_format($c['pagibig'], 2)
-            .' | Tax: PHP '.number_format($c['tax'], 2);
+        $shiftStart = DB::table('employees')->where('employee_id', $employeeId)->value('shift_start');
+
+        if (! $shiftStart) {
+            return ['amount' => 0.0, 'days' => 0];
+        }
+
+        $rows = DB::table('hr_attendance')
+            ->where('employee_id', $employeeId)
+            ->whereBetween('date', [$periodStart, $periodEnd])
+            ->whereNotNull('time_in')
+            ->pluck('time_in');
+
+        $amount = 0.0;
+        $days = 0;
+
+        foreach ($rows as $timeIn) {
+            $minutes = Tardiness::minutesLate(\Carbon\Carbon::parse($timeIn), $shiftStart);
+            $cost = Tardiness::deduction($minutes, $salary);
+
+            if ($cost > 0) {
+                $amount += $cost;
+                $days++;
+            }
+        }
+
+        return ['amount' => round($amount, 2), 'days' => $days];
+    }
+
+    private function breakdownNote(array $c, int $lateDays = 0): string
+    {
+        return PayrollCalculator::note($c, $lateDays);
     }
 
     /**
@@ -288,8 +306,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
      */
     public function generatePeriod(): void
     {
-        $periodStart = $this->payPeriod.'-01';
-        $periodEnd   = date('Y-m-t', strtotime($periodStart));
+        $periodStart = $this->period()->start;
+        $periodEnd   = $this->period()->end;
 
         $already = DB::table('hr_payroll')
             ->where('period_start', $periodStart)
@@ -305,24 +323,31 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         if ($employees->isEmpty()) {
             session()->flash('info', 'Nothing to generate: everyone active with a salary already has a payslip for '
-                .date('F Y', strtotime($periodStart)).'.');
+                .$this->period()->label().'.');
 
             return;
         }
 
         $rows = [];
         foreach ($employees as $employee) {
-            $c = $this->computePayroll((float) $employee->salary);
+            $late = $this->lateDeductionFor(
+                (int) $employee->employee_id,
+                (float) $employee->salary,
+                $periodStart,
+                $periodEnd
+            );
+
+            $c = $this->computePayroll((float) $employee->salary, $late['amount']);
 
             $rows[] = [
                 'employee_id'  => $employee->employee_id,
                 'period_start' => $periodStart,
                 'period_end'   => $periodEnd,
-                'gross_pay'    => $employee->salary,
+                'gross_pay'    => $c['gross'],
                 'deductions'   => $c['deductions'],
                 'net_pay'      => $c['net'],
                 'status'       => 'calculated',
-                'notes'        => $this->breakdownNote($c),
+                'notes'        => $this->breakdownNote($c, $late['days']),
                 'created_at'   => now(),
                 'updated_at'   => now(),
             ];
@@ -334,7 +359,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $skipped = DB::table('employees')->where('status', 'active')->where('salary', '<=', 0)->count();
 
         $message = 'Generated '.count($rows).' payslip'.(count($rows) === 1 ? '' : 's')
-            .' for '.date('F Y', strtotime($periodStart)).'. They are calculated, not yet approved.';
+            .' for '.$this->period()->label().'. They are calculated, not yet approved.';
 
         if ($skipped > 0) {
             $message .= ' '.$skipped.' active employee'.($skipped === 1 ? ' has' : 's have')
@@ -350,7 +375,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
      */
     public function approvePeriod(): void
     {
-        $periodStart = $this->payPeriod.'-01';
+        $periodStart = $this->period()->start;
 
         $n = DB::table('hr_payroll')
             ->where('period_start', $periodStart)
@@ -366,7 +391,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
     public function markPeriodPaid(): void
     {
-        $periodStart = $this->payPeriod.'-01';
+        $periodStart = $this->period()->start;
 
         $n = DB::table('hr_payroll')
             ->where('period_start', $periodStart)
@@ -385,7 +410,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
      */
     public function getPeriodCountsProperty(): array
     {
-        $periodStart = $this->payPeriod.'-01';
+        $periodStart = $this->period()->start;
 
         $byStatus = DB::table('hr_payroll')
             ->where('period_start', $periodStart)
@@ -450,7 +475,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         $payroll = DB::table('hr_payroll')
             ->where('employee_id', $employeeId)
-            ->where('period_start', 'LIKE', $this->payPeriod . '%')
+            ->where('period_start', '=', $this->payPeriod)
             ->first();
             
         if ($payroll) {
@@ -469,7 +494,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         $payroll = DB::table('hr_payroll')
             ->where('employee_id', $employeeId)
-            ->where('period_start', 'LIKE', $this->payPeriod . '%')
+            ->where('period_start', '=', $this->payPeriod)
             ->first();
             
         if ($payroll) {
@@ -487,7 +512,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public function exportPayroll()
     {
         $employees = $this->employees->items();
-        $period = date('F Y', strtotime($this->payPeriod));
+        $period = $this->period()->label();
         
         $csvData = "Employee Name,Department,Position,Basic Salary,Gross Pay,Deductions,Net Pay,Status\n";
         
@@ -583,7 +608,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             <div class="flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-900">
-                        Payroll run &mdash; {{ date('F Y', strtotime($this->payPeriod)) }}
+                        Payroll run &mdash; {{ $this->period()->label() }}
                     </h2>
                     <p class="text-sm text-gray-600 mt-1">
                         {{ $this->periodCounts['eligible'] }} active
@@ -600,7 +625,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
                 <div class="flex flex-wrap items-center gap-2">
                     <button wire:click="generatePeriod"
-                            wire:confirm="Generate payslips for {{ $this->periodCounts['pending'] }} employee(s) for {{ date('F Y', strtotime($this->payPeriod)) }}?"
+                            wire:confirm="Generate payslips for {{ $this->periodCounts['pending'] }} employee(s) for {{ $this->period()->label() }}?"
                             @disabled($this->periodCounts['pending'] === 0)
                             class="btn-primary disabled:opacity-40 disabled:cursor-not-allowed">
                         <i class="fas fa-calculator"></i>
@@ -915,7 +940,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         
         <!-- Summary Section -->
         <div class="mt-6 bg-gray-50 p-4 rounded-lg">
-            <h3 class="text-lg font-medium text-gray-900 mb-3">Pay Period Summary: {{ date('F Y', strtotime($this->payPeriod)) }}</h3>
+            <h3 class="text-lg font-medium text-gray-900 mb-3">Pay Period Summary: {{ $this->period()->label() }}</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="text-center p-3 bg-white rounded shadow">
                     <div class="text-2xl font-bold text-blue-600">
@@ -960,8 +985,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 Payroll Details - {{ $selectedEmployee->full_name }}
                             </h3>
                             <p class="text-sm text-gray-500 mt-1">
-                                Period: {{ date('F d, Y', strtotime($selectedEmployee->period_start ?? $this->payPeriod . '-01')) }} 
-                                to {{ date('F d, Y', strtotime($selectedEmployee->period_end ?? date('Y-m-t', strtotime($this->payPeriod . '-01')))) }}
+                                Period: {{ date('F d, Y', strtotime($selectedEmployee->period_start ?? $this->period()->start)) }} 
+                                to {{ date('F d, Y', strtotime($selectedEmployee->period_end ?? $this->period()->end)) }}
                             </p>
                         </div>
                         <button wire:click="closePayrollDetails" type="button" class="text-gray-400 hover:text-gray-500">

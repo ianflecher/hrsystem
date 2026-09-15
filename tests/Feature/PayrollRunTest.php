@@ -20,12 +20,12 @@ class PayrollRunTest extends TestCase
     {
         parent::setUp();
         // A period far enough back that a real run would not collide with it.
-        $this->period = '2019-03';
+        $this->period = '2019-03-16';
     }
 
     protected function tearDown(): void
     {
-        DB::table('hr_payroll')->where('period_start', $this->period.'-01')->delete();
+        DB::table('hr_payroll')->where('period_start', $this->period)->delete();
 
         foreach ($this->createdUserIds as $id) {
             DB::table('hr_payroll')->whereIn('employee_id', function ($q) use ($id) {
@@ -88,33 +88,57 @@ class PayrollRunTest extends TestCase
         foreach ([$a, $b] as $id) {
             $this->assertDatabaseHas('hr_payroll', [
                 'employee_id'  => $id,
-                'period_start' => $this->period.'-01',
+                'period_start' => $this->period,
                 'status'       => 'calculated',
             ]);
         }
     }
 
-    public function test_tax_is_charged_after_the_statutory_contributions(): void
+    public function test_the_second_cutoff_carries_the_monthly_contributions(): void
     {
-        // 25,000 gross: SSS 1,350, PhilHealth 500, Pag-IBIG 100 = 1,950.
-        // Taxable is therefore 23,050, and the first bracket starts at 20,833,
-        // so tax is (23,050 - 20,833) x 15% = 332.55.
+        // 25,000 a month is 12,500 a payslip. The whole monthly contribution
+        // lands on this cutoff: SSS 1,350 + PhilHealth 500 + Pag-IBIG 100 =
+        // 1,950, leaving 10,550 taxable. The semi-monthly exemption is 10,417,
+        // so 133 is taxed at 15% = 19.95.
         $id = $this->employee(25000);
 
         $this->screen()->call('generatePeriod');
 
         $row = DB::table('hr_payroll')->where('employee_id', $id)->first();
 
-        $this->assertEqualsWithDelta(2282.55, (float) $row->deductions, 0.01,
-            'deductions should be the three contributions plus tax on what is left');
-        $this->assertEqualsWithDelta(22717.45, (float) $row->net_pay, 0.01);
-        $this->assertEqualsWithDelta(25000.00, (float) $row->gross_pay, 0.01);
+        $this->assertEqualsWithDelta(12500.00, (float) $row->gross_pay, 0.01,
+            'a payslip is half the monthly salary');
+        $this->assertEqualsWithDelta(1969.95, (float) $row->deductions, 0.01);
+        $this->assertEqualsWithDelta(10530.05, (float) $row->net_pay, 0.01);
+    }
+
+    public function test_the_first_cutoff_carries_none_of_them(): void
+    {
+        $id = $this->employee(25000);
+
+        Volt::actingAs($this->hr())->test('hr.payroll')
+            ->set('payPeriod', '2019-03-01')
+            ->call('generatePeriod');
+
+        $row = DB::table('hr_payroll')
+            ->where('employee_id', $id)
+            ->where('period_start', '2019-03-01')
+            ->first();
+
+        $this->assertNotNull($row);
+        $this->assertStringContainsString('second cutoff', $row->notes);
+
+        // 12,500 taxable, less the 10,417 exemption, at 15% = 312.45.
+        $this->assertEqualsWithDelta(312.45, (float) $row->deductions, 0.01);
+
+        DB::table('hr_payroll')->where('period_start', '2019-03-01')->delete();
     }
 
     public function test_someone_below_the_threshold_pays_no_tax(): void
     {
-        // 15,000 gross: SSS 900, PhilHealth 300, Pag-IBIG 100 = 1,300.
-        // Taxable 13,700, which is under the 20,833 exemption.
+        // 15,000 a month is 7,500 a payslip, under the 10,417 exemption before
+        // anything is deducted. Second cutoff, so SSS 900 + PhilHealth 300 +
+        // Pag-IBIG 100 still come off.
         $id = $this->employee(15000);
 
         $this->screen()->call('generatePeriod');
@@ -122,7 +146,35 @@ class PayrollRunTest extends TestCase
         $row = DB::table('hr_payroll')->where('employee_id', $id)->first();
 
         $this->assertEqualsWithDelta(1300.00, (float) $row->deductions, 0.01);
-        $this->assertEqualsWithDelta(13700.00, (float) $row->net_pay, 0.01);
+        $this->assertEqualsWithDelta(6200.00, (float) $row->net_pay, 0.01);
+    }
+
+    public function test_lateness_comes_off_the_payslip(): void
+    {
+        // 22,000 a month: 1,000 a day, 125 an hour. Two arrivals, one 8 minutes
+        // late (an hour) and one 40 minutes late (half a day) = 625.
+        $id = $this->employee(22000);
+        DB::table('employees')->where('employee_id', $id)->update(['shift_start' => '08:00:00']);
+
+        foreach (['2019-03-18 08:08:00', '2019-03-19 08:40:00', '2019-03-20 08:03:00'] as $arrival) {
+            DB::table('hr_attendance')->insert([
+                'employee_id' => $id,
+                'date'        => substr($arrival, 0, 10),
+                'time_in'     => $arrival,
+                'status'      => 'present',
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ]);
+        }
+
+        $this->screen()->call('generatePeriod');
+
+        $row = DB::table('hr_payroll')->where('employee_id', $id)->first();
+
+        $this->assertStringContainsString('Late (2 days): PHP 625.00', $row->notes,
+            'the third arrival was inside the grace period');
+
+        DB::table('hr_attendance')->where('employee_id', $id)->delete();
     }
 
     public function test_a_second_run_does_not_duplicate_anyone(): void
@@ -134,7 +186,7 @@ class PayrollRunTest extends TestCase
 
         $this->assertSame(1, DB::table('hr_payroll')
             ->where('employee_id', $id)
-            ->where('period_start', $this->period.'-01')
+            ->where('period_start', $this->period)
             ->count(), 'running the period twice must not pay anyone twice');
     }
 
@@ -148,7 +200,7 @@ class PayrollRunTest extends TestCase
         foreach ([$noSalary, $inactive] as $id) {
             $this->assertDatabaseMissing('hr_payroll', [
                 'employee_id'  => $id,
-                'period_start' => $this->period.'-01',
+                'period_start' => $this->period,
             ]);
         }
     }
@@ -156,7 +208,7 @@ class PayrollRunTest extends TestCase
     public function test_a_payslip_moves_calculated_then_approved_then_paid(): void
     {
         $id = $this->employee(22000);
-        $where = ['employee_id' => $id, 'period_start' => $this->period.'-01'];
+        $where = ['employee_id' => $id, 'period_start' => $this->period];
 
         $screen = $this->screen();
 
@@ -178,12 +230,12 @@ class PayrollRunTest extends TestCase
 
         // A different period is left alone entirely.
         Volt::actingAs($this->hr())->test('hr.payroll')
-            ->set('payPeriod', '2019-04')
+            ->set('payPeriod', '2019-04-16')
             ->call('approvePeriod');
 
         $this->assertSame('calculated', DB::table('hr_payroll')
             ->where('employee_id', $id)
-            ->where('period_start', $this->period.'-01')
+            ->where('period_start', $this->period)
             ->value('status'));
     }
 }

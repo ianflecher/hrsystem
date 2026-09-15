@@ -4,6 +4,7 @@ use Livewire\Volt\Component;
 use Livewire\Attributes\Layout;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Support\Tardiness;
 use Carbon\Carbon;
 
 new #[Layout('components.layouts.employeeland')] class extends Component
@@ -140,7 +141,10 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             ],
             [
                 'time_in' => now(),
-                'status' => now()->hour > 9 ? 'late' : 'present',
+                // Measured against this employee's own shift with the five
+                // minute grace. The old rule only bit from 10:00, so a 9:45
+                // arrival was recorded as on time.
+                'status' => Tardiness::isLate(now(), $this->employee->shift_start ?? null) ? 'late' : 'present',
                 'updated_at' => now()
             ]
         );

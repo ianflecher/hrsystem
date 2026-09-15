@@ -75,7 +75,12 @@ existed are unaffected.
 
 ## Running payroll
 
-`/hr/payroll` generates a period for everyone at once. It is three deliberate
+Staff are paid twice a month: the 1st to the 15th, and the 16th to the end of
+the month. Each payslip is half the monthly salary. SSS, PhilHealth and Pag-IBIG
+are monthly obligations taken **whole on the second cutoff**, so the two
+payslips are deliberately different sizes.
+
+`/hr/payroll` generates a cutoff for everyone at once. It is three deliberate
 steps, because this is the one part of the system that moves money:
 
 1. **Generate** - creates a payslip for every active employee with a salary
@@ -86,6 +91,21 @@ steps, because this is the one part of the system that moves money:
 Each button says how many rows it will touch, and the run is one transaction,
 so a failure leaves no half-finished period. Running it twice does not pay
 anyone twice.
+
+### Lateness
+
+Measured from each employee's own `shift_start`, set on the Employees screen.
+Leave it blank and that person is never marked late.
+
+| Late by | Deducted |
+| --- | --- |
+| Up to 5 minutes | nothing |
+| 6 to 14 minutes | one hour of the daily rate |
+| 15 minutes or more | half the daily rate |
+
+The daily rate is the monthly salary over 22 working days, and the hourly rate
+is that over 8. Time not worked is taken off before tax, because it was never
+earned.
 
 > **The deductions are simplified.** SSS brackets are coarse, PhilHealth has no
 > floor or ceiling applied, and Pag-IBIG is the flat maximum - all carried over
