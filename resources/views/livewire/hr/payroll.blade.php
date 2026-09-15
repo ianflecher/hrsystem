@@ -150,17 +150,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         
         $basicSalary = $this->selectedEmployee->salary;
         
-        // Calculate Philippines-specific deductions
-        $this->payrollBreakdown['sss'] = $this->calculateSSS($basicSalary);
-        $this->payrollBreakdown['philhealth'] = $this->calculatePhilHealth($basicSalary);
-        $this->payrollBreakdown['pagibig'] = 100; // Fixed Pag-IBIG contribution
-        $this->payrollBreakdown['tax'] = $this->calculateTax($basicSalary);
-        
-        // Calculate total Philippines deductions
-        $phDeductions = $this->payrollBreakdown['sss'] + 
-                       $this->payrollBreakdown['philhealth'] + 
-                       $this->payrollBreakdown['pagibig'] + 
-                       $this->payrollBreakdown['tax'];
+        // The same calculation the payslip is written from, so the preview
+        // cannot show one set of figures and the stored row another.
+        $calc = $this->computePayroll((float) $basicSalary);
+
+        $this->payrollBreakdown['sss']        = $calc['sss'];
+        $this->payrollBreakdown['philhealth'] = $calc['philhealth'];
+        $this->payrollBreakdown['pagibig']    = $calc['pagibig'];
+        $this->payrollBreakdown['tax']        = $calc['tax'];
+
+        $phDeductions = $calc['deductions'];
         
         // If payroll exists, calculate other deductions
         if ($this->selectedEmployee->payroll_id) {
@@ -204,22 +203,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 ->first();
             
             $basicSalary = $employee->salary;
-            
-            // Calculate Philippines-specific deductions
-            $sss = $this->calculateSSS($basicSalary);
-            $philhealth = $this->calculatePhilHealth($basicSalary);
-            $pagibig = 100; // Fixed Pag-IBIG contribution
-            $tax = $this->calculateTax($basicSalary);
-            
-            $totalDeductions = $sss + $philhealth + $pagibig + $tax;
-            $netPay = $basicSalary - $totalDeductions;
-            
-            // Store breakdown in notes field
-            $notes = "SSS: ₱" . number_format($sss, 2) . " | " .
-                    "PhilHealth: ₱" . number_format($philhealth, 2) . " | " .
-                    "Pag-IBIG: ₱" . number_format($pagibig, 2) . " | " .
-                    "Tax: ₱" . number_format($tax, 2);
-            
+
+            // Shared with the period run, so a payslip generated singly and one
+            // generated in bulk cannot disagree. It also taxes income after the
+            // statutory contributions; this block used to tax the gross.
+            $calc = $this->computePayroll((float) $basicSalary);
+            $totalDeductions = $calc['deductions'];
+            $netPay = $calc['net'];
+            $notes = $this->breakdownNote($calc);
+
             // Create payroll record
             DB::table('hr_payroll')->insert([
                 'employee_id' => $employeeId,
@@ -244,6 +236,180 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         }
     }
     
+    /**
+     * The statutory deductions for one monthly salary.
+     *
+     * Inherited from the TGIF code and simplified: the SSS brackets are coarse,
+     * PhilHealth has no floor or ceiling applied, and Pag-IBIG is the flat
+     * maximum. Check these against the current SSS, PhilHealth and BIR tables
+     * before anyone is paid from them.
+     */
+    private function computePayroll(float $monthlySalary): array
+    {
+        $sss        = $this->calculateSSS($monthlySalary);
+        $philhealth = $this->calculatePhilHealth($monthlySalary);
+        $pagibig    = 100.0;
+
+        // Tax is charged on what is left after the statutory contributions,
+        // not on the gross - they are deductible from taxable income. The
+        // previous version taxed the gross, which over-withheld from everyone
+        // earning above the exemption.
+        $taxableIncome = max(0, $monthlySalary - ($sss + $philhealth + $pagibig));
+        $tax = $this->calculateTax($taxableIncome);
+
+        $total = $sss + $philhealth + $pagibig + $tax;
+
+        return [
+            'sss'        => round($sss, 2),
+            'philhealth' => round($philhealth, 2),
+            'pagibig'    => round($pagibig, 2),
+            'tax'        => round($tax, 2),
+            'taxable'    => round($taxableIncome, 2),
+            'deductions' => round($total, 2),
+            'net'        => round($monthlySalary - $total, 2),
+        ];
+    }
+
+    private function breakdownNote(array $c): string
+    {
+        return 'SSS: PHP '.number_format($c['sss'], 2)
+            .' | PhilHealth: PHP '.number_format($c['philhealth'], 2)
+            .' | Pag-IBIG: PHP '.number_format($c['pagibig'], 2)
+            .' | Tax: PHP '.number_format($c['tax'], 2);
+    }
+
+    /**
+     * Runs the period for everyone at once.
+     *
+     * Only active employees, only those without a row for this period already,
+     * and only those on a salary above zero - an employee whose salary has not
+     * been entered yet would otherwise get a payslip for nothing, which looks
+     * like a decision rather than missing data.
+     */
+    public function generatePeriod(): void
+    {
+        $periodStart = $this->payPeriod.'-01';
+        $periodEnd   = date('Y-m-t', strtotime($periodStart));
+
+        $already = DB::table('hr_payroll')
+            ->where('period_start', $periodStart)
+            ->pluck('employee_id')
+            ->all();
+
+        $employees = DB::table('employees')
+            ->where('status', 'active')
+            ->where('salary', '>', 0)
+            ->whereNotIn('employee_id', $already ?: [0])
+            ->select('employee_id', 'salary')
+            ->get();
+
+        if ($employees->isEmpty()) {
+            session()->flash('info', 'Nothing to generate: everyone active with a salary already has a payslip for '
+                .date('F Y', strtotime($periodStart)).'.');
+
+            return;
+        }
+
+        $rows = [];
+        foreach ($employees as $employee) {
+            $c = $this->computePayroll((float) $employee->salary);
+
+            $rows[] = [
+                'employee_id'  => $employee->employee_id,
+                'period_start' => $periodStart,
+                'period_end'   => $periodEnd,
+                'gross_pay'    => $employee->salary,
+                'deductions'   => $c['deductions'],
+                'net_pay'      => $c['net'],
+                'status'       => 'calculated',
+                'notes'        => $this->breakdownNote($c),
+                'created_at'   => now(),
+                'updated_at'   => now(),
+            ];
+        }
+
+        // All or nothing: a half-finished payroll run is worse than none.
+        DB::transaction(fn () => DB::table('hr_payroll')->insert($rows));
+
+        $skipped = DB::table('employees')->where('status', 'active')->where('salary', '<=', 0)->count();
+
+        $message = 'Generated '.count($rows).' payslip'.(count($rows) === 1 ? '' : 's')
+            .' for '.date('F Y', strtotime($periodStart)).'. They are calculated, not yet approved.';
+
+        if ($skipped > 0) {
+            $message .= ' '.$skipped.' active employee'.($skipped === 1 ? ' has' : 's have')
+                .' no salary set and were skipped.';
+        }
+
+        session()->flash('success', $message);
+        $this->resetPage();
+    }
+
+    /**
+     * Approves everything calculated for the period in one go.
+     */
+    public function approvePeriod(): void
+    {
+        $periodStart = $this->payPeriod.'-01';
+
+        $n = DB::table('hr_payroll')
+            ->where('period_start', $periodStart)
+            ->where('status', 'calculated')
+            ->update(['status' => 'approved', 'updated_at' => now()]);
+
+        session()->flash(
+            $n ? 'success' : 'info',
+            $n ? 'Approved '.$n.' payslip'.($n === 1 ? '' : 's').'.'
+               : 'Nothing was waiting for approval in this period.'
+        );
+    }
+
+    public function markPeriodPaid(): void
+    {
+        $periodStart = $this->payPeriod.'-01';
+
+        $n = DB::table('hr_payroll')
+            ->where('period_start', $periodStart)
+            ->where('status', 'approved')
+            ->update(['status' => 'paid', 'updated_at' => now()]);
+
+        session()->flash(
+            $n ? 'success' : 'info',
+            $n ? 'Marked '.$n.' payslip'.($n === 1 ? '' : 's').' as paid.'
+               : 'Nothing was approved and waiting to be paid in this period.'
+        );
+    }
+
+    /**
+     * What the buttons should offer for the period currently selected.
+     */
+    public function getPeriodCountsProperty(): array
+    {
+        $periodStart = $this->payPeriod.'-01';
+
+        $byStatus = DB::table('hr_payroll')
+            ->where('period_start', $periodStart)
+            ->selectRaw('status, COUNT(*) as n')
+            ->groupBy('status')
+            ->pluck('n', 'status')
+            ->all();
+
+        $eligible = DB::table('employees')
+            ->where('status', 'active')
+            ->where('salary', '>', 0)
+            ->count();
+
+        $existing = array_sum($byStatus);
+
+        return [
+            'eligible'   => $eligible,
+            'pending'    => max(0, $eligible - $existing),
+            'calculated' => $byStatus['calculated'] ?? 0,
+            'approved'   => $byStatus['approved'] ?? 0,
+            'paid'       => $byStatus['paid'] ?? 0,
+        ];
+    }
+
     private function calculateSSS($salary)
     {
         // Simplified SSS calculation based on Philippines brackets
@@ -254,38 +420,32 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         if ($salary <= 50000) return 2250;
         return 2700; // Max contribution for salary > 50,000
     }
-    
+
     private function calculatePhilHealth($salary)
     {
-        // PhilHealth: 4% of salary, shared 50/50 between employee and employer
-        // Employee pays half (2% of salary)
-        $premium = $salary * 0.04; // Total premium
-        return $premium / 2; // Employee share
+        // PhilHealth: 4% of salary, shared 50/50 between employee and employer.
+        return ($salary * 0.04) / 2;
     }
-    
-    private function calculateTax($salary)
+
+    private function calculateTax($taxableIncome)
     {
-        // Simplified Philippines tax calculation (2024 rates)
-        // For single, no dependents
-        
-        // Tax exemption threshold
-        if ($salary <= 20833) return 0;
-        
-        $taxableIncome = $salary;
-        
-        if ($taxableIncome <= 33333) {
+        // Monthly BIR brackets, simplified. Called with income after the
+        // statutory contributions have been taken off.
+        if ($taxableIncome <= 20833) {
             return 0;
+        } elseif ($taxableIncome <= 33333) {
+            return ($taxableIncome - 20833) * 0.15;
         } elseif ($taxableIncome <= 66667) {
-            return ($taxableIncome - 33333) * 0.15;
+            return 1875 + ($taxableIncome - 33333) * 0.20;
         } elseif ($taxableIncome <= 166667) {
-            return 5000 + ($taxableIncome - 66667) * 0.20;
+            return 8541.80 + ($taxableIncome - 66667) * 0.25;
         } elseif ($taxableIncome <= 666667) {
-            return 25000 + ($taxableIncome - 166667) * 0.25;
-        } else {
-            return 125000 + ($taxableIncome - 666667) * 0.30;
+            return 33541.80 + ($taxableIncome - 166667) * 0.30;
         }
+
+        return 183541.80 + ($taxableIncome - 666667) * 0.35;
     }
-    
+
     public function approvePayroll($employeeId)
     {
         $payroll = DB::table('hr_payroll')
@@ -408,6 +568,81 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 </div>
             </div>
         @endif
+
+        @if (session('info'))
+            <div class="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+                <p class="text-sm text-blue-800">{{ session('info') }}</p>
+            </div>
+        @endif
+
+        {{-- The run itself. Payroll is the one thing in here that moves money,
+             so it is three deliberate steps rather than one button: generate
+             the figures, approve them, then record them as paid. Each says how
+             many it will touch before it is pressed. --}}
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5 mb-6">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">
+                        Payroll run &mdash; {{ date('F Y', strtotime($this->payPeriod)) }}
+                    </h2>
+                    <p class="text-sm text-gray-600 mt-1">
+                        {{ $this->periodCounts['eligible'] }} active
+                        {{ $this->periodCounts['eligible'] === 1 ? 'employee' : 'employees' }} with a salary set.
+                        @if ($this->periodCounts['pending'] > 0)
+                            <span class="text-amber-700 font-medium">
+                                {{ $this->periodCounts['pending'] }} still without a payslip this period.
+                            </span>
+                        @else
+                            Everyone has a payslip for this period.
+                        @endif
+                    </p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <button wire:click="generatePeriod"
+                            wire:confirm="Generate payslips for {{ $this->periodCounts['pending'] }} employee(s) for {{ date('F Y', strtotime($this->payPeriod)) }}?"
+                            @disabled($this->periodCounts['pending'] === 0)
+                            class="btn-primary disabled:opacity-40 disabled:cursor-not-allowed">
+                        <i class="fas fa-calculator"></i>
+                        Generate ({{ $this->periodCounts['pending'] }})
+                    </button>
+
+                    <button wire:click="approvePeriod"
+                            wire:confirm="Approve {{ $this->periodCounts['calculated'] }} calculated payslip(s)?"
+                            @disabled($this->periodCounts['calculated'] === 0)
+                            class="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed">
+                        <i class="fas fa-check"></i>
+                        Approve ({{ $this->periodCounts['calculated'] }})
+                    </button>
+
+                    <button wire:click="markPeriodPaid"
+                            wire:confirm="Mark {{ $this->periodCounts['approved'] }} approved payslip(s) as paid? This records that the money has gone out."
+                            @disabled($this->periodCounts['approved'] === 0)
+                            class="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed">
+                        <i class="fas fa-money-bill-wave"></i>
+                        Mark paid ({{ $this->periodCounts['approved'] }})
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-200">
+                <span class="status-badge status-pending">
+                    {{ $this->periodCounts['calculated'] }} calculated
+                </span>
+                <span class="status-badge status-onleave">
+                    {{ $this->periodCounts['approved'] }} approved
+                </span>
+                <span class="status-badge status-active">
+                    {{ $this->periodCounts['paid'] }} paid
+                </span>
+            </div>
+
+            <p class="text-xs text-gray-500 mt-4">
+                Deductions use simplified SSS, PhilHealth and BIR figures carried over
+                from the original code. Check them against the current tables before
+                anyone is paid from them.
+            </p>
+        </div>
 
         <!-- Filters and Controls -->
         <div class="bg-white shadow rounded-lg p-4 mb-6">

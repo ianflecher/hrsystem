@@ -73,6 +73,27 @@ is held at a change-password screen until it is replaced. The flag driving this
 (`users.must_change_password`) defaults to false, so accounts that already
 existed are unaffected.
 
+## Running payroll
+
+`/hr/payroll` generates a period for everyone at once. It is three deliberate
+steps, because this is the one part of the system that moves money:
+
+1. **Generate** - creates a payslip for every active employee with a salary
+   who does not already have one for the period. Status `calculated`.
+2. **Approve** - moves the period's calculated payslips to `approved`.
+3. **Mark paid** - records that the money has gone out.
+
+Each button says how many rows it will touch, and the run is one transaction,
+so a failure leaves no half-finished period. Running it twice does not pay
+anyone twice.
+
+> **The deductions are simplified.** SSS brackets are coarse, PhilHealth has no
+> floor or ceiling applied, and Pag-IBIG is the flat maximum - all carried over
+> from the original code. Tax is charged on income *after* the statutory
+> contributions, which is correct, but the brackets themselves need checking
+> against the current SSS, PhilHealth and BIR tables before anyone is paid from
+> them.
+
 ## Test data
 
 `php artisan demo:employees --count=100` fills the Employees screen with
