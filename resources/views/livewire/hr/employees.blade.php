@@ -2,6 +2,7 @@
 
 use Livewire\Volt\Component;
 use Livewire\Attributes\Layout;
+use Livewire\WithPagination;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -9,7 +10,8 @@ use Illuminate\Validation\Rule;
 
 new #[Layout('components.layouts.humanresource')] class extends Component
 {
-    public $employees = [];
+    use WithPagination;
+
     public $departments = [];
 
     public string $search = '';
@@ -66,7 +68,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->get();
     }
 
-    public function loadEmployees(): void
+    /**
+     * A paginator rather than a property: a hundred people is a 7,500px page
+     * otherwise, and Livewire cannot hold a paginator in a public property.
+     */
+    private function employeeQuery()
     {
         $query = DB::table('employees as e')
             ->join('users as u', 'e.user_id', '=', 'u.user_id')
@@ -93,18 +99,31 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             });
         }
 
-        $this->employees = $query->orderBy('u.full_name')->get();
+        return $query->orderBy('u.full_name');
+    }
+
+    public function with(): array
+    {
+        return ['employees' => $this->employeeQuery()->paginate(15)];
+    }
+
+    public function loadEmployees(): void
+    {
+        // Kept so the save/reset paths read the same; with() re-runs the query
+        // on every render, so there is nothing to refresh by hand.
+        $this->resetPage();
     }
 
     public function updatedSearch(): void
     {
-        $this->loadEmployees();
+        // Otherwise a search from page 6 lands on page 6 of a shorter list.
+        $this->resetPage();
     }
 
     public function setStatusFilter(string $status): void
     {
         $this->statusFilter = $status;
-        $this->loadEmployees();
+        $this->resetPage();
     }
 
     public function openCreate(): void
@@ -350,7 +369,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     </div>
 
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        @if (count($employees) === 0)
+        @if ($employees->isEmpty())
             <div class="px-6 py-14 text-center">
                 <p class="text-gray-900 font-medium">
                     {{ trim($search) !== '' || $statusFilter !== 'all' ? 'Nobody matches that' : 'No employees yet' }}
@@ -416,6 +435,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     </tbody>
                 </table>
             </div>
+
+            @if ($employees->hasPages())
+                <div class="px-6 py-3 border-t border-gray-200">
+                    {{ $employees->links() }}
+                </div>
+            @endif
         @endif
     </div>
 

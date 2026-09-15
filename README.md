@@ -73,6 +73,18 @@ is held at a change-password screen until it is replaced. The flag driving this
 (`users.must_change_password`) defaults to false, so accounts that already
 existed are unaffected.
 
+## Test data
+
+`php artisan demo:employees --count=100` fills the Employees screen with
+clearly-marked test people, for trying it at a realistic size. Deliberately a
+command rather than a seeder: invented records must never appear because
+somebody ran the normal setup.
+
+Every row is marked - usernames start with `demo-`, emails end in
+`@example.test`, a domain RFC 6761 reserves so it can never receive mail - and
+`php artisan demo:employees --purge` finds them by exactly that and removes
+them. Run it before going live.
+
 ## Job openings
 
 The careers page and the application form both read the `job_positions` table,
