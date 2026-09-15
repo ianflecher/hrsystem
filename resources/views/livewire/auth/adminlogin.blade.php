@@ -309,11 +309,11 @@ new #[Layout('components.layouts.employee')] class extends Component
                                     <button 
                                         type="submit" 
                                         wire:loading.attr="disabled"
-                                        class="w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:from-red-700 hover:to-red-700 transition font-medium flex items-center justify-center gap-2 shadow-sm hover:shadow-sm transform hover:-translate-y-0.5 transition-all duration-200"
+                                        class="w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition font-medium flex items-center justify-center gap-2 shadow-sm hover:shadow-sm transform hover:-translate-y-0.5 transition-all duration-200"
                                     >
                                         <span wire:loading.remove wire:target="login">
                                             <i class="fas fa-sign-in-alt"></i>
-                                            Access Module
+                                            Sign in
                                         </span>
                                         <span wire:loading wire:target="login">
                                             <i class="fas fa-spinner fa-spin"></i>

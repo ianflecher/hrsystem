@@ -101,7 +101,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
         <!-- HEADER -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-                <h1 class="text-4xl font-bold bg-red-700 bg-clip-text text-transparent">
+                <h1 class="text-3xl font-bold text-gray-900">
                     Leave Management
                 </h1>
                 <p class="text-gray-600 mt-2">Submit and track your leave requests</p>
@@ -119,10 +119,10 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             
             <!-- LEAVE REQUEST FORM -->
             <div class="lg:col-span-2">
-                <div class="bg-white rounded-xl shadow-sm border border-green-100 overflow-hidden">
-                    <div class="bg-red-600 p-8">
-                        <h2 class="text-2xl font-bold text-white">New Leave Request</h2>
-                        <p class="text-green-500 font-bold mt-1">Fill out the form below to submit your leave application</p>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="px-8 py-6 border-b border-gray-200">
+                        <h2 class="text-xl font-bold text-gray-900">New Leave Request</h2>
+                        <p class="text-sm text-gray-600 mt-1">Fill out the form below to submit your leave application</p>
                     </div>
 
                     @if (session()->has('success'))
@@ -138,10 +138,10 @@ new #[Layout('components.layouts.employeeland')] class extends Component
 
                     <form wire:submit.prevent="submit" class="p-8 space-y-8">
                         <!-- Leave Type -->
-                        <div class="bg-gradient-to-br from-green-50 to-white border border-green-100 rounded-xl p-6 shadow-sm">
+                        <div class="bg-gradient-to-br from-green-50 to-white border border-gray-200 rounded-xl p-6 shadow-sm">
                             <label class="block mb-4">
                                 <div class="flex items-center mb-2">
-                                    <div class="w-2 h-6 bg-red-500 rounded-full mr-3"></div>
+                                    <div class="w-1.5 h-5 bg-red-600 rounded-full mr-3"></div>
                                     <span class="text-lg font-bold text-gray-800">Leave Type</span>
                                 </div>
                                 <select wire:model="leave_type"
@@ -163,7 +163,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         <!-- Dates -->
                         <div class="bg-gradient-to-br from-red-50 to-white border border-gray-200 rounded-xl p-6 shadow-sm">
                             <div class="flex items-center mb-4">
-                                <div class="w-2 h-6 bg-red-500 rounded-full mr-3"></div>
+                                <div class="w-1.5 h-5 bg-red-600 rounded-full mr-3"></div>
                                 <span class="text-lg font-bold text-gray-800">Leave Period</span>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -193,7 +193,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         <div class="bg-gradient-to-br from-red-50 to-white border border-gray-200 rounded-xl p-6 shadow-sm">
                             <label class="block">
                                 <div class="flex items-center mb-4">
-                                    <div class="w-2 h-6 bg-red-500 rounded-full mr-3"></div>
+                                    <div class="w-1.5 h-5 bg-red-600 rounded-full mr-3"></div>
                                     <span class="text-lg font-bold text-gray-800">Reason for Leave</span>
                                 </div>
                                 <textarea wire:model="reason" rows="4" placeholder="Please provide details about your leave..."
@@ -256,7 +256,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                 </div>
                                 <span class="font-medium text-gray-700">Total Requests</span>
                             </div>
-                            <div class="w-2 h-6 bg-red-500 rounded-full"></div>
+                            <div class="w-1.5 h-5 bg-red-600 rounded-full"></div>
                         </div>
                     </div>
                 </div>
@@ -271,15 +271,15 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                     </h3>
                     <ul class="space-y-3">
                         <li class="flex items-start">
-                            <div class="w-2 h-2 bg-red-500 rounded-full mt-2 mr-3"></div>
+                            <div class="w-1.5 h-1.5 bg-slate-400 rounded-full mt-2 mr-3"></div>
                             <span class="text-sm text-gray-700">Submit requests at least 3 days in advance</span>
                         </li>
                         <li class="flex items-start">
-                            <div class="w-2 h-2 bg-red-500 rounded-full mt-2 mr-3"></div>
+                            <div class="w-1.5 h-1.5 bg-slate-400 rounded-full mt-2 mr-3"></div>
                             <span class="text-sm text-gray-700">Attach medical certificate for sick leave</span>
                         </li>
                         <li class="flex items-start">
-                            <div class="w-2 h-2 bg-red-500 rounded-full mt-2 mr-3"></div>
+                            <div class="w-1.5 h-1.5 bg-slate-400 rounded-full mt-2 mr-3"></div>
                             <span class="text-sm text-gray-700">Check with your team before submission</span>
                         </li>
                     </ul>
@@ -289,8 +289,8 @@ new #[Layout('components.layouts.employeeland')] class extends Component
 
         <!-- LEAVE HISTORY TABLE -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div class="bg-red-600 p-8">
-                <h2 class="text-2xl font-bold text-white">Leave History</h2>
+            <div class="px-8 py-6 border-b border-gray-200">
+                <h2 class="text-xl font-bold text-gray-900">Leave History</h2>
                 <p class="text-emerald-500 mt-1">Track all your leave requests and their status</p>
             </div>
 

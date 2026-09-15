@@ -610,7 +610,7 @@
         <div class="user-info">
             <div class="user-badge">
                 <span style="color: var(--dept-accent);">👤</span>
-                <span>{{ Auth::user()->name ?? 'Employee' }}</span>
+                <span>{{ Auth::user()->full_name ?? 'Employee' }}</span>
                 <span class="employee-role">
                     EMPLOYEE
                 </span>

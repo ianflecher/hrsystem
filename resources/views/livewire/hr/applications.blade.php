@@ -1776,7 +1776,7 @@ public function updateApplicationStatus($applicationId, $status)
                             <!-- Role descriptions -->
                             <div class="mt-2 text-sm text-gray-600 space-y-1">
                                 <div class="flex items-center">
-                                    <span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                                    <span class="w-2 h-2 bg-slate-400 rounded-full mr-2"></span>
                                     <span class="font-medium text-red-600">Admin:</span>
                                     <span class="ml-1">Full system access and management</span>
                                 </div>

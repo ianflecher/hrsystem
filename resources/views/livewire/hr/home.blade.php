@@ -711,14 +711,14 @@ class extends Component
         <div class="lg:col-span-2 space-y-8">
             <!-- Recruitment Overview -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-green-600 bg-red-600">
+                <div class="p-6 border-b border-gray-200">
                     <div class="flex justify-between items-center">
-                        <h2 class="text-xl font-bold text-white">📊 Recruitment Overview</h2>
+                        <h2 class="text-xl font-bold text-gray-900">📊 Recruitment Overview</h2>
                         <div class="flex space-x-2">
-                            <span class="px-3 py-1 bg-white/20 text-white rounded-full text-sm font-medium">
+                            <span class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-medium">
                                 {{ $applicationStats['total'] }} Total
                             </span>
-                            <span class="px-3 py-1 bg-white/20 text-white rounded-full text-sm font-medium">
+                            <span class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-medium">
                                 {{ $applicationStats['hired'] }} Hired
                             </span>
                         </div>
@@ -757,9 +757,9 @@ class extends Component
 
             <!-- Recent Applications -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-red-600 bg-red-600">
+                <div class="p-6 border-b border-gray-200">
                     <div class="flex justify-between items-center">
-                        <h2 class="text-xl font-bold text-white">📝 Recent Job Applications</h2>
+                        <h2 class="text-xl font-bold text-gray-900">📝 Recent Job Applications</h2>
                         <a href="#" class="text-white hover:text-red-100 text-sm font-medium flex items-center">
                             View All 
                             <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -882,8 +882,8 @@ class extends Component
         <div class="space-y-8">
             <!-- Popular Positions -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-red-600 bg-red-600">
-                    <h2 class="text-xl font-bold text-white">🎯 Popular Positions</h2>
+                <div class="p-6 border-b border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-900">🎯 Popular Positions</h2>
                 </div>
                 <div class="p-6">
                     <div class="space-y-4">
@@ -932,8 +932,8 @@ class extends Component
 
             <!-- Status Distribution -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-red-600 bg-red-600">
-                    <h2 class="text-xl font-bold text-white">📈 Status Distribution</h2>
+                <div class="p-6 border-b border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-900">📈 Status Distribution</h2>
                 </div>
                 <div class="p-6">
                     <div class="space-y-4">
@@ -970,36 +970,36 @@ class extends Component
             </div>
 
             <!-- Today's Attendance Summary - COMPLETELY FIXED -->
-            <div class="bg-red-800 rounded-xl shadow-sm p-6 border border-red-600">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
     <div class="flex items-center mb-6">
-        <div class="p-2 bg-red-500 rounded-lg mr-3">
-            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="p-2 bg-slate-100 rounded-lg mr-3">
+            <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
         </div>
-        <h2 class="text-xl font-bold text-green">📅 Today's Attendance</h2>
+        <h2 class="text-xl font-bold text-gray-900">Today's Attendance</h2>
     </div>
     <div class="space-y-4">
-        <div class="flex justify-between items-center p-3 bg-red-600 rounded-lg">
-            <span class="font-medium text-white">Present</span>
-            <span class="text-2xl font-bold text-white">{{ $attendanceToday->where('status', 'present')->count() }}</span>
+        <div class="flex justify-between items-center p-3 bg-green-50 border border-green-200 rounded-lg">
+            <span class="font-medium text-green-800">Present</span>
+            <span class="text-2xl font-bold text-green-900">{{ $attendanceToday->where('status', 'present')->count() }}</span>
         </div>
-        <div class="flex justify-between items-center p-3 bg-red-500 rounded-lg">
-            <span class="font-medium text-white">Absent</span>
-            <span class="text-2xl font-bold text-white">{{ $attendanceToday->where('status', 'absent')->count() }}</span>
+        <div class="flex justify-between items-center p-3 bg-red-50 border border-red-200 rounded-lg">
+            <span class="font-medium text-red-800">Absent</span>
+            <span class="text-2xl font-bold text-red-900">{{ $attendanceToday->where('status', 'absent')->count() }}</span>
         </div>
-        <div class="flex justify-between items-center p-3 bg-red-500 rounded-lg">
-            <span class="font-medium text-white">Late</span>
-            <span class="text-2xl font-bold text-white">{{ $attendanceToday->where('status', 'late')->count() }}</span>
+        <div class="flex justify-between items-center p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <span class="font-medium text-amber-800">Late</span>
+            <span class="text-2xl font-bold text-amber-900">{{ $attendanceToday->where('status', 'late')->count() }}</span>
         </div>
-        <div class="flex justify-between items-center p-3 bg-red-600 rounded-lg">
-            <span class="font-medium text-white">On Leave</span>
-            <span class="text-2xl font-bold text-white">{{ $attendanceToday->where('status', 'on_leave')->count() }}</span>
+        <div class="flex justify-between items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <span class="font-medium text-blue-800">On Leave</span>
+            <span class="text-2xl font-bold text-blue-900">{{ $attendanceToday->where('status', 'on_leave')->count() }}</span>
         </div>
-        <div class="pt-4 border-t border-red-600">
-            <div class="flex justify-between items-center p-3 bg-red-700 rounded-lg">
-                <span class="font-bold text-white">Total Check-ins</span>
-                <span class="text-2xl font-bold text-white">{{ $attendanceToday->count() }}</span>
+        <div class="pt-4 border-t border-gray-200">
+            <div class="flex justify-between items-center p-3 bg-slate-50 border border-slate-200 rounded-lg">
+            <span class="font-medium text-gray-700">Total Check-ins</span>
+            <span class="text-2xl font-bold text-gray-900">{{ $attendanceToday->count() }}</span>
             </div>
         </div>
     </div>

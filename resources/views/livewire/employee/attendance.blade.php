@@ -499,10 +499,10 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                     </div>
                     
                     <!-- Monthly Total -->
-                    <div class="mt-6 p-5 bg-red-600 rounded-lg text-white">
+                    <div class="mt-6 p-5 bg-slate-50 border border-slate-200 rounded-lg text-gray-900">
                         <div class="flex justify-between items-center">
                             <div>
-                                <p class="text-sm opacity-90">Total Working Days This Month</p>
+                                <p class="text-sm text-gray-600">Total Working Days This Month</p>
                                 <p class="text-3xl font-bold mt-1">{{ $monthlySummary->total_days ?? 0 }}</p>
                             </div>
                             <div class="text-right">
@@ -740,7 +740,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
     <!-- Flash Messages -->
     @if(session()->has('success'))
         <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)" 
-             class="fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-sm z-50">
+             class="fixed bottom-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-sm z-50">
             {{ session('success') }}
         </div>
     @endif
