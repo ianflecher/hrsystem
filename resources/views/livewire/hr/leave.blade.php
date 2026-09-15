@@ -157,6 +157,51 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         return $query->paginate(10);
     }
 
+    public string $entitlementType = 'vacation';
+    public $entitlementDays = '';
+    public $entitlementAfterMonths = 0;
+
+    public function getEntitlementsProperty()
+    {
+        return DB::table('leave_entitlements')->orderBy('leave_type')->get();
+    }
+
+    /** The balances of whoever's request is open, so the decision has the figures. */
+    public function getSelectedBalancesProperty(): array
+    {
+        if (! $this->selectedLeave) {
+            return [];
+        }
+
+        return (new \App\Services\LeaveBalances)->forEmployee(
+            (int) $this->selectedLeave->employee_id,
+            (int) substr((string) $this->selectedLeave->start_date, 0, 4)
+        );
+    }
+
+    public function saveEntitlement(): void
+    {
+        $data = $this->validate([
+            'entitlementType'        => ['required', \Illuminate\Validation\Rule::in(array_keys($this->leaveTypes))],
+            'entitlementDays'        => ['required', 'numeric', 'min:0', 'max:365'],
+            'entitlementAfterMonths' => ['required', 'integer', 'min:0', 'max:120'],
+        ]);
+
+        DB::table('leave_entitlements')->updateOrInsert(
+            ['leave_type' => $data['entitlementType']],
+            ['days_per_year' => $data['entitlementDays'], 'after_months' => $data['entitlementAfterMonths'],
+             'created_at' => now(), 'updated_at' => now()]);
+
+        $this->entitlementDays = '';
+        session()->flash('success', 'Entitlement saved for '.$this->leaveTypes[$data['entitlementType']].'.');
+    }
+
+    public function removeEntitlement(string $type): void
+    {
+        DB::table('leave_entitlements')->where('leave_type', $type)->delete();
+        session()->flash('success', 'Entitlement removed. That leave type is no longer limited.');
+    }
+
     public function viewLeave($leaveId)
     {
         $this->selectedLeave = DB::table('leaves as l')
@@ -183,6 +228,25 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
     public function approveLeave($leaveId, $approvedBy = null)
     {
+        $leave = DB::table('leaves')->where('leave_id', $leaveId)->first();
+
+        if (! $leave) {
+            session()->flash('error', 'That leave request no longer exists.');
+
+            return;
+        }
+
+        // Approved leave is paid, so the balance is the difference between a
+        // day off and a day of the company's money. Checked here rather than
+        // only shown on screen, because the screen can be out of date.
+        $verdict = (new \App\Services\LeaveBalances)->canApprove($leave);
+
+        if (! $verdict['ok']) {
+            session()->flash('error', 'Not approved. '.$verdict['reason']);
+
+            return;
+        }
+
         DB::table('leaves')
             ->where('leave_id', $leaveId)
             ->update([
@@ -443,6 +507,66 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             <div class="card-title">Total Days</div>
             <div class="card-subtitle">Approved leave days</div>
         </div>
+    </div>
+
+    {{-- What a year is worth, per kind of leave. Empty until HR fills it in:
+         the law sets a floor but the rest is company policy, and a number
+         invented here would be the number people planned their year around. --}}
+    <div class="bg-white rounded-xl p-5 mb-6 shadow-sm border border-gray-100">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">Leave entitlements</h2>
+                <p class="text-sm text-gray-600 mt-1">
+                    Days a year, per type. A type with nothing set here is not limited.
+                </p>
+            </div>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-end gap-3">
+            <div>
+                <label class="form-label" for="entitlementType">Leave type</label>
+                <select id="entitlementType" wire:model="entitlementType" class="form-input">
+                    @foreach($leaveTypes as $key => $label)
+                        <option value="{{ $key }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="entitlementDays">Days a year</label>
+                <input id="entitlementDays" type="number" step="0.5" min="0" max="365"
+                       wire:model="entitlementDays" class="form-input w-32">
+            </div>
+            <div>
+                <label class="form-label" for="entitlementAfterMonths">Earned after (months)</label>
+                <input id="entitlementAfterMonths" type="number" min="0" max="120"
+                       wire:model="entitlementAfterMonths" class="form-input w-32">
+            </div>
+            <button wire:click="saveEntitlement" class="btn-primary">Save</button>
+        </div>
+        @error('entitlementDays') <p class="mt-2 text-sm text-red-600">{{ $message }}</p> @enderror
+
+        @if($this->entitlements->isNotEmpty())
+            <div class="mt-4 flex flex-wrap gap-2">
+                @foreach($this->entitlements as $entitlement)
+                    <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-sm text-gray-700">
+                        <strong>{{ $leaveTypes[$entitlement->leave_type] ?? $entitlement->leave_type }}</strong>
+                        {{ rtrim(rtrim(number_format($entitlement->days_per_year, 1), '0'), '.') }} days
+                        @if($entitlement->after_months > 0)
+                            <span class="text-gray-500">after {{ $entitlement->after_months }} months</span>
+                        @endif
+                        <button wire:click="removeEntitlement('{{ $entitlement->leave_type }}')"
+                                wire:confirm="Remove the entitlement for {{ $leaveTypes[$entitlement->leave_type] ?? $entitlement->leave_type }}? That leave type stops being limited."
+                                class="text-gray-400 hover:text-red-600" title="Remove">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </span>
+                @endforeach
+            </div>
+        @else
+            <p class="mt-4 text-sm text-gray-500">
+                Nothing set yet, so no leave type is limited and every request can be approved.
+            </p>
+        @endif
     </div>
 
     <!-- Filters -->
@@ -870,7 +994,30 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
                         <!-- Actions (if pending) -->
                         @if($selectedLeave->status === 'pending')
+                        @php($balance = $this->selectedBalances[$selectedLeave->leave_type] ?? null)
                         <div class="md:col-span-2 border-t pt-4">
+                            {{-- The figures belong next to the button, not on
+                                 another screen: this is where the day is spent. --}}
+                            @if($balance && $balance['entitled'] !== null)
+                                <div class="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                                    <strong>{{ $leaveTypes[$selectedLeave->leave_type] ?? $selectedLeave->leave_type }}</strong>
+                                    for {{ substr((string) $selectedLeave->start_date, 0, 4) }}:
+                                    {{ rtrim(rtrim(number_format($balance['entitled'], 1), '0'), '.') }} days entitled,
+                                    {{ rtrim(rtrim(number_format($balance['used'], 1), '0'), '.') }} taken,
+                                    <strong>{{ rtrim(rtrim(number_format(max(0, $balance['entitled'] - $balance['used']), 1), '0'), '.') }} left</strong>
+                                    before this request of {{ rtrim(rtrim(number_format((float) $selectedLeave->total_days, 1), '0'), '.') }}.
+                                    @unless($balance['eligible'])
+                                        <span class="block mt-1 text-amber-700">
+                                            Earned after {{ $balance['afterMonths'] }} months of service, which they have not reached.
+                                        </span>
+                                    @endunless
+                                </div>
+                            @elseif($balance)
+                                <p class="mb-3 text-sm text-gray-500">
+                                    No entitlement set for this leave type, so it is not limited.
+                                </p>
+                            @endif
+
                             <h4 class="text-sm font-medium text-gray-700 mb-3">Actions</h4>
                             <div class="flex flex-col sm:flex-row gap-3">
                                 <button wire:click="approveLeave('{{ $selectedLeave->leave_id }}')" 

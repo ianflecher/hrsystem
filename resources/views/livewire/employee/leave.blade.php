@@ -27,6 +27,12 @@ new #[Layout('components.layouts.employeeland')] class extends Component
     /**
      * Leave history
      */
+    /** What this employee has left to take this year, by type. */
+    public function getBalancesProperty(): array
+    {
+        return (new \App\Services\LeaveBalances)->forEmployee($this->employeeId());
+    }
+
     public function getLeavesProperty()
     {
         return DB::table('leaves')
@@ -113,6 +119,41 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                 <span class="text-lg font-semibold">Employee Portal</span>
             </div>
         </div>
+
+        {{-- Before the form, not after: knowing the balance is what decides
+             whether the request is worth making. --}}
+        @php($balances = collect($this->balances)->filter(fn ($b) => $b['entitled'] !== null))
+        @if($balances->isNotEmpty())
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-bold text-gray-900">Your leave this year</h2>
+                <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    @foreach($balances as $type => $balance)
+                        <div class="rounded-xl border border-gray-200 p-4">
+                            <div class="text-xs uppercase tracking-wide text-gray-500">{{ ucfirst($type) }}</div>
+                            <div class="mt-1 text-2xl font-bold text-gray-900">
+                                {{ rtrim(rtrim(number_format(max(0, $balance['remaining']), 1), '0'), '.') }}
+                            </div>
+                            <div class="text-xs text-gray-500">
+                                of {{ rtrim(rtrim(number_format($balance['entitled'], 1), '0'), '.') }} days left
+                                @if($balance['pending'] > 0)
+                                    <span class="block text-amber-700">
+                                        {{ rtrim(rtrim(number_format($balance['pending'], 1), '0'), '.') }} awaiting a decision
+                                    </span>
+                                @endif
+                                @unless($balance['eligible'])
+                                    <span class="block text-amber-700">
+                                        Earned after {{ $balance['afterMonths'] }} months
+                                    </span>
+                                @endunless
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                <p class="mt-3 text-xs text-gray-500">
+                    Days awaiting a decision are already held against the balance. Unpaid leave is not limited.
+                </p>
+            </div>
+        @endif
 
         <!-- MAIN GRID -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
