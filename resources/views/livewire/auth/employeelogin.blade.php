@@ -61,11 +61,12 @@ new #[Layout('components.layouts.landing')] class extends Component
         'role' => $user->role
     ]);
 
-    // Check if user has employee or manager role
-    if (!in_array($user->role, ['employee', 'manager'])) {
+    // The staff portal is for the people it serves: employees and the two
+    // tiers above them. Admin and HR sign in through the back office.
+    if (!in_array($user->role, ['employee', 'supervisor', 'leader'])) {
         \Log::warning('User role not allowed', ['role' => $user->role]);
         throw ValidationException::withMessages([
-            'username' => __('Access denied. Employee or Manager credentials required.'),
+            'username' => __('Access denied. This sign-in is for staff accounts.'),
         ]);
     }
 
@@ -78,7 +79,7 @@ new #[Layout('components.layouts.landing')] class extends Component
     if (!$employee) {
         \Log::warning('No active employee record', ['user_id' => $user->user_id]);
         throw ValidationException::withMessages([
-            'username' => __('Employee/Manager account is not active. Please contact HR.'),
+            'username' => __('This staff account is not active. Please contact HR.'),
         ]);
     }
 
@@ -195,7 +196,7 @@ new #[Layout('components.layouts.landing')] class extends Component
                 <i class="fas fa-users text-3xl text-white"></i>
             </div>
             <h1 class="text-3xl font-bold text-gray-900 mb-2">Staff Portal</h1>
-            <p class="text-gray-600">Employee & Manager Access</p>
+            <p class="text-gray-600">Employee, Supervisor &amp; Leader Access</p>
         </div>
 
         <!-- Login Card -->
@@ -286,11 +287,12 @@ new #[Layout('components.layouts.landing')] class extends Component
                 {{-- What this portal actually does.
 
                      It used to advertise two roles with three features each:
-                     Employee got Attendance, Tasks and Orders; Manager got
-                     Reports, Approvals and Team. Six claims, one of them true.
+                     Employee got Attendance, Tasks and Orders; a manager tier
+                     that does not exist here got Reports, Approvals and Team.
+                     Six claims, one of them true.
                      Tasks and Orders belong to the projects and ERP modules,
-                     which are not part of the HRIS, and there is no manager
-                     view at all - both roles land on the same dashboard. --}}
+                     which are not part of the HRIS, and every staff tier
+                     lands on the same dashboard. --}}
                 <div class="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
                     <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
                         In this portal

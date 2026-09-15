@@ -74,6 +74,40 @@ class HrApplicationWorkflowTest extends TestCase
         );
     }
 
+    public function test_a_role_outside_the_allowed_set_is_rejected(): void
+    {
+        [$hr, $applicant] = $this->scenario();
+
+        $component = Volt::actingAs($hr)->test('hr.applications');
+        $component->call('openRoleChangeModal', $applicant->user_id)
+            ->set('newRole', 'superuser')
+            ->call('changeUserRole')
+            ->assertHasErrors('newRole');
+
+        $this->assertSame(
+            'employee',
+            DB::table('users')->where('user_id', $applicant->user_id)->value('role'),
+            'an unknown role must not reach the column'
+        );
+    }
+
+    public function test_hr_can_promote_someone_to_supervisor(): void
+    {
+        [$hr, $applicant] = $this->scenario();
+
+        Volt::actingAs($hr)
+            ->test('hr.applications')
+            ->call('openRoleChangeModal', $applicant->user_id)
+            ->set('newRole', 'supervisor')
+            ->call('changeUserRole')
+            ->assertHasNoErrors();
+
+        $this->assertSame(
+            'supervisor',
+            DB::table('users')->where('user_id', $applicant->user_id)->value('role')
+        );
+    }
+
     /** @return array{0: User, 1: User, 2: int} */
     private function scenario(): array
     {

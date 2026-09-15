@@ -166,7 +166,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         $this->users = DB::table('users')
             ->select('user_id', 'full_name', 'username', 'email', 'role')
-            ->whereIn('role', ['admin', 'manager', 'hr'])
+            ->whereIn('role', ['admin', 'hr'])
             ->orderBy('full_name')
             ->get();
     }
@@ -582,9 +582,16 @@ public function updateApplicationStatus($applicationId, $status)
             return;
         }
 
+        // newRole arrives straight from the browser and used to be written to
+        // the column unchecked, so any value a request carried became somebody's
+        // role - including one the column would reject outright.
+        $this->validate([
+            'newRole' => ['required', 'in:admin,hr,supervisor,leader,employee'],
+        ]);
+
         $userId = $this->selectedUserForRoleChange->user_id;
         $oldRole = $this->selectedUserForRoleChange->role ?? 'employee';
-        
+
         DB::table('users')
             ->where('user_id', $userId)
             ->update([
@@ -1121,11 +1128,10 @@ public function updateApplicationStatus($applicationId, $status)
                                         @php
                                             $roleColors = [
                                                 'admin' => 'text-red-700 bg-red-50',
-                                                'manager' => 'text-orange-700 bg-orange-50',
                                                 'hr' => 'text-purple-700 bg-purple-50',
-                                                'employee' => 'text-red-700 bg-red-50',
-                                                'customer' => 'text-blue-700 bg-blue-50',
-                                                'supplier' => 'text-indigo-700 bg-indigo-50',
+                                                'supervisor' => 'text-amber-700 bg-amber-50',
+                                                'leader' => 'text-blue-700 bg-blue-50',
+                                                'employee' => 'text-gray-700 bg-gray-50',
                                             ];
                                         @endphp
                                         <span class="px-3 py-1 rounded-full text-sm font-medium {{ $roleColors[$role] ?? 'bg-gray-100 text-gray-800' }}">
@@ -1140,14 +1146,13 @@ public function updateApplicationStatus($applicationId, $status)
                                 @php
                                     $roleColors = [
                                         'admin' => 'bg-red-100 text-red-800',
-                                        'manager' => 'bg-orange-100 text-orange-800',
                                         'hr' => 'bg-purple-100 text-purple-800',
-                                        'employee' => 'bg-red-100 text-red-800',
-                                        'customer' => 'bg-blue-100 text-blue-800',
-                                        'supplier' => 'bg-indigo-100 text-indigo-800',
+                                        'supervisor' => 'bg-amber-100 text-amber-800',
+                                        'leader' => 'bg-blue-100 text-blue-800',
+                                        'employee' => 'bg-gray-100 text-gray-800',
                                     ];
                                     
-                                    $isSystemRole = in_array($employee->role, ['admin', 'manager', 'hr']);
+                                    $isSystemRole = in_array($employee->role, ['admin', 'hr']);
                                 @endphp
                                 <tr>
                                     <td>
@@ -1169,9 +1174,13 @@ public function updateApplicationStatus($applicationId, $status)
                                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                                         <i class="fas fa-shield-alt mr-1"></i>Full System Access
                                                     </span>
-                                                @elseif($employee->role === 'manager')
-                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                                        <i class="fas fa-tasks mr-1"></i>Management Access
+                                                @elseif($employee->role === 'supervisor')
+                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                                        <i class="fas fa-user-check mr-1"></i>Supervisor
+                                                    </span>
+                                                @elseif($employee->role === 'leader')
+                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                        <i class="fas fa-users mr-1"></i>Leader
                                                     </span>
                                                 @elseif($employee->role === 'hr')
                                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
@@ -1275,11 +1284,10 @@ public function updateApplicationStatus($applicationId, $status)
                                             @php
                                                 $roleColors = [
                                                     'admin' => 'text-red-600',
-                                                    'manager' => 'text-orange-600',
                                                     'hr' => 'text-purple-600',
-                                                    'employee' => 'text-red-600',
-                                                    'customer' => 'text-blue-600',
-                                                    'supplier' => 'text-indigo-600',
+                                                    'supervisor' => 'text-amber-600',
+                                                    'leader' => 'text-blue-600',
+                                                    'employee' => 'text-gray-600',
                                                 ];
                                             @endphp
                                             <div class="flex items-center">
@@ -1969,7 +1977,7 @@ public function updateApplicationStatus($applicationId, $status)
                             <div class="p-3 bg-gray-50 rounded-lg">
                                 <span class="px-3 py-1 rounded-full text-sm font-medium 
                                     {{ $selectedUserForRoleChange->role === 'admin' ? 'bg-red-100 text-red-800' : 
-                                       ($selectedUserForRoleChange->role === 'manager' ? 'bg-orange-100 text-orange-800' : 
+                                       ($selectedUserForRoleChange->role === 'supervisor' ? 'bg-amber-100 text-amber-800' : 
                                        ($selectedUserForRoleChange->role === 'hr' ? 'bg-purple-100 text-purple-800' : 
                                        ($selectedUserForRoleChange->role === 'employee' ? 'bg-red-100 text-red-800' : 
                                        ($selectedUserForRoleChange->role === 'customer' ? 'bg-blue-100 text-blue-800' : 
@@ -1982,12 +1990,11 @@ public function updateApplicationStatus($applicationId, $status)
                         <div>
                             <label class="form-label">New Role</label>
                             <select wire:model="newRole" class="form-input">
-                                <option value="admin">Admin (Full System Access)</option>
-                                <option value="manager">Manager (Department Management)</option>
-                                <option value="hr">HR (Human Resources)</option>
-                                <option value="employee">Employee (Regular Staff)</option>
-                                <option value="customer">Customer (External Client)</option>
-                                <option value="supplier">Supplier (Vendor/Supplier)</option>
+                                <option value="admin">Admin (full system access)</option>
+                                <option value="hr">HR (human resources)</option>
+                                <option value="leader">Leader</option>
+                                <option value="supervisor">Supervisor</option>
+                                <option value="employee">Employee</option>
                             </select>
                             
                             <!-- Role descriptions -->
@@ -1998,19 +2005,24 @@ public function updateApplicationStatus($applicationId, $status)
                                     <span class="ml-1">Full system access and management</span>
                                 </div>
                                 <div class="flex items-center">
-                                    <span class="w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
-                                    <span class="font-medium text-orange-600">Manager:</span>
-                                    <span class="ml-1">Team and project management</span>
-                                </div>
-                                <div class="flex items-center">
                                     <span class="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
                                     <span class="font-medium text-purple-600">HR:</span>
                                     <span class="ml-1">Human resources and recruitment</span>
                                 </div>
                                 <div class="flex items-center">
-                                    <span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
-                                    <span class="font-medium text-red-600">Employee:</span>
-                                    <span class="ml-1">Regular staff with assigned tasks</span>
+                                    <span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                                    <span class="font-medium text-blue-600">Leader:</span>
+                                    <span class="ml-1">Staff, with a team under them</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <span class="w-2 h-2 bg-amber-500 rounded-full mr-2"></span>
+                                    <span class="font-medium text-amber-600">Supervisor:</span>
+                                    <span class="ml-1">Staff, oversees a section</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <span class="w-2 h-2 bg-gray-400 rounded-full mr-2"></span>
+                                    <span class="font-medium text-gray-600">Employee:</span>
+                                    <span class="ml-1">Staff</span>
                                 </div>
                             </div>
                         </div>
