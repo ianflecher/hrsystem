@@ -15,13 +15,17 @@ class PayrollRun
         return DB::transaction(function () use ($employeeId, $period) {
             $employee = DB::table('employees')->where('employee_id', $employeeId)->lockForUpdate()->first();
             if (! $employee || $employee->status !== 'active' || $employee->salary <= 0) return null;
-            if (DB::table('hr_payroll')->where('employee_id', $employeeId)->where('period_start', $period->start)->exists()) return null;
+            if (DB::table('hr_payroll')->where('employee_id', $employeeId)->where('kind', 'regular')->where('period_start', $period->start)->exists()) return null;
             // Lateness and undertime, day by day - see TimeDeductions.
             $time = (new TimeDeductions)->forPeriod($employee, $period->start, $period->end);
             // Includes previously approved, unpaid overtime missed by an older cutoff.
             $overtime = DB::table('overtime_requests')->where('employee_id', $employeeId)->where('status', 'approved')->whereNull('payroll_id')
                 ->where('ends_at', '<', Carbon::parse($period->end)->addDay())->lockForUpdate()->get();
-            $c = PayrollCalculator::forCutoff((float) $employee->salary, $time['total'], $period->isSecondCutoff, (float) $overtime->sum('approved_amount'));
+            // Working a holiday earns a premium on top of the monthly salary,
+            // which already covers the holidays nobody works.
+            $holiday = (new HolidayPay)->forPeriod($employee, $period->start, $period->end);
+            $c = PayrollCalculator::forCutoff((float) $employee->salary, $time['total'], $period->isSecondCutoff,
+                (float) $overtime->sum('approved_amount'), $holiday['amount']);
             $remainingCents = max(0, (int) round($c['net'] * 100));
             $loans = DB::table('employee_loans')->where('employee_id', $employeeId)->where('status', 'active')->where('starts_on', '<=', $period->start)->orderBy('id')->lockForUpdate()->get();
             $installments = [];
@@ -40,7 +44,8 @@ class PayrollRun
             $id = DB::table('hr_payroll')->insertGetId([
                 'employee_id' => $employeeId, 'period_start' => $period->start, 'period_end' => $period->end,
                 'gross_pay' => $c['gross'], 'deductions' => round($c['deductions'] + $deduction, 2), 'net_pay' => round($c['net'] - $deduction, 2),
-                'overtime_pay' => $c['overtime'], 'loan_deduction' => $deduction, 'status' => 'calculated', 'notes' => $notes,
+                'overtime_pay' => $c['overtime'], 'holiday_pay' => $c['holiday'], 'time_deduction' => $time['total'],
+                'loan_deduction' => $deduction, 'status' => 'calculated', 'notes' => $notes,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
             DB::table('overtime_requests')->whereIn('id', $overtime->pluck('id'))->update(['payroll_id' => $id, 'updated_at' => now()]);

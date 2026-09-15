@@ -21,6 +21,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public $departmentFilter = '';
     public $payPeriod = '';
     public $statusFilter = 'active';
+
+    /** The year the 13th month panel is showing. */
+    public $thirteenthYear = '';
+    public bool $showThirteenth = false;
     
     // Payroll details modal
     public $showPayrollDetails = false;
@@ -299,6 +303,39 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     /**
      * What the buttons should offer for the period currently selected.
      */
+    public function getThirteenthRowsProperty(): array
+    {
+        return (new \App\Services\ThirteenthMonth)->forYear($this->thirteenthYearOrNow());
+    }
+
+    public function thirteenthYearOrNow(): int
+    {
+        return (int) ($this->thirteenthYear ?: now()->year);
+    }
+
+    public function toggleThirteenth(): void
+    {
+        $this->showThirteenth = ! $this->showThirteenth;
+
+        if ($this->thirteenthYear === '') {
+            $this->thirteenthYear = (string) now()->year;
+        }
+    }
+
+    /**
+     * Records the 13th month for the year on screen. It is one payment per
+     * employee per year, so running it twice adds nothing.
+     */
+    public function generateThirteenth(): void
+    {
+        $year = $this->thirteenthYearOrNow();
+        $recorded = (new \App\Services\ThirteenthMonth)->generate($year);
+
+        session()->flash($recorded > 0 ? 'success' : 'info', $recorded > 0
+            ? $recorded.' 13th month payslip(s) recorded for '.$year.'.'
+            : 'Nothing to record for '.$year.' - everybody owed one already has it.');
+    }
+
     /**
      * Days in this cutoff where somebody has no attendance at all.
      *
@@ -562,6 +599,94 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 If the scanner was down, sync or correct attendance before generating.
             </div>
         @endif
+
+        {{-- 13th month pay: a twelfth of the basic salary actually earned over
+             the year, so absence and unpaid leave reduce it, and overtime and
+             holiday premiums do not inflate it. Payable on or before 24
+             December, which is the date the payslip carries. --}}
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5 mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">13th month pay</h2>
+                    <p class="text-sm text-gray-600 mt-1">
+                        One twelfth of the basic salary earned in the year. Due on or before 24 December.
+                    </p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="number" wire:model.live="thirteenthYear" min="2000" max="2100"
+                           class="form-input w-28" placeholder="{{ now()->year }}">
+                    <button wire:click="toggleThirteenth" class="btn-secondary">
+                        {{ $showThirteenth ? 'Hide' : 'Show' }}
+                    </button>
+                </div>
+            </div>
+
+            @if ($showThirteenth)
+                @php
+                    $rows = $this->thirteenthRows;
+                    $outstanding = collect($rows)->whereNull('recorded');
+                @endphp
+
+                <div class="mt-4 overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-gray-600 border-b border-gray-200">
+                                <th class="py-2">Employee</th>
+                                <th class="py-2">Basic earned</th>
+                                <th class="py-2">13th month</th>
+                                <th class="py-2">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($rows as $row)
+                                <tr class="border-b border-gray-100">
+                                    <td class="py-2">{{ $row['name'] }}</td>
+                                    <td class="py-2 text-gray-600">
+                                        PHP {{ number_format($row['basic'], 2) }}
+                                        <span class="block text-xs text-gray-500">{{ $row['payslips'] }} payslip(s)</span>
+                                    </td>
+                                    <td class="py-2 font-semibold">PHP {{ number_format($row['amount'], 2) }}</td>
+                                    <td class="py-2">
+                                        @if ($row['recorded'] !== null)
+                                            <span class="text-green-700">Recorded</span>
+                                        @else
+                                            <span class="text-gray-500">Not yet recorded</span>
+                                        @endif
+                                        @if ($row['taxableExcess'] > 0)
+                                            <span class="block text-xs text-amber-700">
+                                                PHP {{ number_format($row['taxableExcess'], 2) }} above the exemption is taxable
+                                            </span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="4" class="py-3 text-gray-500">
+                                    Nobody has a payslip for {{ $this->thirteenthYearOrNow() }} yet, so there is nothing to work from.
+                                </td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+
+                @if ($outstanding->isNotEmpty())
+                    <div class="mt-4 flex items-center gap-3">
+                        <button wire:click="generateThirteenth"
+                                wire:confirm="Record 13th month pay for {{ $outstanding->count() }} employee(s) for {{ $this->thirteenthYearOrNow() }}?"
+                                class="btn-primary">
+                            Record ({{ $outstanding->count() }})
+                        </button>
+                        <span class="text-sm text-gray-600">
+                            Total PHP {{ number_format($outstanding->sum('amount'), 2) }}
+                        </span>
+                    </div>
+                @endif
+
+                <p class="mt-3 text-xs text-gray-500">
+                    The first PHP 90,000 a year is tax exempt. Anything above it is taxable and is flagged
+                    rather than withheld, because that depends on the whole year's pay.
+                </p>
+            @endif
+        </div>
 
         {{-- The run itself. Payroll is the one thing in here that moves money,
              so it is three deliberate steps rather than one button: generate

@@ -28,8 +28,9 @@ class PayrollCalculator
         float $lateDeduction = 0.0,
         bool $isSecondCutoff = true,
         float $overtimePay = 0.0,
+        float $holidayPay = 0.0,
     ): array {
-        $gross = round($monthlySalary / 2 + $overtimePay, 2);
+        $gross = round($monthlySalary / 2 + $overtimePay + $holidayPay, 2);
 
         // Contributions are monthly amounts, taken whole on one cutoff.
         $sss        = $isSecondCutoff ? self::sss($monthlySalary) : 0.0;
@@ -47,6 +48,7 @@ class PayrollCalculator
         return [
             'gross'      => $gross,
             'overtime'   => round($overtimePay, 2),
+            'holiday'    => round($holidayPay, 2),
             'sss'        => round($sss, 2),
             'philhealth' => round($philhealth, 2),
             'pagibig'    => round($pagibig, 2),
@@ -150,6 +152,10 @@ class PayrollCalculator
             if (round($named, 2) < $c['late']) {
                 $parts[] = 'Other time deductions: PHP '.number_format($c['late'] - round($named, 2), 2);
             }
+        }
+
+        if ($c['holiday'] > 0) {
+            $parts[] = 'Holiday premium: PHP '.number_format($c['holiday'], 2);
         }
 
         if (($time['leaveDays'] ?? 0) > 0) {
