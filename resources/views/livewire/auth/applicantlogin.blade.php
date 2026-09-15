@@ -309,7 +309,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                     @else
                         <div class="space-y-4">
                             @foreach ($openings as $position)
-                                <div class="border border-gray-200 rounded-lg p-4 hover:border-red-300 transition-colors">
+                                <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
                                     <div class="flex justify-between items-start gap-3">
                                         <div>
                                             <h3 class="font-semibold text-gray-900">{{ $position->title }}</h3>
@@ -372,7 +372,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                                            id="login-email"
                                            type="email" 
                                            required
-                                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                            placeholder="you@example.com">
                                 </div>
                                 @error('email')
@@ -386,7 +386,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                                     <label for="login-password" class="block text-sm font-medium text-gray-700">
                                         Password
                                     </label>
-                                    <a href="#" class="text-sm text-red-600 hover:text-red-700">
+                                    <a href="#" class="text-sm text-blue-600 hover:text-blue-700">
                                         Forgot password?
                                     </a>
                                 </div>
@@ -398,7 +398,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                                            id="login-password"
                                            type="password" 
                                            required
-                                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                            placeholder="••••••••">
                                 </div>
                                 @error('password')
@@ -408,7 +408,7 @@ new #[Layout('components.layouts.employee')] class extends Component
 
                             <!-- Submit Button -->
                             <button type="submit" 
-                                    class="w-full bg-red-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors">
+                                    class="w-full bg-red-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
                                 <i class="fas fa-sign-in-alt mr-2"></i>
                                 Sign In
                             </button>

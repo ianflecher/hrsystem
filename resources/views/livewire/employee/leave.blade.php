@@ -146,7 +146,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                 </div>
                                 <select wire:model="leave_type"
                                     class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white
-                                           focus:border-red-500 focus:ring-2 focus:ring-red-200 transition duration-200 cursor-pointer">
+                                           focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition duration-200 cursor-pointer">
                                     <option value="vacation">🏖️ Vacation</option>
                                     <option value="sick">🤒 Sick Leave</option>
                                     <option value="emergency">🚨 Emergency</option>
@@ -171,13 +171,13 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                     <label class="block text-sm font-semibold text-gray-700 mb-2">Start Date</label>
                                     <input type="date" wire:model="start_date" onclick="this.showPicker()"
                                         class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                               focus:border-red-500 focus:ring-2 focus:ring-red-200 cursor-pointer bg-white">
+                                               focus:border-blue-500 focus:ring-2 focus:ring-blue-200 cursor-pointer bg-white">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-semibold text-gray-700 mb-2">End Date</label>
                                     <input type="date" wire:model="end_date" onclick="this.showPicker()"
                                         class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                               focus:border-red-500 focus:ring-2 focus:ring-red-200 cursor-pointer bg-white">
+                                               focus:border-blue-500 focus:ring-2 focus:ring-blue-200 cursor-pointer bg-white">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-semibold text-gray-700 mb-2">Total Days</label>
@@ -198,7 +198,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                 </div>
                                 <textarea wire:model="reason" rows="4" placeholder="Please provide details about your leave..."
                                     class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white
-                                           focus:border-red-500 focus:ring-2 focus:ring-red-200 transition duration-200 resize-none"></textarea>
+                                           focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition duration-200 resize-none"></textarea>
                                 <div class="flex justify-between mt-2 text-sm text-gray-500">
                                     <span>Minimum 5 characters required</span>
                                     <span>{{ strlen($reason) }}/255</span>
@@ -231,9 +231,9 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h3 class="text-xl font-bold text-gray-800 mb-4">Leave Overview</h3>
                     <div class="space-y-4">
-                        <div class="flex items-center justify-between p-3 rounded-xl bg-red-50">
+                        <div class="flex items-center justify-between p-3 rounded-xl bg-slate-100">
                             <div class="flex items-center">
-                                <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mr-3">
+                                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mr-3">
                                     <span class="text-emerald-600 font-bold">{{ $this->leaves->where('status', 'pending')->count() }}</span>
                                 </div>
                                 <span class="font-medium text-gray-700">Pending</span>
@@ -311,7 +311,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                 @foreach ($this->leaves as $leave)
                                     <tr class="hover:bg-red-50/50 transition duration-150">
                                         <td class="px-6 py-4 flex items-center">
-                                            <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center mr-3">
+                                            <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center mr-3">
                                                 @switch($leave->leave_type)
                                                     @case('vacation') 🏖️ @break
                                                     @case('sick') 🤒 @break

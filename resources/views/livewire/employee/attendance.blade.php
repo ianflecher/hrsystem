@@ -310,7 +310,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
 <div class="p-6">
     <!-- Simplified Header -->
     <div class="mb-8">
-        <h1 class="text-2xl font-bold text-red-800 mb-2">My Attendance Overview</h1>
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">My Attendance Overview</h1>
         <p class="text-red-600">Track your daily attendance and work hours</p>
     </div>
     
@@ -322,7 +322,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                 <span class="text-red-600">{{ now()->format('l, F j, Y') }}</span>
                 <button 
                     wire:click="refreshData"
-                    class="p-2 text-red-600 hover:text-red-800 transition rounded-lg hover:bg-red-50"
+                    class="p-2 text-blue-600 hover:text-blue-700 transition rounded-lg hover:bg-slate-100"
                     title="Refresh data"
                 >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -336,7 +336,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             <!-- Time In -->
             <div class="bg-red-50 rounded-lg p-5 border border-gray-200">
                 <div class="flex items-center mb-3">
-                    <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                    <div class="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mr-3">
                         <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -367,7 +367,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             <!-- Time Out -->
             <div class="bg-red-50 rounded-lg p-5 border border-gray-200">
                 <div class="flex items-center mb-3">
-                    <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                    <div class="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mr-3">
                         <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                         </svg>
@@ -400,7 +400,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             <!-- Status & Hours -->
             <div class="bg-red-50 rounded-lg p-5 border border-gray-200">
                 <div class="flex items-center mb-3">
-                    <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                    <div class="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mr-3">
                         <svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                         </svg>
@@ -435,7 +435,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                 
                 <!-- Clock System Status -->
                 @if($isClockedIn)
-                    <div class="mt-4 p-3 bg-red-50 rounded-lg border border-gray-200">
+                    <div class="mt-4 p-3 bg-slate-100 rounded-lg border border-gray-200">
                         <p class="text-sm text-red-700 font-medium">✓ Clocked In via System</p>
                         <p class="text-xs text-red-600">
                             @if($clockStatus['last_clock_in'])
@@ -524,7 +524,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             
             <!-- Recent Attendance -->
             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <h2 class="text-xl font-bold text-red-800 mb-6">Recent Attendance</h2>
+                <h2 class="text-xl font-bold text-gray-900 mb-6">Recent Attendance</h2>
                 
                 @if(count($attendanceHistory) > 0)
                     <div class="space-y-4">
@@ -574,14 +574,14 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                     
                     @if(count($attendanceHistory) > 7)
                         <div class="mt-6 text-center">
-                            <button class="px-4 py-2 text-red-600 hover:text-red-800 font-medium hover:bg-red-50 rounded-lg transition">
+                            <button class="px-4 py-2 text-blue-600 hover:text-blue-700 font-medium hover:bg-red-50 rounded-lg transition">
                                 View All Records →
                             </button>
                         </div>
                     @endif
                 @else
                     <div class="text-center py-8">
-                        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <svg class="w-8 h-8 text-red-400" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                             </svg>
@@ -596,7 +596,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
         <div class="space-y-8">
             <!-- Employee Info Card -->
             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <h2 class="text-xl font-bold text-red-800 mb-4">Employee Information</h2>
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Employee Information</h2>
                 
                 <div class="space-y-4">
                     <div>
@@ -673,8 +673,8 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                         </div>
                     </div>
                     
-                    <div class="flex items-center p-3 bg-red-50 rounded-lg">
-                        <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center mr-3">
+                    <div class="flex items-center p-3 bg-slate-100 rounded-lg">
+                        <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center mr-3">
                             <svg class="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
                             </svg>
@@ -689,10 +689,10 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             
             <!-- Quick Stats -->
             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <h2 class="text-xl font-bold text-red-800 mb-4">Quick Stats</h2>
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Quick Stats</h2>
                 
                 <div class="space-y-4">
-                    <div class="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                    <div class="flex items-center justify-between p-3 bg-slate-100 rounded-lg">
                         <span class="text-red-700">This Week</span>
                         @php
                             $weekDays = collect($attendanceHistory)->filter(function($record) {

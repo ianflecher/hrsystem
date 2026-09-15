@@ -624,7 +624,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                             'calculated' => 'bg-blue-100 text-blue-800',
                                             'approved' => 'bg-yellow-100 text-yellow-800',
                                             'paid' => 'bg-green-100 text-green-800',
-                                            'cancelled' => 'bg-green-100 text-green-800',
+                                            'cancelled' => 'bg-gray-100 text-gray-700',
                                             'not_processed' => 'bg-gray-100 text-gray-800',
                                         ];
                                         $payrollStatus = $employee->payroll_status;

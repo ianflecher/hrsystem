@@ -207,10 +207,13 @@
         transition: border-color .15s ease, box-shadow .15s ease;
     }
 
+    /* Focus takes the calm accent, not the brand: a red ring on a field the
+       user has merely tabbed into reads as a validation error. Imprint
+       Production makes the same distinction. */
     .form-input:focus {
         outline: none;
-        border-color: var(--brand);
-        box-shadow: 0 0 0 3px rgba(227, 27, 35, .12);
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, .15);
     }
 
     .form-input::placeholder { color: var(--ink-3); }

@@ -299,7 +299,7 @@ new #[Layout('components.layouts.landing')] class extends Component
                                             required
                                             autofocus
                                             placeholder="staff@imprintcustoms.ph"
-                                            class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition"
+                                            class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition"
                                         >
                                         <div class="absolute left-3 top-3 text-gray-400">
                                             <i class="fas fa-id-badge"></i>
@@ -316,7 +316,7 @@ new #[Layout('components.layouts.landing')] class extends Component
                                         <label for="password" class="block text-sm font-medium text-gray-700">
                                             Password
                                         </label>
-                                        <a href="#" class="text-sm text-red-600 hover:text-red-700 font-medium">
+                                        <a href="#" class="text-sm text-blue-600 hover:text-blue-700 font-medium">
                                             Forgot password?
                                         </a>
                                     </div>
@@ -327,7 +327,7 @@ new #[Layout('components.layouts.landing')] class extends Component
                                             id="password"
                                             required
                                             placeholder="••••••••"
-                                            class="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition"
+                                            class="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition"
                                         >
                                         <div class="absolute left-3 top-3 text-gray-400">
                                             <i class="fas fa-lock"></i>

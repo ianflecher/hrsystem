@@ -28,10 +28,10 @@ class AdminSeeder extends Seeder
                 'job_title' => 'System Administrator',
             ],
             [
-                'full_name' => 'HR Manager',
+                'full_name' => 'HR Supervisor',
                 'username'  => 'hr',
                 'email'     => 'hr@imprintcustoms.ph',
-                'job_title' => 'HR Manager',
+                'job_title' => 'HR Supervisor',
             ],
         ];
 

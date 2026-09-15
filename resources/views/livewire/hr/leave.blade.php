@@ -380,7 +380,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     <!-- Page Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-hr-900">Leave Management</h1>
+            <h1 class="text-2xl font-bold text-gray-900">Leave Management</h1>
             <p class="text-gray-600 mt-1">View and manage all employee leave requests</p>
         </div>
         <div class="flex items-center gap-3">
@@ -874,7 +874,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             <h4 class="text-sm font-medium text-gray-700 mb-3">Actions</h4>
                             <div class="flex flex-col sm:flex-row gap-3">
                                 <button wire:click="approveLeave('{{ $selectedLeave->leave_id }}')" 
-                                        class="flex-1 inline-flex justify-center items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                        class="flex-1 inline-flex justify-center items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                                     <i class="fas fa-check mr-2"></i>
                                     Approve Leave
                                 </button>
@@ -884,7 +884,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     <div x-data="{ showRejectForm: false }" class="w-full">
                                         <template x-if="!showRejectForm">
                                             <button @click="showRejectForm = true" 
-                                                    class="w-full inline-flex justify-center items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                                    class="w-full inline-flex justify-center items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                                                 <i class="fas fa-times mr-2"></i>
                                                 Reject Leave
                                             </button>

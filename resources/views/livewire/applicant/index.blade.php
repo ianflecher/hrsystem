@@ -208,7 +208,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
                 <p class="text-sm font-medium text-green-800">{{ session('success') }}</p>
             </div>
             <div class="ml-auto pl-3">
-                <button @click="show = false" class="text-red-500 hover:text-red-700">
+                <button @click="show = false" class="text-red-500 hover:text-blue-700">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -230,7 +230,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
                 <p class="text-sm font-medium text-red-800">{{ session('error') }}</p>
             </div>
             <div class="ml-auto pl-3">
-                <button @click="show = false" class="text-red-500 hover:text-red-700">
+                <button @click="show = false" class="text-red-500 hover:text-blue-700">
                     <i class="fas fa-times"></i>
                 </button>
             </div>

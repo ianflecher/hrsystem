@@ -56,7 +56,7 @@ they meant something. Everything else is entered through the app.
 | Sign in with | Role |
 | --- | --- |
 | `admin` / `admin@imprintcustoms.ph` | Super admin |
-| `hr` / `hr@imprintcustoms.ph` | HR manager |
+| `hr` / `hr@imprintcustoms.ph` | HR supervisor |
 
 Both start with the password `imprint123`, matching Imprint Production.
 **Change them after the first sign-in.**

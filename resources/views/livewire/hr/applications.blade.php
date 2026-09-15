@@ -711,7 +711,7 @@ public function updateApplicationStatus($applicationId, $status)
     <!-- Page Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-hr-900">Human Resources Management</h1>
+            <h1 class="text-2xl font-bold text-gray-900">Human Resources Management</h1>
             <p class="text-gray-600 mt-1">Manage applications, employees, salaries and departments</p>
         </div>
         <div class="flex items-center gap-3">
@@ -831,7 +831,7 @@ public function updateApplicationStatus($applicationId, $status)
                             <h3 class="font-medium text-gray-900">{{ $department->department_name }}</h3>
                             <button wire:click="deleteDepartment('{{ $department->department_id }}')" 
                                     onclick="return confirm('Delete {{ $department->department_name }} department?')"
-                                    class="text-red-400 hover:text-red-600">
+                                    class="text-red-400 hover:text-blue-600">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -952,9 +952,9 @@ public function updateApplicationStatus($applicationId, $status)
                                     'reviewed' => 'bg-blue-100 text-blue-800',
                                     'scheduled_interview' => 'bg-purple-100 text-purple-800',
                                     'interview_completed' => 'bg-indigo-100 text-indigo-800',
-                                    'shortlisted' => 'bg-green-100 text-green-800',
-                                    'rejected' => 'bg-green-100 text-green-800',
-                                    'hired' => 'bg-teal-100 text-teal-800',
+                                    'shortlisted' => 'bg-teal-100 text-teal-800',
+                                    'rejected' => 'bg-red-100 text-red-800',
+                                    'hired' => 'bg-green-100 text-green-800',
                                 ];
                             @endphp
                             <tr>
@@ -1398,12 +1398,12 @@ public function updateApplicationStatus($applicationId, $status)
                 
                 <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                     <button wire:click="updateSalary" 
-                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
+                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
                         <i class="fas fa-save mr-2"></i>
                         Update Salary
                     </button>
                     <button wire:click="$set('showSalaryModal', false)" 
-                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
                         Cancel
                     </button>
                 </div>
@@ -1463,12 +1463,12 @@ public function updateApplicationStatus($applicationId, $status)
                 
                 <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                     <button wire:click="createNewDepartment" 
-                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
+                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
                         <i class="fas fa-plus mr-2"></i>
                         Create Department
                     </button>
                     <button wire:click="$set('showNewDepartmentModal', false)" 
-                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
                         Cancel
                     </button>
                 </div>
@@ -1546,8 +1546,8 @@ public function updateApplicationStatus($applicationId, $status)
                                             'pending' => 'bg-yellow-100 text-yellow-800',
                                             'reviewed' => 'bg-blue-100 text-blue-800',
                                             'shortlisted' => 'bg-green-100 text-green-800',
-                                            'rejected' => 'bg-green-100 text-green-800',
-                                            'hired' => 'bg-teal-100 text-teal-800',
+                                            'rejected' => 'bg-red-100 text-red-800',
+                                            'hired' => 'bg-green-100 text-green-800',
                                         ];
                                     @endphp
                                     <span class="px-3 py-1 rounded-full text-sm font-medium {{ $statusColors[$selectedApplication->status] ?? 'bg-gray-100 text-gray-800' }}">

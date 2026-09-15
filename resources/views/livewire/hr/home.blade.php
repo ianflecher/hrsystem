@@ -7,7 +7,7 @@ use Livewire\Attributes\Url;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
-new #[Layout('components.layouts.app')] 
+new #[Layout('components.layouts.humanresource')] 
 #[Title('HR Dashboard')]
 class extends Component
 {
@@ -454,7 +454,7 @@ class extends Component
                 <div>
                     <label class="block text-sm font-semibold text-gray-800 mb-2">📅 Date Range</label>
                     <div class="relative">
-                        <select wire:model.live="dateRange" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-red-500 focus:ring-red-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
+                        <select wire:model.live="dateRange" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
                             <option value="today">Today</option>
                             <option value="this_week">This Week</option>
                             <option value="last_week">Last Week</option>
@@ -471,7 +471,7 @@ class extends Component
                 <div>
                     <label class="block text-sm font-semibold text-gray-800 mb-2">🏢 Department</label>
                     <div class="relative">
-                        <select wire:model.live="department_id" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-red-500 focus:ring-red-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
+                        <select wire:model.live="department_id" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
                             <option value="">All Departments</option>
                             @foreach($departments as $dept)
                                 <option value="{{ $dept->department_id }}">{{ $dept->department_name }}</option>
@@ -486,7 +486,7 @@ class extends Component
                 <div>
                     <label class="block text-sm font-semibold text-gray-800 mb-2">👥 Employee Status</label>
                     <div class="relative">
-                        <select wire:model.live="employee_status" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-red-500 focus:ring-red-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
+                        <select wire:model.live="employee_status" class="pl-10 pr-4 py-2.5 border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl shadow-sm bg-white text-gray-900 font-medium">
                             <option value="all">All Status</option>
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
@@ -540,7 +540,7 @@ class extends Component
                      not a calculation, so it reported growth whatever the
                      headcount actually did. --}}
             </div>
-            <div class="p-3 rounded-full bg-red-50">
+            <div class="p-3 rounded-full bg-slate-100">
                 <svg class="w-8 h-8 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -561,7 +561,7 @@ class extends Component
                     <span class="text-sm text-gray-600 font-medium ml-3">{{ $totalEmployees > 0 ? round($activeEmployees / $totalEmployees * 100, 1) : 0 }}%</span>
                 </div>
             </div>
-            <div class="p-3 rounded-full bg-red-50">
+            <div class="p-3 rounded-full bg-slate-100">
                 <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -582,7 +582,7 @@ class extends Component
                     <span class="text-sm text-gray-600">{{ $applicationStats['pending'] }} pending review</span>
                 </div>
             </div>
-            <div class="p-3 rounded-full bg-red-50">
+            <div class="p-3 rounded-full bg-slate-100">
                 <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
@@ -609,7 +609,7 @@ class extends Component
                     <span class="text-sm text-gray-600">{{ $applicationStats['hired'] }} hired this month</span>
                 </div>
             </div>
-            <div class="p-3 rounded-full bg-red-50">
+            <div class="p-3 rounded-full bg-slate-100">
                 <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
@@ -622,13 +622,13 @@ class extends Component
 <div class="mb-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
     <div class="p-6 border-b border-gray-200 bg-gray-50">
         <div class="flex items-center">
-            <div class="p-2 bg-red-100 rounded-lg mr-3">
+            <div class="p-2 bg-slate-100 rounded-lg mr-3">
                 <svg class="w-6 h-6 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
             </div>
             <div>
-                <h2 class="text-xl font-bold text-red-900">⚡ Quick Actions</h2>
+                <h2 class="text-xl font-bold text-gray-900">⚡ Quick Actions</h2>
                 <p class="text-red-700 mt-1">Frequently used HR operations</p>
             </div>
         </div>
@@ -637,8 +637,8 @@ class extends Component
         <div class="grid grid-cols-2 md:grid-cols-5 gap-6">
             <!-- Attendance Summary -->
             <a href="{{ route('hr.attendance') }}" class="group">
-                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-red-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
-                    <div class="w-16 h-16 mx-auto mb-4 bg-red-50 rounded-xl flex items-center justify-center transition-transform duration-300">
+                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-blue-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-xl flex items-center justify-center transition-transform duration-300">
                         <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -654,7 +654,7 @@ class extends Component
             <!-- Applications -->
             <a href="{{ route('hr.applications') }}" class="group">
                 <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-blue-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
-                    <div class="w-16 h-16 mx-auto mb-4 bg-red-50 rounded-xl flex items-center justify-center transition-transform duration-300">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-xl flex items-center justify-center transition-transform duration-300">
                         <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
@@ -670,7 +670,7 @@ class extends Component
             <!-- Process Payroll -->
             <a href="{{ route('hr.payroll') }}" class="group">
                 <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-teal-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
-                    <div class="w-16 h-16 mx-auto mb-4 bg-red-50 rounded-xl flex items-center justify-center transition-transform duration-300">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-xl flex items-center justify-center transition-transform duration-300">
                         <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -686,7 +686,7 @@ class extends Component
             <!-- Manage Leave -->
             <a href="{{ route('hr.leave') }}" class="group">
                 <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-purple-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
-                    <div class="w-16 h-16 mx-auto mb-4 bg-red-50 rounded-xl flex items-center justify-center transition-transform duration-300">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-xl flex items-center justify-center transition-transform duration-300">
                         <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -786,7 +786,7 @@ class extends Component
                                     <tr class="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                                         <td class="py-4 px-6">
                                             <div class="flex items-center">
-                                                <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mr-3 border border-gray-200">
+                                                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mr-3 border border-gray-200">
                                                     <span class="text-red-900 font-bold">
                                                         {{ substr($application->full_name, 0, 2) }}
                                                     </span>

@@ -623,31 +623,204 @@
 
     @include('partials.theme')
 </head>
+
+<style>
+    /* One navigation for the whole HR module.
+
+       The dashboard sat on the generic app layout with its icon rail while
+       every other HR page used a row of tabs across the top, so moving between
+       them changed the furniture. All six now share this sidebar. */
+    .hr-shell {
+        display: flex;
+        min-height: 100vh;
+        background: var(--bg, #F4F6F9);
+    }
+
+    .hr-sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 60;
+        width: 244px;
+        display: flex;
+        flex-direction: column;
+        background: var(--sidebar-bg, #0C1626);
+        border-right: 1px solid rgba(255, 255, 255, .06);
+        transition: transform .2s ease;
+    }
+
+    .hr-sidebar__brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 18px 18px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, .08);
+        text-decoration: none;
+    }
+
+    .hr-sidebar__brand img {
+        height: 36px;
+        width: 36px;
+        object-fit: contain;
+        background: #fff;
+        border-radius: 50%;
+        padding: 2px;
+        flex: none;
+    }
+
+    .hr-sidebar__brand-name {
+        color: #fff;
+        font-family: var(--font-head, "Space Grotesk", system-ui, sans-serif);
+        font-size: .9375rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .hr-sidebar__brand-sub {
+        color: #7E8CA0;
+        font-size: .6875rem;
+        letter-spacing: .02em;
+    }
+
+    .hr-sidebar__label {
+        padding: 18px 18px 8px;
+        color: #64748B;
+        font-size: .6875rem;
+        font-weight: 600;
+        letter-spacing: .07em;
+        text-transform: uppercase;
+    }
+
+    .hr-sidebar nav { flex: 1; overflow-y: auto; padding: 0 10px 16px; }
+
+    .hr-sidebar .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 9px 12px;
+        margin-bottom: 2px;
+        border-radius: 8px;
+        color: #93A0B4;
+        font-size: .875rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: background-color .12s ease, color .12s ease;
+    }
+
+    .hr-sidebar .nav-link i { width: 18px; text-align: center; font-size: .9375rem; }
+    .hr-sidebar .nav-link:hover { background: rgba(255, 255, 255, .06); color: #E6EBF2; }
+
+    /* The current page, marked by a fill and a rule down its edge rather than
+       colour alone. */
+    .hr-sidebar .nav-link.active {
+        background: var(--sidebar-active, #17233A);
+        color: #fff;
+        box-shadow: inset 3px 0 0 var(--brand, #E31B23);
+    }
+
+    .hr-sidebar .nav-link.active i { color: var(--brand, #E31B23); }
+
+    .hr-sidebar__foot {
+        padding: 12px;
+        border-top: 1px solid rgba(255, 255, 255, .08);
+    }
+
+    .hr-sidebar__user {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 10px 10px;
+        color: #C6CFDC;
+        font-size: .8125rem;
+    }
+
+    .hr-sidebar__user i { color: var(--brand, #E31B23); }
+
+    .hr-sidebar__logout {
+        width: 100%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .5rem;
+        padding: .5rem .75rem;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, .18);
+        background: transparent;
+        color: #C6CFDC;
+        font-size: .8125rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+    }
+
+    .hr-sidebar__logout:hover {
+        background: var(--brand, #E31B23);
+        border-color: var(--brand, #E31B23);
+        color: #fff;
+    }
+
+    .hr-main { flex: 1; min-width: 0; margin-left: 244px; }
+
+    .hr-topbar {
+        display: none;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        background: var(--sidebar-bg, #0C1626);
+        color: #fff;
+        position: sticky;
+        top: 0;
+        z-index: 50;
+    }
+
+    .hr-topbar__toggle {
+        background: none;
+        border: 0;
+        color: #fff;
+        font-size: 1.25rem;
+        cursor: pointer;
+        line-height: 1;
+    }
+
+    .hr-content { padding: 0; }
+
+    .hr-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 55;
+        background: rgba(12, 22, 38, .55);
+    }
+
+    .hr-backdrop.show { display: block; }
+
+    @media (max-width: 1024px) {
+        .hr-sidebar { transform: translateX(-100%); }
+        .hr-sidebar.open { transform: translateX(0); }
+        .hr-main { margin-left: 0; }
+        .hr-topbar { display: flex; }
+    }
+</style>
+
 <body class="bg-gray-50">
 
-<!-- Main Header -->
-<header class="hr-header">
-    <div class="header-content">
-        <!-- Logo -->
-        <a href="{{ route('hr.home') }}" class="logo-container">
-            <div class="logo-icon">
-                @if(file_exists(public_path('imprint-customs.jpg')))
-                    <img src="{{ asset('imprint-customs.jpg') }}" alt="Imprint Customs" style="height: 44px; width: 44px; object-fit: contain; background: #fff; border-radius: 50%; padding: 3px;">
-                @else
-                    <div style="background: white; color: var(--hr-dark-green); font-weight: bold; padding: 8px 12px; border-radius: 8px; font-size: 1.2rem;">
-                        Imprint Customs HR
-                    </div>
-                @endif
-            </div>
-            <div class="logo-text">
-                <div class="company-name">Imprint Customs Human Resources</div>
-                <div class="company-tagline">Employee Management Portal</div>
-            </div>
+<div class="hr-shell">
+    <aside class="hr-sidebar" id="hrSidebar">
+        <a href="{{ route('hr.home') }}" class="hr-sidebar__brand">
+            @if(file_exists(public_path('imprint-customs.jpg')))
+                <img src="{{ asset('imprint-customs.jpg') }}" alt="Imprint Customs">
+            @endif
+            <span>
+                <span class="hr-sidebar__brand-name">Imprint Customs</span><br>
+                <span class="hr-sidebar__brand-sub">Human Resources</span>
+            </span>
         </a>
 
-        <!-- Desktop Navigation -->
-        <nav class="hr-nav">
-            <a href="{{ route('hr.home') }}" class="nav-link {{ request()->routeIs('hr.dashboard') ? 'active' : '' }}">
+        <div class="hr-sidebar__label">Modules</div>
+
+        <nav>
+            {{-- routeIs('hr.dashboard') used to mark the dashboard, but the
+                 route is named hr.home, so this item could never light up. --}}
+            <a href="{{ route('hr.home') }}" class="nav-link {{ request()->routeIs('hr.home') ? 'active' : '' }}">
                 <i class="fas fa-tachometer-alt"></i>Dashboard
             </a>
             <a href="{{ route('hr.attendance') }}" class="nav-link {{ request()->routeIs('hr.attendance') ? 'active' : '' }}">
@@ -667,124 +840,77 @@
             </a>
         </nav>
 
-        <!-- User Actions -->
-        <div class="user-actions">
-            <!-- Mobile Menu Button -->
-            <button class="mobile-menu-btn lg:hidden" onclick="toggleMobileMenu()" style="background: none; border: none; color: white; font-size: 1.5rem;">
-                <i class="fas fa-bars"></i>
-            </button>
-            
+        <div class="hr-sidebar__foot">
             @auth
-                <div class="user-badge hidden md:flex">
+                <div class="hr-sidebar__user">
                     <i class="fas fa-user-tie"></i>
-                    <span>{{ Auth::user()->name ?? 'HR Manager' }}</span>
+                    {{-- The column is full_name; ->name was always null, so every
+                         signed-in user showed the same fallback. --}}
+                    <span>{{ Auth::user()->full_name ?? 'HR' }}</span>
                 </div>
-                            <form method="POST" action="{{ route('admin.logout') }}">
+                <form method="POST" action="{{ route('admin.logout') }}">
                     @csrf
-                    <button type="submit" class="logout-btn">
-                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                    </button>
-                </form>
-            @else
-                <a href="{{ route('login') }}" class="nav-link">
-                    <i class="fas fa-sign-in-alt"></i>
-                    <span class="hidden md:inline">Login</span>
-                </a>
-            @endauth
-        </div>
-    </div>
-</header>
-
-<!-- Mobile Menu Overlay -->
-<div class="mobile-overlay" id="mobileOverlay" onclick="toggleMobileMenu()"></div>
-
-<!-- Mobile Menu -->
-<div class="mobile-menu" id="mobileMenu">
-    <div class="mobile-menu-header">
-        <h3 style="font-weight: 600; color: var(--hr-dark-green);">HR Menu</h3>
-        <button class="mobile-menu-close" onclick="toggleMobileMenu()">
-            <i class="fas fa-times"></i>
-        </button>
-    </div>
-    
-    <nav>
-        <a href="{{ route('hr.home') }}" class="mobile-nav-link {{ request()->routeIs('hr.home') ? 'active' : '' }}">
-            <i class="fas fa-tachometer-alt"></i>Dashboard
-        </a>
-        <a href="{{ route('hr.attendance') }}" class="mobile-nav-link {{ request()->routeIs('hr.attendance') ? 'active' : '' }}">
-            <i class="fas fa-clock"></i>Attendance
-        </a>
-        <a href="{{ route('hr.payroll') }}" class="mobile-nav-link {{ request()->routeIs('hr.payroll') ? 'active' : '' }}">
-            <i class="fas fa-money-bill-wave"></i>Payroll
-        </a>
-        <a href="{{ route('hr.positions') }}" class="mobile-nav-link {{ request()->routeIs('hr.positions') ? 'active' : '' }}">
-            <i class="fas fa-bullhorn"></i>Openings
-        </a>
-        <a href="{{ route('hr.applications') }}" class="mobile-nav-link {{ request()->routeIs('hr.applications') ? 'active' : '' }}">
-            <i class="fas fa-briefcase"></i>Applications
-            <span style="margin-left: auto; background: var(--hr-purple); color: white; padding: 0.1rem 0.4rem; border-radius: 10px; font-size: 0.7rem;">5</span>
-        </a>
-        <a href="{{ route('hr.leave') }}" class="mobile-nav-link {{ request()->routeIs('hr.leave') ? 'active' : '' }}">
-            <i class="fas fa-chart-bar"></i>Leave
-        </a>
-        
-        @auth
-            <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
-                <div style="display: flex; align-items: center; gap: 1rem; padding: 0.5rem; color: #64748b;">
-                    <i class="fas fa-user-tie"></i>
-                    <span>{{ Auth::user()->name ?? 'HR Manager' }}</span>
-                </div>
-                <form method="POST" action="{{ route('logout') }}" style="margin-top: 0.5rem;">
-                    @csrf
-                    <button type="submit" style="width: 100%; background: #ef4444; color: white; border: none; padding: 0.75rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                    <button type="submit" class="hr-sidebar__logout">
                         <i class="fas fa-sign-out-alt"></i>Logout
                     </button>
                 </form>
-            </div>
-        @endauth
-    </nav>
-</div>
+            @else
+                <a href="{{ route('login') }}" class="hr-sidebar__logout">
+                    <i class="fas fa-sign-in-alt"></i>Login
+                </a>
+            @endauth
+        </div>
+    </aside>
 
-<!-- Main Content Area -->
-<main class="hr-content">
-    <!-- Alert Messages -->
-    @if(session('success'))
-        <div class="alert alert-success">
-            <i class="fas fa-check-circle"></i>
-            {{ session('success') }}
-        </div>
-    @endif
-    
-    @if(session('error'))
-        <div class="alert alert-error">
-            <i class="fas fa-exclamation-circle"></i>
-            {{ session('error') }}
-        </div>
-    @endif
-    
-    @if(session('warning'))
-        <div class="alert alert-warning">
-            <i class="fas fa-exclamation-triangle"></i>
-            {{ session('warning') }}
-        </div>
-    @endif
-    
-    @if(session('info'))
-        <div class="alert alert-info">
-            <i class="fas fa-info-circle"></i>
-            {{ session('info') }}
-        </div>
-    @endif
-    
-    <!-- Page Content -->
-    {{ $slot }}
-</main>
+    <div class="hr-backdrop" id="hrBackdrop" onclick="toggleMobileMenu()"></div>
+
+    <div class="hr-main">
+        <header class="hr-topbar">
+            <button class="hr-topbar__toggle" onclick="toggleMobileMenu()" aria-label="Menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <strong style="font-size:.9375rem;">Imprint Customs HR</strong>
+        </header>
+
+        <main class="hr-content">
+            @if(session('success'))
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    {{ session('success') }}
+                </div>
+            @endif
+
+            @if(session('error'))
+                <div class="alert alert-error">
+                    <i class="fas fa-exclamation-circle"></i>
+                    {{ session('error') }}
+                </div>
+            @endif
+
+            @if(session('warning'))
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    {{ session('warning') }}
+                </div>
+            @endif
+
+            @if(session('info'))
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    {{ session('info') }}
+                </div>
+            @endif
+
+            {{ $slot }}
+        </main>
+    </div>
+</div>
 
 <!-- JavaScript -->
 <script>
     // Toggle mobile menu
     function toggleMobileMenu() {
-        const mobileMenu = document.getElementById('mobileMenu');
+        const mobileMenu = document.getElementById('hrSidebar');
         const overlay = document.getElementById('mobileOverlay');
         
         mobileMenu.classList.toggle('open');
@@ -794,18 +920,11 @@
         document.body.style.overflow = mobileMenu.classList.contains('open') ? 'hidden' : '';
     }
     
-    // Highlight active navigation link
-    document.addEventListener('DOMContentLoaded', function() {
-        const currentPath = window.location.pathname;
-        const navLinks = document.querySelectorAll('.nav-link, .mobile-nav-link');
-        
-        navLinks.forEach(link => {
-            const href = link.getAttribute('href');
-            if (href === currentPath || (href !== '/' && currentPath.includes(href.replace(/\/$/, '')))) {
-                link.classList.add('active');
-            }
-        });
-    });
+    // The active item is decided server-side with request()->routeIs().
+    // The script that used to do it here compared each link's href - an
+    // absolute URL - against window.location.pathname, which can never
+    // match, so it marked nothing and quietly did nothing.
+
     
     // Auto-dismiss alerts after 5 seconds
     setTimeout(function() {
@@ -820,7 +939,7 @@
     // Close mobile menu on escape key
     document.addEventListener('keydown', function(event) {
         if (event.key === 'Escape') {
-            const mobileMenu = document.getElementById('mobileMenu');
+            const mobileMenu = document.getElementById('hrSidebar');
             if (mobileMenu.classList.contains('open')) {
                 toggleMobileMenu();
             }

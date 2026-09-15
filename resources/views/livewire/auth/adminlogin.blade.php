@@ -260,7 +260,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                                             required
                                             autofocus
                                             placeholder="admin or hr"
-                                            class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition"
+                                            class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition"
                                         >
                                         <div class="absolute left-3 top-3 text-gray-400">
                                             <i class="fas fa-user-tie"></i>
@@ -285,7 +285,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                                             id="password"
                                             required
                                             placeholder="••••••••"
-                                            class="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition"
+                                            class="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition"
                                         >
                                         <div class="absolute left-3 top-3 text-gray-400">
                                             <i class="fas fa-key"></i>

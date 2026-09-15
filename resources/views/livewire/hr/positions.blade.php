@@ -260,7 +260,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         </button>
                                         <button wire:click="delete({{ $position->position_id }})"
                                                 wire:confirm="Delete this opening? Applications already received are kept."
-                                                class="px-2.5 py-1.5 text-sm text-red-600 hover:text-red-700" title="Delete">
+                                                class="px-2.5 py-1.5 text-sm text-blue-600 hover:text-blue-700" title="Delete">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </div>
