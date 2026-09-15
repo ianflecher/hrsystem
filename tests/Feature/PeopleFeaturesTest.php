@@ -140,6 +140,17 @@ class PeopleFeaturesTest extends TestCase
         $this->actingAs($this->other)->post('/employee/people/reviews/'.$id, ['action' => 'progress', 'goal_id' => $goal, 'progress' => 100])->assertForbidden();
     }
 
+    public function test_hr_cannot_raise_a_loan_on_somebodys_behalf(): void
+    {
+        // The form is only on the employee portal, and so is the rule: a request
+        // raised by HR would lose the record of who actually asked for it.
+        $this->actingAs($this->hr)->get('/hr/people/loans')->assertOk()->assertDontSee('Request a loan');
+        $this->post('/hr/people/loans', ['employee_id' => $this->employeeId, 'type' => 'loan',
+            'amount' => 5000, 'installment' => 500, 'starts_on' => '2018-01-01', 'reason' => 'On their behalf'])
+            ->assertForbidden();
+        $this->assertDatabaseCount('employee_loans', 0);
+    }
+
     public function test_loan_and_overtime_integrate_with_payroll_exactly_once(): void
     {
         $overtime = $this->overtime();

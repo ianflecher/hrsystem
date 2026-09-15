@@ -1,6 +1,9 @@
+{{-- Only the employee portal offers the form: a loan is asked for by the
+     person who needs it, and HR decides. HR raising one on somebody's behalf
+     would leave no record of who actually asked. --}}
+@unless($hr)
 <details class="card" @if($errors->any()) open @endif><summary>Request a loan or cash advance</summary>
 <form method="POST" action="{{ $base }}" class="grid divider">@csrf
-    @include('people.employee-select')
     <label class="people-field"><span>Type</span><select name="type"><option value="loan">Loan</option><option value="cash_advance">Cash advance</option></select></label>
     <x-people.field name="amount" label="Amount (PHP)" type="number" min="1" max="1000000" step="0.01" />
     <x-people.field name="installment" label="Deduction per payroll cutoff (PHP)" type="number" min="1" step="0.01" />
@@ -9,6 +12,8 @@
     <p class="muted wide">Interest-free repayments start after HR confirms disbursement. Deductions are capped at remaining pay and balance.</p>
     <div><button>Submit request</button></div>
 </form></details>
+@endunless
+
 @forelse($rows as $row)
 @php
     $installments = $extra['installments']->get($row->id, collect());

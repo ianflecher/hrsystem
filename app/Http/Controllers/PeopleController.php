@@ -88,7 +88,9 @@ class PeopleController extends Controller
         [$hr, $employeeId] = $this->context($request);
         abort_unless(isset(self::MODULES[$module]), 404);
         if (! in_array($module, ['overtime', 'loans'], true)) PeopleAccess::hr();
-        if (in_array($module, ['documents', 'overtime', 'shifts', 'checklists', 'reviews', 'loans'], true) && $hr) {
+        // Loans are requested from the employee portal only - see the view.
+        abort_if($hr && $module === 'loans', 403, 'Loans are requested by the employee.');
+        if (in_array($module, ['documents', 'overtime', 'shifts', 'checklists', 'reviews'], true) && $hr) {
             $request->validate(['employee_id' => 'required|integer|exists:employees,employee_id']);
             $employeeId = (int) $request->input('employee_id');
         }
