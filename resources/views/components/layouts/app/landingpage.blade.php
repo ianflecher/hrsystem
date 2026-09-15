@@ -278,7 +278,7 @@
 
                 
                 <!-- Login Button -->
-                <a href="{{ route('login') }}" class="btn-auth btn-login">
+                <a href="{{ route('employee.login') }}" class="btn-auth btn-login">
                     <i class="fas fa-sign-in-alt"></i>
                     Login
                 </a>
@@ -303,7 +303,7 @@
             <!-- Mobile Auth -->
             <div class="mobile-auth-buttons">
                 <!-- Login -->
-                <a href="{{ route('login') }}" class="mobile-nav-item border border-green-600 text-green-600">
+                <a href="{{ route('employee.login') }}" class="mobile-nav-item border border-gray-300 text-gray-700">
                     <div class="mobile-nav-left">
                         <i class="fas fa-sign-in-alt"></i>
                         <span>Login</span>

@@ -14,7 +14,11 @@ use Livewire\Volt\Volt;
 
 Volt::route('/', 'landingpage')->name('landing');
 
-Volt::route('/login', 'auth.login')->name('login');
+// There is no customer portal in an HRIS - that page came across with the
+// e-commerce code. The name stays defined because Laravel redirects guests to
+// it, and it points at the chooser, which is the honest answer to "where do I
+// sign in?" when the area is not known.
+Route::redirect('/login', '/')->name('login');
 Volt::route('/admin/login', 'auth.adminlogin')->name('admin.login');
 Volt::route('/employee/login', 'auth.employeelogin')->name('employee.login');
 Volt::route('/applicant/login', 'auth.applicantlogin')->name('applicant.login');

@@ -858,7 +858,7 @@
                     </button>
                 </form>
             @else
-                <a href="{{ route('login') }}" class="hr-sidebar__logout">
+                <a href="{{ route('admin.login') }}" class="hr-sidebar__logout">
                     <i class="fas fa-sign-in-alt"></i>Login
                 </a>
             @endauth

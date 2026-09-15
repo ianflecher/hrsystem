@@ -144,7 +144,11 @@ return [
     */
 
     'features' => [
-        Features::registration(),
+        // No self-registration. HR creates staff accounts at /hr/employees, and
+        // applicants register through the careers portal's own component - so
+        // Fortify's registration screen has nobody to serve, and the view it
+        // pointed at no longer exists.
+        // Features::registration(),
         Features::resetPasswords(),
         Features::emailVerification(),
         // Features::updateProfileInformation(),

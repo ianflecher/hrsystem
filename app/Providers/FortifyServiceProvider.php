@@ -45,11 +45,13 @@ class FortifyServiceProvider extends ServiceProvider
      */
     private function configureViews(): void
     {
-        Fortify::loginView(fn () => view('livewire.auth.login'));
+        // There is no single sign-in page: each portal has its own. Fortify
+        // still needs something for this route, so it points at the chooser.
+        Fortify::loginView(fn () => redirect('/'));
         Fortify::verifyEmailView(fn () => view('livewire.auth.verify-email'));
         Fortify::twoFactorChallengeView(fn () => view('livewire.auth.two-factor-challenge'));
         Fortify::confirmPasswordView(fn () => view('livewire.auth.confirm-password'));
-        Fortify::registerView(fn () => view('livewire.auth.register'));
+        // Registration is disabled in config/fortify.php - see the note there.
         Fortify::resetPasswordView(fn () => view('livewire.auth.reset-password'));
         Fortify::requestPasswordResetLinkView(fn () => view('livewire.auth.forgot-password'));
     }

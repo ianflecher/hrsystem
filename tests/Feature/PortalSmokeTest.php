@@ -30,7 +30,6 @@ class PortalSmokeTest extends TestCase
     {
         return [
             'landing'         => ['/'],
-            'login'           => ['/login'],
             'admin login'     => ['/admin/login'],
             'employee login'  => ['/employee/login'],
             'applicant login' => ['/applicant/login'],
@@ -62,6 +61,14 @@ class PortalSmokeTest extends TestCase
     public function test_public_pages_render(string $uri): void
     {
         $this->get($uri)->assertOk();
+    }
+
+    public function test_the_old_customer_sign_in_points_at_the_chooser(): void
+    {
+        // /login served a customer portal inherited from the e-commerce code.
+        // The name stays defined - Laravel redirects guests to it - but each
+        // portal has its own sign-in now, so it hands over to the chooser.
+        $this->get('/login')->assertRedirect('/');
     }
 
     #[DataProvider('hrPages')]
