@@ -6,6 +6,7 @@ use App\Http\Controllers\PeopleController;
 use App\Models\User;
 use App\Services\PayrollRun;
 use App\Support\PayPeriod;
+use App\Support\PayrollCalculator;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -173,6 +174,52 @@ class PeopleFeaturesTest extends TestCase
 
         $this->actingAs($this->hr)->post('/hr/people/shifts/'.$id, ['action' => 'delete'])->assertRedirect();
         $this->assertDatabaseMissing('holidays', ['id' => $id]);
+    }
+
+    public function test_leaving_early_is_deducted_and_named_on_the_payslip(): void
+    {
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'shift_end' => '17:00:00', 'rest_days' => null, 'salary' => 22000]);
+
+        // On time in, half an hour early out.
+        DB::table('hr_attendance')->insert(['employee_id' => $this->employeeId, 'date' => '2018-01-03',
+            'time_in' => '2018-01-03 08:00:00', 'time_out' => '2018-01-03 16:30:00', 'status' => 'present',
+            'created_at' => now(), 'updated_at' => now()]);
+
+        // A day with no clock-out at all must cost nothing.
+        DB::table('hr_attendance')->insert(['employee_id' => $this->employeeId, 'date' => '2018-01-04',
+            'time_in' => '2018-01-04 08:00:00', 'time_out' => null, 'status' => 'present',
+            'created_at' => now(), 'updated_at' => now()]);
+
+        (new PayrollRun)->generate($this->employeeId, PayPeriod::fromStart('2018-01-01'));
+        $payslip = DB::table('hr_payroll')->where('employee_id', $this->employeeId)->first();
+
+        $half = round(22000 / 22 / 2, 2);
+        $this->assertStringContainsString('Undertime (1 day)', $payslip->notes);
+        $this->assertStringContainsString(number_format($half, 2), $payslip->notes);
+        $this->assertStringNotContainsString('Late', $payslip->notes);
+    }
+
+    public function test_late_and_undertime_on_one_day_cost_one_day(): void
+    {
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'shift_end' => '17:00:00', 'rest_days' => null, 'salary' => 22000]);
+
+        // An hour late and an hour early: half a day each.
+        DB::table('hr_attendance')->insert(['employee_id' => $this->employeeId, 'date' => '2018-01-03',
+            'time_in' => '2018-01-03 09:00:00', 'time_out' => '2018-01-03 16:00:00', 'status' => 'late',
+            'created_at' => now(), 'updated_at' => now()]);
+
+        (new PayrollRun)->generate($this->employeeId, PayPeriod::fromStart('2018-01-01'));
+        $payslip = DB::table('hr_payroll')->where('employee_id', $this->employeeId)->first();
+
+        $half = round(22000 / 22 / 2, 2);
+        $this->assertStringContainsString('Late (1 day): PHP '.number_format($half, 2), $payslip->notes);
+        $this->assertStringContainsString('Undertime (1 day): PHP '.number_format($half, 2), $payslip->notes);
+
+        // The two together are one whole day off the gross, and no more.
+        $expected = PayrollCalculator::forCutoff(22000, round(22000 / 22, 2), false);
+        $this->assertEquals($expected['net'], (float) $payslip->net_pay);
     }
 
     public function test_nobody_is_late_on_a_rest_day_or_a_holiday(): void

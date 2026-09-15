@@ -223,6 +223,21 @@ class BiometricImportTest extends TestCase
         $this->assertSame(1, DB::table('hr_attendance')->where('employee_id', $id)->count());
     }
 
+    public function test_the_attendance_screen_shows_undertime_against_the_shift(): void
+    {
+        $id = $this->employee('120');
+        DB::table('employees')->where('employee_id', $id)->update(['shift_end' => '17:00:00']);
+        DB::table('hr_attendance')->insert(['employee_id' => $id, 'date' => '2020-06-20',
+            'time_in' => '2020-06-20 08:00:00', 'time_out' => '2020-06-20 16:20:00', 'status' => 'present',
+            'created_at' => now(), 'updated_at' => now()]);
+
+        $hr = User::where('username', 'hr')->firstOrFail();
+
+        \Livewire\Volt\Volt::actingAs($hr)->test('hr.attendance')
+            ->set('selectedDate', '2020-06-20')
+            ->assertSee('40 min undertime');
+    }
+
     // ----------------------------------------------------------- file reader
 
     public function test_incremental_imports_preserve_the_full_day(): void

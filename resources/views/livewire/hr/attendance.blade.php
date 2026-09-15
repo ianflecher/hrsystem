@@ -50,6 +50,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'a.*',
                 'e.employee_id',
                 'e.job_title',
+                'e.shift_start',
+                'e.shift_end',
                 'u.full_name',
                 'u.username',
                 'u.email',
@@ -575,6 +577,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     $hours = round($diff / 3600, 1) . 'h';
                                 }
                                 
+                                // Measured against their own shift. Either can be
+                                // unknowable - no shift set, or no scan - and then
+                                // nothing is claimed about the day.
+                                $minutesLate = \App\Support\Tardiness::minutesLate(
+                                    $record->time_in ? \Carbon\Carbon::parse($record->time_in) : null,
+                                    $record->shift_start ?? null);
+                                $minutesShort = \App\Support\Undertime::minutesShort(
+                                    $record->time_out ? \Carbon\Carbon::parse($record->time_out) : null,
+                                    $record->shift_end ?? null);
+
                                 // Status colors
                                 $statusColors = [
                                     'present' => 'bg-green-100 text-green-800',
@@ -602,8 +614,18 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     </span>
                                 </td>
                                 <td>{{ $record->job_title ?? 'N/A' }}</td>
-                                <td class="font-mono">{{ $timeIn }}</td>
-                                <td class="font-mono">{{ $timeOut }}</td>
+                                <td class="font-mono">
+                                    {{ $timeIn }}
+                                    @if($minutesLate !== null && $minutesLate > \App\Support\Tardiness::GRACE_MINUTES)
+                                        <span class="block text-xs font-sans text-amber-700">{{ $minutesLate }} min late</span>
+                                    @endif
+                                </td>
+                                <td class="font-mono">
+                                    {{ $timeOut }}
+                                    @if($minutesShort !== null && $minutesShort > \App\Support\Tardiness::GRACE_MINUTES)
+                                        <span class="block text-xs font-sans text-amber-700">{{ $minutesShort }} min undertime</span>
+                                    @endif
+                                </td>
                                 <td>
                                     <span class="px-3 py-1 rounded-full text-xs font-medium {{ $statusColors[$record->status] ?? 'bg-gray-100 text-gray-800' }}">
                                         {{ ucfirst(str_replace('_', ' ', $record->status)) }}

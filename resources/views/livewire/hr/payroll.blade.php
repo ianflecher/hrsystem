@@ -211,47 +211,6 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     }
 
     /**
-     * What lateness cost this employee over the cutoff.
-     *
-     * Only days with a clock-in count. An employee with no shift set cannot be
-     * judged late at all - see the migration that added the column.
-     */
-    private function lateDeductionFor(int $employeeId, float $salary, string $periodStart, string $periodEnd): array
-    {
-        $shiftStart = DB::table('employees')->where('employee_id', $employeeId)->value('shift_start');
-
-        if (! $shiftStart) {
-            return ['amount' => 0.0, 'days' => 0];
-        }
-
-        $rows = DB::table('hr_attendance')
-            ->where('employee_id', $employeeId)
-            ->whereBetween('date', [$periodStart, $periodEnd])
-            ->whereNotNull('time_in')
-            ->pluck('time_in');
-
-        $amount = 0.0;
-        $days = 0;
-
-        foreach ($rows as $timeIn) {
-            $minutes = Tardiness::minutesLate(\Carbon\Carbon::parse($timeIn), $shiftStart);
-            $cost = Tardiness::deduction($minutes, $salary);
-
-            if ($cost > 0) {
-                $amount += $cost;
-                $days++;
-            }
-        }
-
-        return ['amount' => round($amount, 2), 'days' => $days];
-    }
-
-    private function breakdownNote(array $c, int $lateDays = 0): string
-    {
-        return PayrollCalculator::note($c, $lateDays);
-    }
-
-    /**
      * Runs the period for everyone at once.
      *
      * Only active employees, only those without a row for this period already,

@@ -4,8 +4,6 @@ namespace App\Services;
 
 use App\Support\PayPeriod;
 use App\Support\PayrollCalculator;
-use App\Support\Tardiness;
-use App\Support\WorkWeek;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -18,25 +16,12 @@ class PayrollRun
             $employee = DB::table('employees')->where('employee_id', $employeeId)->lockForUpdate()->first();
             if (! $employee || $employee->status !== 'active' || $employee->salary <= 0) return null;
             if (DB::table('hr_payroll')->where('employee_id', $employeeId)->where('period_start', $period->start)->exists()) return null;
-            $late = 0;
-            $lateDays = 0;
-            // Nobody is late on a day they were not due in: their own rest days,
-            // and the holidays, both count as not due.
-            $holidays = DB::table('holidays')->whereBetween('date', [$period->start, $period->end])->pluck('date')
-                ->map(fn ($date) => substr((string) $date, 0, 10))->all();
-            foreach (DB::table('hr_attendance')->where('employee_id', $employeeId)->whereBetween('date', [$period->start, $period->end])->whereNotNull('time_in')->get() as $attendance) {
-                $date = Carbon::parse($attendance->date);
-                $due = ! in_array($date->toDateString(), $holidays, true)
-                    && ! WorkWeek::restsOn($employee->rest_days, $date);
-                $start = $due ? $employee->shift_start : null;
-                $cost = $start ? Tardiness::deduction(Tardiness::minutesLate(Carbon::parse($attendance->time_in), $start), (float) $employee->salary) : 0;
-                $late += $cost;
-                if ($cost > 0) $lateDays++;
-            }
+            // Lateness and undertime, day by day - see TimeDeductions.
+            $time = (new TimeDeductions)->forPeriod($employee, $period->start, $period->end);
             // Includes previously approved, unpaid overtime missed by an older cutoff.
             $overtime = DB::table('overtime_requests')->where('employee_id', $employeeId)->where('status', 'approved')->whereNull('payroll_id')
                 ->where('ends_at', '<', Carbon::parse($period->end)->addDay())->lockForUpdate()->get();
-            $c = PayrollCalculator::forCutoff((float) $employee->salary, round($late, 2), $period->isSecondCutoff, (float) $overtime->sum('approved_amount'));
+            $c = PayrollCalculator::forCutoff((float) $employee->salary, $time['total'], $period->isSecondCutoff, (float) $overtime->sum('approved_amount'));
             $remainingCents = max(0, (int) round($c['net'] * 100));
             $loans = DB::table('employee_loans')->where('employee_id', $employeeId)->where('status', 'active')->where('starts_on', '<=', $period->start)->orderBy('id')->lockForUpdate()->get();
             $installments = [];
@@ -49,7 +34,7 @@ class PayrollRun
                 $remainingCents -= $cents;
             }
             $deduction = array_sum($installments);
-            $notes = PayrollCalculator::note($c, $lateDays);
+            $notes = PayrollCalculator::note($c, $time);
             if ($c['overtime'] > 0) $notes .= ' | Overtime: PHP '.number_format($c['overtime'], 2);
             if ($deduction > 0) $notes .= ' | Loan repayment: PHP '.number_format($deduction, 2);
             $id = DB::table('hr_payroll')->insertGetId([

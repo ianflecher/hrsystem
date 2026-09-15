@@ -111,7 +111,11 @@ class PayrollCalculator
     /**
      * How the payslip describes itself.
      */
-    public static function note(array $c, int $lateDays = 0): string
+    /**
+     * @param  array  $time  the TimeDeductions breakdown, when there is one:
+     *                       late, lateDays, undertime, undertimeDays
+     */
+    public static function note(array $c, array $time = []): string
     {
         $parts = [];
 
@@ -121,9 +125,26 @@ class PayrollCalculator
 
         $parts[] = 'Tax: PHP '.number_format($c['tax'], 2);
 
+        // $c['late'] is the two together, capped at the day rate, so each is
+        // named from its own figure rather than by subtracting one from the
+        // other - which would misreport a day where the cap bit.
         if ($c['late'] > 0) {
-            $parts[] = 'Late ('.$lateDays.' day'.($lateDays === 1 ? '' : 's').'): PHP '
-                .number_format($c['late'], 2);
+            $lateDays = (int) ($time['lateDays'] ?? 0);
+            $undertimeDays = (int) ($time['undertimeDays'] ?? 0);
+
+            if ($lateDays > 0) {
+                $parts[] = 'Late ('.$lateDays.' day'.($lateDays === 1 ? '' : 's').'): PHP '
+                    .number_format((float) ($time['late'] ?? 0), 2);
+            }
+
+            if ($undertimeDays > 0) {
+                $parts[] = 'Undertime ('.$undertimeDays.' day'.($undertimeDays === 1 ? '' : 's').'): PHP '
+                    .number_format((float) ($time['undertime'] ?? 0), 2);
+            }
+
+            if ($lateDays === 0 && $undertimeDays === 0) {
+                $parts[] = 'Time deductions: PHP '.number_format($c['late'], 2);
+            }
         }
 
         if ($c['sss'] == 0 && $c['philhealth'] == 0 && $c['pagibig'] == 0) {
