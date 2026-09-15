@@ -395,7 +395,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         @endif
 
         @if (session()->has('error'))
-            <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div class="mb-4 p-4 bg-red-50 border border-gray-200 rounded-lg">
                 <div class="flex">
                     <div class="flex-shrink-0">
                         <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">

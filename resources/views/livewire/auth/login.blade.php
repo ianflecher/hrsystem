@@ -190,7 +190,7 @@ new #[Layout('components.layouts.landing')] class extends Component
     </div>
 
     <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div class="bg-white py-8 px-4 shadow-xl rounded-lg sm:px-10 border border-gray-100">
+        <div class="bg-white py-8 px-4 shadow-sm rounded-lg sm:px-10 border border-gray-100">
             <!-- Session Status -->
             @if (session('status'))
                 <div class="mb-4 text-sm font-medium text-red-600">

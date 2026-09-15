@@ -249,6 +249,8 @@
             }
         }
     </style>
+
+    @include('partials.theme')
 </head>
 <body>
     <!-- Compact Header -->

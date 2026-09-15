@@ -105,7 +105,7 @@ new #[Layout('components.layouts.employee')] class extends Component
     <div class="max-w-md mx-auto">
         <!-- Brand Header -->
         <div class="text-center mb-8">
-            <div class="mx-auto h-20 w-20 bg-gradient-to-r from-red-500 to-red-600 rounded-full flex items-center justify-center mb-4 overflow-hidden border-2 border-red-200 shadow-lg">
+            <div class="mx-auto h-20 w-20 bg-red-600 rounded-full flex items-center justify-center mb-4 overflow-hidden border-2 border-gray-200 shadow-sm">
                 <i class="fas fa-crown text-3xl text-white"></i>
             </div>
             <h1 class="text-3xl font-bold text-gray-900 mb-2">HR Back Office</h1>
@@ -113,7 +113,7 @@ new #[Layout('components.layouts.employee')] class extends Component
         </div>
 
         <!-- Login Card -->
-        <div class="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 hover:shadow-2xl transition-all duration-300">
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 hover:shadow-sm transition-all duration-300">
             <div class="p-8">
                 <form wire:submit.prevent="login" class="space-y-6">
                     @csrf
@@ -181,7 +181,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                         <button 
                             type="submit" 
                             wire:loading.attr="disabled"
-                            class="w-full bg-gradient-to-r from-red-600 to-red-600 text-white py-3 px-4 rounded-lg hover:from-red-700 hover:to-red-700 transition font-medium flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                            class="w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:from-red-700 hover:to-red-700 transition font-medium flex items-center justify-center gap-2 shadow-sm hover:shadow-sm transform hover:-translate-y-0.5 transition-all duration-200"
                         >
                             <span wire:loading.remove wire:target="login">
                                 <i class="fas fa-sign-in-alt"></i>
@@ -197,7 +197,7 @@ new #[Layout('components.layouts.employee')] class extends Component
             </div>
             
             <!-- Footer -->
-            <div class="bg-gradient-to-r from-red-50 to-red-50 px-8 py-4 border-t border-red-100">
+            <div class="bg-red-50 px-8 py-4 border-t border-gray-200">
                 <div class="flex items-center justify-center">
                     <i class="fas fa-server text-red-600 mr-2"></i>
                     <p class="text-xs text-center text-red-800 font-medium">

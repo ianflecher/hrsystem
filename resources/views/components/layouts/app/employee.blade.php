@@ -249,6 +249,8 @@
             }
         }
     </style>
+
+    @include('partials.theme')
 </head>
 <body>
     {{-- The HR back office is not linked from anywhere public; it is reached

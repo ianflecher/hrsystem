@@ -217,7 +217,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
     @endif
 
     @if (session()->has('error'))
-    <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg" 
+    <div class="mb-6 p-4 bg-red-50 border border-gray-200 rounded-lg" 
          x-data="{ show: true }" 
          x-show="show" 
          x-transition

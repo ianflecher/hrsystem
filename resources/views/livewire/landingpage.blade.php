@@ -24,127 +24,214 @@ new #[Layout('components.layouts.landing')] class extends Component
             'icon'  => 'fas fa-briefcase',
         ],
     ];
+
+    /*
+     * The team photograph behind the hero. Optional on purpose: drop a file at
+     * public/hero-team.jpg and the hero uses it, otherwise the same layout
+     * renders on the flat navy below and nothing breaks.
+     */
+    public function heroImage(): ?string
+    {
+        return file_exists(public_path('hero-team.jpg'))
+            ? asset('hero-team.jpg')
+            : null;
+    }
 }; ?>
 
-<div class="hris-portals">
+<div class="hero" @if ($this->heroImage()) style="--hero-image: url('{{ $this->heroImage() }}')" @endif>
     <style>
-        .hris-portals {
-            --ink: #17202E;
-            --muted: #566172;
-            --surface: #ffffff;
-            --line: #E5E9F0;
-            --brand: #E31B23;
-            --brand-soft: #FDECEC;
+        .hero {
+            --ink-on-dark:   #ffffff;
+            --muted-on-dark: #A9B4C6;
+            --brand:         #E31B23;
+            --brand-hover:   #B5141A;
+            --navy:          #0C1626;
 
-            /* Fill the space under the header instead of stranding the cards
-               at the top of a tall empty page.
-               The layout already spends vertical room above us: main carries
-               pt-16 (64px) to clear the fixed header, and the Flux wrapper adds
-               p-6 (24px) -> lg:p-8 (32px) top and bottom. Subtracting exactly
-               that is what keeps the page from growing a scrollbar. */
-            min-height: calc(100vh - 112px);
+            position: relative;
+            isolation: isolate;
+            min-height: calc(100vh - 64px);
             display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding: 24px 0 40px;
+            align-items: center;
+            padding: 56px 0;
+            background: var(--navy);
+            overflow: hidden;
         }
 
-        @media (min-width: 1024px) {
-            .hris-portals { min-height: calc(100vh - 128px); }
+        /* The photograph, and a scrim over it. Text sits on the left, so the
+           scrim is heaviest there and thins out across the image rather than
+           greying the whole picture down uniformly. */
+        .hero::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -2;
+            background-image: var(--hero-image, none);
+            background-size: cover;
+            background-position: center right;
         }
 
-        .hris-portals__head { text-align: center; margin-bottom: 40px; }
+        .hero::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            background:
+                linear-gradient(100deg,
+                    rgba(12, 22, 38, .97) 0%,
+                    rgba(12, 22, 38, .93) 34%,
+                    rgba(12, 22, 38, .70) 56%,
+                    rgba(12, 22, 38, .45) 100%);
+        }
 
-        .hris-portals__title {
-            color: var(--ink);
-            font-size: clamp(1.75rem, 4vw, 2.5rem);
+        @media (max-width: 900px) {
+            /* Narrow screens put the text over the middle of the photo, where
+               a left-weighted scrim leaves it unreadable. */
+            .hero::after {
+                background: linear-gradient(180deg,
+                    rgba(12, 22, 38, .93) 0%,
+                    rgba(12, 22, 38, .88) 100%);
+            }
+        }
+
+        .hero__inner {
+            width: 100%;
+            max-width: 72rem;
+            margin: 0 auto;
+            padding: 0 32px;
+        }
+
+        .hero__copy { max-width: 34rem; }
+
+        .hero__eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .3125rem .75rem;
+            border-radius: 999px;
+            background: rgba(227, 27, 35, .16);
+            border: 1px solid rgba(227, 27, 35, .38);
+            color: #FCA5A9;
+            font-size: .75rem;
+            font-weight: 600;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+
+        .hero__title {
+            margin: 18px 0 12px;
+            color: var(--ink-on-dark);
+            font-family: var(--font-head, "Space Grotesk", system-ui, sans-serif);
+            font-size: clamp(2rem, 4.6vw, 3.25rem);
             font-weight: 700;
-            letter-spacing: -0.02em;
-            margin: 0 0 10px;
+            line-height: 1.08;
+            letter-spacing: -0.025em;
         }
 
-        .hris-portals__lede {
-            color: var(--muted);
-            font-size: 1rem;
+        .hero__lede {
             margin: 0;
+            color: var(--muted-on-dark);
+            font-size: 1.0625rem;
+            line-height: 1.6;
+            max-width: 30rem;
         }
 
-        /* Flex, not a fixed 3-column grid: the row stays centred whether there
-           are two portals or three. */
-        .hris-portals__grid {
+        .hero__portals {
             display: flex;
             flex-wrap: wrap;
-            justify-content: center;
-            gap: 24px;
-            width: 100%;
-            max-width: 56rem;
-            margin: 0 auto;
+            gap: 16px;
+            margin-top: 36px;
         }
 
-        .hris-portals__card {
-            flex: 1 1 18rem;
-            max-width: 22rem;
+        /* Glass panels rather than white cards: on a photograph a solid white
+           block reads as a hole punched through the image. */
+        .hero__card {
+            flex: 1 1 16rem;
+            max-width: 19rem;
             display: flex;
             flex-direction: column;
-            background: var(--surface);
-            border: 1px solid var(--line);
+            padding: 22px;
             border-radius: 14px;
-            padding: 28px;
+            background: rgba(255, 255, 255, .07);
+            border: 1px solid rgba(255, 255, 255, .16);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
             text-decoration: none;
-            transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+            transition: background-color .15s ease, border-color .15s ease, transform .15s ease;
         }
 
-        .hris-portals__card:hover {
-            border-color: var(--brand);
-            box-shadow: 0 10px 28px rgba(19, 30, 51, .10);
+        .hero__card:hover {
+            background: rgba(255, 255, 255, .12);
+            border-color: rgba(227, 27, 35, .65);
             transform: translateY(-2px);
         }
 
-        .hris-portals__icon {
-            width: 46px; height: 46px;
-            display: inline-flex; align-items: center; justify-content: center;
-            border-radius: 12px;
-            margin-bottom: 18px;
-            background: var(--brand-soft);
-            color: var(--brand);
-            font-size: 1.05rem;
+        .hero__icon {
+            width: 42px;
+            height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 11px;
+            margin-bottom: 16px;
+            background: var(--brand);
+            color: #fff;
+            font-size: .95rem;
         }
 
-        .hris-portals__name { color: var(--ink); font-size: 1.15rem; font-weight: 600; margin: 0; }
-        .hris-portals__desc { color: var(--muted); font-size: .9rem; line-height: 1.55; margin: 6px 0 0; flex: 1; }
-
-        .hris-portals__cta {
-            color: var(--brand);
-            font-size: .9rem;
+        .hero__name {
+            margin: 0;
+            color: var(--ink-on-dark);
+            font-size: 1.0625rem;
             font-weight: 600;
-            margin-top: 22px;
+        }
+
+        .hero__desc {
+            margin: 6px 0 0;
+            flex: 1;
+            color: var(--muted-on-dark);
+            font-size: .875rem;
+            line-height: 1.55;
+        }
+
+        .hero__cta {
             display: inline-flex;
             align-items: center;
             gap: 7px;
+            margin-top: 20px;
+            color: #fff;
+            font-size: .875rem;
+            font-weight: 600;
         }
 
-        .hris-portals__cta i { transition: transform .15s ease; }
-        .hris-portals__card:hover .hris-portals__cta i { transform: translateX(3px); }
+        .hero__cta i { transition: transform .15s ease; }
+        .hero__card:hover .hero__cta i { transform: translateX(3px); }
 
         @media (max-width: 640px) {
-            .hris-portals { padding: 16px 0 32px; min-height: 0; }
-            .hris-portals__card { flex: 1 1 100%; max-width: none; }
+            .hero { min-height: 0; padding: 40px 0; }
+            .hero__inner { padding: 0 20px; }
+            .hero__card { flex: 1 1 100%; max-width: none; }
         }
     </style>
 
-    <div class="hris-portals__head">
-        <h1 class="hris-portals__title">Human Resource Information System</h1>
-        <p class="hris-portals__lede">Choose the portal that matches your role to sign in.</p>
-    </div>
+    <div class="hero__inner">
+        <div class="hero__copy">
+            <span class="hero__eyebrow">Imprint Customs PH</span>
+            <h1 class="hero__title">Human Resource Information System</h1>
+            <p class="hero__lede">
+                Attendance, payslips, leave and hiring &mdash; in one place for
+                the whole team.
+            </p>
+        </div>
 
-    <div class="hris-portals__grid">
-        @foreach ($portals as $portal)
-            <a href="{{ route($portal['route']) }}" class="hris-portals__card">
-                <span class="hris-portals__icon"><i class="{{ $portal['icon'] }}"></i></span>
-                <h2 class="hris-portals__name">{{ $portal['name'] }}</h2>
-                <p class="hris-portals__desc">{{ $portal['desc'] }}</p>
-                <span class="hris-portals__cta">Sign in <i class="fas fa-arrow-right"></i></span>
-            </a>
-        @endforeach
+        <div class="hero__portals">
+            @foreach ($portals as $portal)
+                <a href="{{ route($portal['route']) }}" class="hero__card">
+                    <span class="hero__icon"><i class="{{ $portal['icon'] }}"></i></span>
+                    <h2 class="hero__name">{{ $portal['name'] }}</h2>
+                    <p class="hero__desc">{{ $portal['desc'] }}</p>
+                    <span class="hero__cta">Sign in <i class="fas fa-arrow-right"></i></span>
+                </a>
+            @endforeach
+        </div>
     </div>
 </div>

@@ -111,7 +111,7 @@ new #[Layout('components.layouts.employee')] class extends Component
 }
 ?>
 
-<div class="min-h-screen bg-gradient-to-br from-green-50 to-amber-50 py-12 px-4 sm:px-6 lg:px-8">
+<div class="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-7xl mx-auto">
         <!-- Hero Section -->
         <div class="text-center mb-12">
@@ -127,7 +127,7 @@ new #[Layout('components.layouts.employee')] class extends Component
             <!-- Left Column: Info Cards -->
             <div class="space-y-6">
                 <!-- Current Openings -->
-                <div class="bg-white rounded-2xl shadow-lg p-6">
+                <div class="bg-white rounded-xl shadow-sm p-6">
                     <h2 class="text-2xl font-bold text-gray-900 mb-4">Current Openings</h2>
                     <div class="space-y-4">
                         @php
@@ -157,7 +157,7 @@ new #[Layout('components.layouts.employee')] class extends Component
                 </div>
 
                 <!-- Benefits -->
-                <div class="bg-white rounded-2xl shadow-lg p-6">
+                <div class="bg-white rounded-xl shadow-sm p-6">
                     <h2 class="text-2xl font-bold text-gray-900 mb-4">Why Join Imprint Customs?</h2>
                     <div class="grid grid-cols-2 gap-4">
                         @php
@@ -181,7 +181,7 @@ new #[Layout('components.layouts.employee')] class extends Component
             </div>
 
             <!-- Right Column: Auth Form -->
-            <div class="bg-white rounded-2xl shadow-xl p-8">
+            <div class="bg-white rounded-xl shadow-sm p-8">
                 <!-- Form Toggle -->
                 <div class="flex mb-8">
                     <button wire:click="toggleForm" 

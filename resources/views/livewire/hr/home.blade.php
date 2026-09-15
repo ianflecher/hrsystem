@@ -448,7 +448,7 @@ class extends Component
     </div>
 
     <!-- Filters Section -->
-    <div class="mb-6 bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
+    <div class="mb-6 bg-white rounded-xl shadow-sm p-6 border border-gray-200">
         <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex flex-wrap gap-6">
                 <div>
@@ -518,7 +518,7 @@ class extends Component
             </div>
             
             <div class="flex items-center space-x-2">
-                <button wire:click="$refresh" class="px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors shadow-md hover:shadow-lg font-medium">
+                <button wire:click="$refresh" class="px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors shadow-md hover:shadow-sm font-medium">
                     <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
@@ -531,11 +531,11 @@ class extends Component
         <!-- Key Metrics - FIXED READABILITY -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
     <!-- Total Employees -->
-    <div class="bg-white border border-red-200 rounded-2xl shadow-xl p-6 text-gray-900 transform hover:scale-[1.02] transition-transform duration-300">
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 text-gray-900 transition-transform duration-300">
         <div class="flex items-center justify-between">
             <div>
                 <p class="text-gray-600 mb-1 font-medium">Total Employees</p>
-                <p class="text-4xl font-bold text-red-700">{{ $totalEmployees }}</p>
+                <p class="text-4xl font-bold text-gray-900">{{ $totalEmployees }}</p>
                 <div class="flex items-center mt-3">
                     <svg class="w-4 h-4 mr-2 text-red-600" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l4.293-4.293a1 1 0 011.414 0z" clip-rule="evenodd" />
@@ -543,7 +543,7 @@ class extends Component
                     <span class="text-sm text-gray-600">+12% from last month</span>
                 </div>
             </div>
-            <div class="p-3 rounded-full bg-red-100">
+            <div class="p-3 rounded-full bg-red-50">
                 <svg class="w-8 h-8 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -552,11 +552,11 @@ class extends Component
     </div>
 
     <!-- Active Employees -->
-    <div class="bg-white border border-teal-200 rounded-2xl shadow-xl p-6 text-gray-900 transform hover:scale-[1.02] transition-transform duration-300">
+    <div class="bg-white border border-teal-200 rounded-xl shadow-sm p-6 text-gray-900 transition-transform duration-300">
         <div class="flex items-center justify-between">
             <div>
                 <p class="text-gray-600 mb-1 font-medium">Active Employees</p>
-                <p class="text-4xl font-bold text-teal-700">{{ $activeEmployees }}</p>
+                <p class="text-4xl font-bold text-gray-900">{{ $activeEmployees }}</p>
                 <div class="flex items-center mt-3">
                     <div class="w-full bg-gray-200 rounded-full h-2">
                         <div class="bg-teal-700 h-2 rounded-full" style="width: {{ $totalEmployees > 0 ? ($activeEmployees / $totalEmployees * 100) : 0 }}%"></div>
@@ -564,8 +564,8 @@ class extends Component
                     <span class="text-sm text-gray-600 font-medium ml-3">{{ $totalEmployees > 0 ? round($activeEmployees / $totalEmployees * 100, 1) : 0 }}%</span>
                 </div>
             </div>
-            <div class="p-3 rounded-full bg-teal-100">
-                <svg class="w-8 h-8 text-teal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="p-3 rounded-full bg-red-50">
+                <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
             </div>
@@ -573,11 +573,11 @@ class extends Component
     </div>
 
     <!-- Job Applications -->
-    <div class="bg-white border border-blue-200 rounded-2xl shadow-xl p-6 text-gray-900 transform hover:scale-[1.02] transition-transform duration-300">
+    <div class="bg-white border border-blue-200 rounded-xl shadow-sm p-6 text-gray-900 transition-transform duration-300">
         <div class="flex items-center justify-between">
             <div>
                 <p class="text-gray-600 mb-1 font-medium">Job Applications</p>
-                <p class="text-4xl font-bold text-blue-700">{{ $applicationStats['total'] }}</p>
+                <p class="text-4xl font-bold text-gray-900">{{ $applicationStats['total'] }}</p>
                 <div class="flex items-center mt-3">
                     <svg class="w-4 h-4 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" />
@@ -585,8 +585,8 @@ class extends Component
                     <span class="text-sm text-gray-600">{{ $applicationStats['pending'] }} pending review</span>
                 </div>
             </div>
-            <div class="p-3 rounded-full bg-blue-100">
-                <svg class="w-8 h-8 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="p-3 rounded-full bg-red-50">
+                <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
             </div>
@@ -594,11 +594,11 @@ class extends Component
     </div>
 
     <!-- Hiring Success Rate -->
-    <div class="bg-white border border-green-200 rounded-2xl shadow-xl p-6 text-gray-900 transform hover:scale-[1.02] transition-transform duration-300">
+    <div class="bg-white border border-green-200 rounded-xl shadow-sm p-6 text-gray-900 transition-transform duration-300">
         <div class="flex items-center justify-between">
             <div>
                 <p class="text-gray-600 mb-1 font-medium">Hiring Success</p>
-                <p class="text-4xl font-bold text-green-700">
+                <p class="text-4xl font-bold text-gray-900">
                     @if($applicationStats['total'] > 0)
                         {{ number_format(($applicationStats['hired'] / $applicationStats['total']) * 100, 1) }}%
                     @else
@@ -612,8 +612,8 @@ class extends Component
                     <span class="text-sm text-gray-600">{{ $applicationStats['hired'] }} hired this month</span>
                 </div>
             </div>
-            <div class="p-3 rounded-full bg-green-100">
-                <svg class="w-8 h-8 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="p-3 rounded-full bg-red-50">
+                <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
             </div>
@@ -622,8 +622,8 @@ class extends Component
 </div>
 
 <!-- Quick Actions Box -->
-<div class="mb-8 bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-    <div class="p-6 border-b border-red-200 bg-red-50">
+<div class="mb-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="p-6 border-b border-gray-200 bg-gray-50">
         <div class="flex items-center">
             <div class="p-2 bg-red-100 rounded-lg mr-3">
                 <svg class="w-6 h-6 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -640,9 +640,9 @@ class extends Component
         <div class="grid grid-cols-2 md:grid-cols-5 gap-6">
             <!-- Attendance Summary -->
             <a href="{{ route('hr.attendance') }}" class="group">
-                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-red-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div class="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md">
-                        <svg class="w-8 h-8 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-red-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-red-50 rounded-xl flex items-center justify-center transition-transform duration-300">
+                        <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
@@ -656,9 +656,9 @@ class extends Component
 
             <!-- Applications -->
             <a href="{{ route('hr.applications') }}" class="group">
-                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-blue-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div class="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md">
-                        <svg class="w-8 h-8 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-blue-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-red-50 rounded-xl flex items-center justify-center transition-transform duration-300">
+                        <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                     </div>
@@ -672,9 +672,9 @@ class extends Component
 
             <!-- Process Payroll -->
             <a href="{{ route('hr.payroll') }}" class="group">
-                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-teal-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div class="w-16 h-16 mx-auto mb-4 bg-teal-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md">
-                        <svg class="w-8 h-8 text-teal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-teal-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-red-50 rounded-xl flex items-center justify-center transition-transform duration-300">
+                        <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
@@ -688,9 +688,9 @@ class extends Component
 
             <!-- Manage Leave -->
             <a href="{{ route('hr.leave') }}" class="group">
-                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-purple-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div class="w-16 h-16 mx-auto mb-4 bg-purple-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md">
-                        <svg class="w-8 h-8 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-purple-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-red-50 rounded-xl flex items-center justify-center transition-transform duration-300">
+                        <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
@@ -713,8 +713,8 @@ class extends Component
         <!-- Left Column -->
         <div class="lg:col-span-2 space-y-8">
             <!-- Recruitment Overview -->
-            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-green-600 bg-gradient-to-r from-green-600 to-green-600">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-6 border-b border-green-600 bg-red-600">
                     <div class="flex justify-between items-center">
                         <h2 class="text-xl font-bold text-white">📊 Recruitment Overview</h2>
                         <div class="flex space-x-2">
@@ -759,8 +759,8 @@ class extends Component
             </div>
 
             <!-- Recent Applications -->
-            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-red-600 bg-gradient-to-r from-red-600 to-red-600">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-6 border-b border-red-600 bg-red-600">
                     <div class="flex justify-between items-center">
                         <h2 class="text-xl font-bold text-white">📝 Recent Job Applications</h2>
                         <a href="#" class="text-white hover:text-red-100 text-sm font-medium flex items-center">
@@ -789,7 +789,7 @@ class extends Component
                                     <tr class="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                                         <td class="py-4 px-6">
                                             <div class="flex items-center">
-                                                <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mr-3 border border-red-200">
+                                                <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mr-3 border border-gray-200">
                                                     <span class="text-red-900 font-bold">
                                                         {{ substr($application->full_name, 0, 2) }}
                                                     </span>
@@ -804,7 +804,7 @@ class extends Component
                                             <span class="font-bold text-gray-900">{{ $application->position_applied }}</span>
                                         </td>
                                         <td class="py-4 px-6">
-                                            <span class="px-3 py-1 bg-red-100 text-red-900 rounded-full text-sm font-medium border border-red-200">
+                                            <span class="px-3 py-1 bg-red-100 text-red-900 rounded-full text-sm font-medium border border-gray-200">
                                                 {{ $application->years_experience }}
                                             </span>
                                         </td>
@@ -830,7 +830,7 @@ class extends Component
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                                                     </svg>
                                                 </button>
-                                                <div class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-300 hidden group-hover:block z-10">
+                                                <div class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-sm border border-gray-300 hidden group-hover:block z-10">
                                                     <div class="py-1">
                                                         <button wire:click="updateApplicationStatus('{{ $application->application_id }}', 'reviewed')" class="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 text-blue-900 font-medium flex items-center">
                                                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -884,14 +884,14 @@ class extends Component
         <!-- Right Column -->
         <div class="space-y-8">
             <!-- Popular Positions -->
-            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-red-600 bg-gradient-to-r from-red-600 to-red-600">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-6 border-b border-red-600 bg-red-600">
                     <h2 class="text-xl font-bold text-white">🎯 Popular Positions</h2>
                 </div>
                 <div class="p-6">
                     <div class="space-y-4">
                         @forelse($positionStats as $position)
-                            <div class="p-4 bg-red-50 rounded-xl hover:bg-red-100 transition-colors border border-red-200">
+                            <div class="p-4 bg-red-50 rounded-xl hover:bg-red-100 transition-colors border border-gray-200">
                                 <div class="flex justify-between items-start mb-3">
                                     <h3 class="font-bold text-gray-900">{{ $position->position_applied }}</h3>
                                     <span class="px-3 py-1 bg-green-600 text-white text-xs rounded-full font-bold">
@@ -934,8 +934,8 @@ class extends Component
             </div>
 
             <!-- Status Distribution -->
-            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-red-600 bg-gradient-to-r from-red-600 to-red-600">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-6 border-b border-red-600 bg-red-600">
                     <h2 class="text-xl font-bold text-white">📈 Status Distribution</h2>
                 </div>
                 <div class="p-6">
@@ -973,7 +973,7 @@ class extends Component
             </div>
 
             <!-- Today's Attendance Summary - COMPLETELY FIXED -->
-            <div class="bg-gradient-to-br from-red-700 to-red-800 rounded-2xl shadow-xl p-6 border border-red-600">
+            <div class="bg-red-800 rounded-xl shadow-sm p-6 border border-red-600">
     <div class="flex items-center mb-6">
         <div class="p-2 bg-red-500 rounded-lg mr-3">
             <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

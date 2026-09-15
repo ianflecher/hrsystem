@@ -95,13 +95,13 @@ new #[Layout('components.layouts.employeeland')] class extends Component
 };
 ?>
 
-<div class="min-h-screen bg-gradient-to-br from-green-50 via-white to-teal-50 p-4 md:p-8">
+<div class="min-h-screen bg-gray-50 p-4 md:p-8">
     <div class="max-w-7xl mx-auto space-y-8">
         
         <!-- HEADER -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-                <h1 class="text-4xl font-bold bg-gradient-to-r from-red-700 to-teal-600 bg-clip-text text-transparent">
+                <h1 class="text-4xl font-bold bg-red-700 bg-clip-text text-transparent">
                     Leave Management
                 </h1>
                 <p class="text-gray-600 mt-2">Submit and track your leave requests</p>
@@ -119,14 +119,14 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             
             <!-- LEAVE REQUEST FORM -->
             <div class="lg:col-span-2">
-                <div class="bg-white rounded-3xl shadow-2xl border border-green-100 overflow-hidden">
-                    <div class="bg-gradient-to-r from-green-600 to-teal-500 p-8">
+                <div class="bg-white rounded-xl shadow-sm border border-green-100 overflow-hidden">
+                    <div class="bg-red-600 p-8">
                         <h2 class="text-2xl font-bold text-white">New Leave Request</h2>
                         <p class="text-green-500 font-bold mt-1">Fill out the form below to submit your leave application</p>
                     </div>
 
                     @if (session()->has('success'))
-                        <div class="mx-6 mt-6 p-4 rounded-xl bg-gradient-to-r from-green-50 to-teal-50 border border-green-200 shadow-sm animate-pulse-once">
+                        <div class="mx-6 mt-6 p-4 rounded-xl bg-gray-50 border border-green-200 shadow-sm animate-pulse-once">
                             <div class="flex items-center">
                                 <svg class="w-5 h-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
@@ -138,14 +138,14 @@ new #[Layout('components.layouts.employeeland')] class extends Component
 
                     <form wire:submit.prevent="submit" class="p-8 space-y-8">
                         <!-- Leave Type -->
-                        <div class="bg-gradient-to-br from-green-50 to-white border border-green-100 rounded-2xl p-6 shadow-sm">
+                        <div class="bg-gradient-to-br from-green-50 to-white border border-green-100 rounded-xl p-6 shadow-sm">
                             <label class="block mb-4">
                                 <div class="flex items-center mb-2">
                                     <div class="w-2 h-6 bg-red-500 rounded-full mr-3"></div>
                                     <span class="text-lg font-bold text-gray-800">Leave Type</span>
                                 </div>
                                 <select wire:model="leave_type"
-                                    class="w-full px-4 py-3 rounded-xl border-2 border-red-200 bg-white
+                                    class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white
                                            focus:border-red-500 focus:ring-2 focus:ring-red-200 transition duration-200 cursor-pointer">
                                     <option value="vacation">🏖️ Vacation</option>
                                     <option value="sick">🤒 Sick Leave</option>
@@ -161,7 +161,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         </div>
 
                         <!-- Dates -->
-                        <div class="bg-gradient-to-br from-red-50 to-white border border-red-100 rounded-2xl p-6 shadow-sm">
+                        <div class="bg-gradient-to-br from-red-50 to-white border border-gray-200 rounded-xl p-6 shadow-sm">
                             <div class="flex items-center mb-4">
                                 <div class="w-2 h-6 bg-red-500 rounded-full mr-3"></div>
                                 <span class="text-lg font-bold text-gray-800">Leave Period</span>
@@ -170,18 +170,18 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                 <div>
                                     <label class="block text-sm font-semibold text-gray-700 mb-2">Start Date</label>
                                     <input type="date" wire:model="start_date" onclick="this.showPicker()"
-                                        class="w-full px-4 py-3 rounded-xl border-2 border-red-200 
+                                        class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
                                                focus:border-red-500 focus:ring-2 focus:ring-red-200 cursor-pointer bg-white">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-semibold text-gray-700 mb-2">End Date</label>
                                     <input type="date" wire:model="end_date" onclick="this.showPicker()"
-                                        class="w-full px-4 py-3 rounded-xl border-2 border-red-200 
+                                        class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
                                                focus:border-red-500 focus:ring-2 focus:ring-red-200 cursor-pointer bg-white">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-semibold text-gray-700 mb-2">Total Days</label>
-                                    <div class="flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-red-50 to-teal-50 border-2 border-red-200">
+                                    <div class="flex items-center justify-between px-4 py-3 rounded-xl bg-gray-50 border-2 border-gray-200">
                                         <span class="text-2xl font-bold text-red-700">{{ $total_days }}</span>
                                         <span class="text-sm text-red-600 font-medium">days</span>
                                     </div>
@@ -190,14 +190,14 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         </div>
 
                         <!-- Reason -->
-                        <div class="bg-gradient-to-br from-red-50 to-white border border-red-100 rounded-2xl p-6 shadow-sm">
+                        <div class="bg-gradient-to-br from-red-50 to-white border border-gray-200 rounded-xl p-6 shadow-sm">
                             <label class="block">
                                 <div class="flex items-center mb-4">
                                     <div class="w-2 h-6 bg-red-500 rounded-full mr-3"></div>
                                     <span class="text-lg font-bold text-gray-800">Reason for Leave</span>
                                 </div>
                                 <textarea wire:model="reason" rows="4" placeholder="Please provide details about your leave..."
-                                    class="w-full px-4 py-3 rounded-xl border-2 border-red-200 bg-white
+                                    class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white
                                            focus:border-red-500 focus:ring-2 focus:ring-red-200 transition duration-200 resize-none"></textarea>
                                 <div class="flex justify-between mt-2 text-sm text-gray-500">
                                     <span>Minimum 5 characters required</span>
@@ -207,10 +207,10 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         </div>
 
                         <!-- Submit Button -->
-                        <div class="pt-6 border-t border-red-100">
+                        <div class="pt-6 border-t border-gray-200">
                             <button type="submit"
     class="w-full py-4 px-6 rounded-xl bg-red-600
-           text-white font-bold text-lg shadow-md hover:shadow-lg
+           text-white font-bold text-lg shadow-md hover:shadow-sm
            hover:bg-red-700
            flex items-center justify-center gap-2
            transition-all duration-200">
@@ -228,7 +228,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             <!-- QUICK STATS & GUIDELINES -->
             <div class="space-y-6">
                 <!-- Stats -->
-                <div class="bg-white rounded-3xl shadow-xl border border-red-100 p-6">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h3 class="text-xl font-bold text-gray-800 mb-4">Leave Overview</h3>
                     <div class="space-y-4">
                         <div class="flex items-center justify-between p-3 rounded-xl bg-red-50">
@@ -262,7 +262,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                 </div>
 
                 <!-- Guidelines -->
-                <div class="bg-gradient-to-br from-red-50 to-teal-50 rounded-3xl border border-red-200 p-6">
+                <div class="bg-gray-50 rounded-xl border border-gray-200 p-6">
                     <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
                         <svg class="w-5 h-5 mr-2 text-red-600" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
@@ -288,17 +288,17 @@ new #[Layout('components.layouts.employeeland')] class extends Component
         </div>
 
         <!-- LEAVE HISTORY TABLE -->
-        <div class="bg-white rounded-3xl shadow-2xl border border-red-100 overflow-hidden">
-            <div class="bg-gradient-to-r from-red-600 to-teal-500 p-8">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="bg-red-600 p-8">
                 <h2 class="text-2xl font-bold text-white">Leave History</h2>
                 <p class="text-emerald-500 mt-1">Track all your leave requests and their status</p>
             </div>
 
             <div class="p-6">
                 @if($this->leaves->isNotEmpty())
-                    <div class="overflow-x-auto rounded-xl border border-red-100">
+                    <div class="overflow-x-auto rounded-xl border border-gray-200">
                         <table class="min-w-full divide-y divide-red-100">
-                            <thead class="bg-gradient-to-r from-red-50 to-teal-50">
+                            <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-6 py-4 text-left text-sm font-bold text-red-800 uppercase tracking-wider">Type</th>
                                     <th class="px-6 py-4 text-left text-sm font-bold text-red-800 uppercase tracking-wider">Period</th>

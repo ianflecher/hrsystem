@@ -549,6 +549,8 @@
             }
         }
     </style>
+
+    @include('partials.theme')
 </head>
 <body class="bg-gray-50">
 

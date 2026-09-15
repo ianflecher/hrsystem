@@ -573,6 +573,8 @@
             });
         });
     </script>
+
+    @include('partials.theme')
 </head>
 <body>
 

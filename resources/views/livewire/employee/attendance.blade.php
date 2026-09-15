@@ -315,7 +315,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
     </div>
     
     <!-- Today's Status Card -->
-    <div class="bg-white rounded-xl shadow-lg p-6 mb-8 border border-red-100">
+    <div class="bg-white rounded-xl shadow-sm p-6 mb-8 border border-gray-200">
         <div class="flex items-center justify-between mb-4">
             <h2 class="text-xl font-bold text-emerald-800">Today's Status</h2>
             <div class="flex items-center space-x-2">
@@ -334,7 +334,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
         
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <!-- Time In -->
-            <div class="bg-red-50 rounded-lg p-5 border border-red-200">
+            <div class="bg-red-50 rounded-lg p-5 border border-gray-200">
                 <div class="flex items-center mb-3">
                     <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
                         <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -365,7 +365,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             </div>
             
             <!-- Time Out -->
-            <div class="bg-red-50 rounded-lg p-5 border border-red-200">
+            <div class="bg-red-50 rounded-lg p-5 border border-gray-200">
                 <div class="flex items-center mb-3">
                     <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
                         <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -398,7 +398,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             </div>
             
             <!-- Status & Hours -->
-            <div class="bg-red-50 rounded-lg p-5 border border-red-200">
+            <div class="bg-red-50 rounded-lg p-5 border border-gray-200">
                 <div class="flex items-center mb-3">
                     <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
                         <svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
@@ -435,7 +435,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                 
                 <!-- Clock System Status -->
                 @if($isClockedIn)
-                    <div class="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                    <div class="mt-4 p-3 bg-red-50 rounded-lg border border-gray-200">
                         <p class="text-sm text-red-700 font-medium">✓ Clocked In via System</p>
                         <p class="text-xs text-red-600">
                             @if($clockStatus['last_clock_in'])
@@ -472,12 +472,12 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
         <!-- Left Column - Monthly Summary -->
         <div class="lg:col-span-2">
             <!-- Monthly Statistics -->
-            <div class="bg-white rounded-xl shadow-lg p-6 border border-green-100 mb-8">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-green-100 mb-8">
                 <h2 class="text-xl font-bold text-green-800 mb-6">Monthly Overview - {{ $currentMonth }}</h2>
                 
                 @if($monthlySummary)
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div class="bg-red-50 rounded-lg p-5 text-center border border-red-200">
+                        <div class="bg-red-50 rounded-lg p-5 text-center border border-gray-200">
                             <div class="text-3xl font-bold text-emerald-700 mb-2">{{ $monthlySummary->present_days ?? 0 }}</div>
                             <p class="text-emerald-600 text-sm">Present Days</p>
                         </div>
@@ -492,14 +492,14 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                             <p class="text-blue-600 text-sm">Leave Days</p>
                         </div>
                         
-                        <div class="bg-red-50 rounded-lg p-5 text-center border border-red-200">
+                        <div class="bg-red-50 rounded-lg p-5 text-center border border-gray-200">
                             <div class="text-3xl font-bold text-red-700 mb-2">{{ $monthlySummary->absent_days ?? 0 }}</div>
                             <p class="text-red-600 text-sm">Absent Days</p>
                         </div>
                     </div>
                     
                     <!-- Monthly Total -->
-                    <div class="mt-6 p-5 bg-gradient-to-r from-red-500 to-red-600 rounded-lg text-white">
+                    <div class="mt-6 p-5 bg-red-600 rounded-lg text-white">
                         <div class="flex justify-between items-center">
                             <div>
                                 <p class="text-sm opacity-90">Total Working Days This Month</p>
@@ -523,7 +523,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             </div>
             
             <!-- Recent Attendance -->
-            <div class="bg-white rounded-xl shadow-lg p-6 border border-red-100">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
                 <h2 class="text-xl font-bold text-red-800 mb-6">Recent Attendance</h2>
                 
                 @if(count($attendanceHistory) > 0)
@@ -531,7 +531,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                         @foreach(array_slice($attendanceHistory, 0, 7) as $record)
                             <div class="flex items-center justify-between p-4 bg-red-50 rounded-lg hover:bg-red-100 transition">
                                 <div class="flex items-center">
-                                    <div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center mr-4 border border-red-200">
+                                    <div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center mr-4 border border-gray-200">
                                         <span class="text-red-700 font-bold">{{ \Carbon\Carbon::parse($record->date)->format('d') }}</span>
                                     </div>
                                     <div>
@@ -595,7 +595,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
         <!-- Right Column - Employee Info & Legend -->
         <div class="space-y-8">
             <!-- Employee Info Card -->
-            <div class="bg-white rounded-xl shadow-lg p-6 border border-red-100">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
                 <h2 class="text-xl font-bold text-red-800 mb-4">Employee Information</h2>
                 
                 <div class="space-y-4">
@@ -633,7 +633,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             </div>
             
             <!-- Status Legend -->
-            <div class="bg-white rounded-xl shadow-lg p-6 border border-red-100">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
                 <h2 class="text-xl font-bold text-emerald-800 mb-4">Status Guide</h2>
                 
                 <div class="space-y-3">
@@ -688,7 +688,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             </div>
             
             <!-- Quick Stats -->
-            <div class="bg-white rounded-xl shadow-lg p-6 border border-red-100">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
                 <h2 class="text-xl font-bold text-red-800 mb-4">Quick Stats</h2>
                 
                 <div class="space-y-4">
@@ -740,21 +740,21 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
     <!-- Flash Messages -->
     @if(session()->has('success'))
         <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)" 
-             class="fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
+             class="fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-sm z-50">
             {{ session('success') }}
         </div>
     @endif
     
     @if(session()->has('error'))
         <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)" 
-             class="fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
+             class="fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-sm z-50">
             {{ session('error') }}
         </div>
     @endif
     
     @if(session()->has('info'))
         <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)" 
-             class="fixed bottom-4 right-4 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
+             class="fixed bottom-4 right-4 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-sm z-50">
             {{ session('info') }}
         </div>
     @endif
