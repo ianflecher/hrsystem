@@ -45,24 +45,6 @@ return new class extends Migration
             $t->timestamps();
             $t->unique(['employee_id', 'work_date']);
         });
-        Schema::create('announcements', function (Blueprint $t) {
-            $t->id();
-            $t->string('title', 150);
-            $t->text('body');
-            $t->foreignId('department_id')->nullable()->constrained('departments', 'department_id')->nullOnDelete();
-            $t->dateTime('published_at');
-            $t->dateTime('expires_at')->nullable();
-            $t->boolean('archived')->default(false);
-            $t->foreignId('created_by')->nullable()->constrained('users', 'user_id')->nullOnDelete();
-            $t->timestamps();
-        });
-        Schema::create('announcement_reads', function (Blueprint $t) {
-            $t->id();
-            $t->foreignId('announcement_id')->constrained()->cascadeOnDelete();
-            $t->foreignId('user_id')->constrained('users', 'user_id')->cascadeOnDelete();
-            $t->timestamp('acknowledged_at');
-            $t->unique(['announcement_id', 'user_id']);
-        });
         Schema::create('employee_checklists', function (Blueprint $t) {
             $t->id();
             $t->foreignId('employee_id')->constrained('employees', 'employee_id')->cascadeOnDelete();
@@ -134,7 +116,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('hr_payroll', fn (Blueprint $t) => $t->dropColumn(['overtime_pay', 'loan_deduction']));
-        foreach (['loan_installments', 'employee_loans', 'performance_goals', 'performance_reviews', 'checklist_items', 'employee_checklists', 'announcement_reads', 'announcements', 'shift_assignments', 'overtime_requests', 'employee_documents'] as $table) {
+        foreach (['loan_installments', 'employee_loans', 'performance_goals', 'performance_reviews', 'checklist_items', 'employee_checklists', 'shift_assignments', 'overtime_requests', 'employee_documents'] as $table) {
             Schema::dropIfExists($table);
         }
     }
