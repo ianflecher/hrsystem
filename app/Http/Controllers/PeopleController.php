@@ -18,6 +18,12 @@ class PeopleController extends Controller
         'reviews' => 'Performance reviews', 'loans' => 'Loans & cash advances',
     ];
 
+    /** Employment statuses that mean the person is on their way out. */
+    public const LEAVING = ['terminated', 'inactive'];
+
+    /** How long after a hire date somebody still counts as a new starter. */
+    public const ONBOARDING_WINDOW_DAYS = 30;
+
     private function context(Request $request): array
     {
         $hr = $request->is('hr/*');
@@ -69,9 +75,42 @@ class PeopleController extends Controller
             $query->whereBetween('r.work_date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()]);
             $extra['calendar'] = (clone $query)->orderBy('u.full_name')->get()->groupBy('work_date');
         }
-        $rows = $query ? $query->orderByDesc('r.id')->paginate(20)->withQueryString() : null;
+        // Onboarding and offboarding is a roster, not a queue: HR is looking at
+        // people, so everybody is listed - including whoever has no checklist
+        // yet, who are precisely the ones worth noticing.
+        $order = ['r.id', 'desc'];
+        if ($module === 'checklists' && $hr) {
+            $query = DB::table('employees as r')->join('users as u', 'u.user_id', '=', 'r.user_id')
+                ->select('r.employee_id', 'r.job_title', 'r.status', 'r.hire_date', 'u.full_name');
+            $order = ['u.full_name', 'asc'];
+
+            if ($request->filled('search')) {
+                $query->where('u.full_name', 'like', '%'.$request->input('search').'%');
+            } elseif (! $request->boolean('all')) {
+                // Only the people this screen is actually about: someone still
+                // being onboarded or cleared, a recent hire nobody has started,
+                // and anyone who has left without being cleared. Settled staff
+                // are not a to-do list, so they are behind "Show everyone".
+                $query->where(function ($q) {
+                    $q->whereExists(fn ($c) => $c->from('employee_checklists as c')
+                        ->whereColumn('c.employee_id', 'r.employee_id')->whereNull('c.completed_at'))
+                      ->orWhere(fn ($q2) => $q2->whereIn('r.status', self::LEAVING)
+                          ->whereNotExists(fn ($c) => $c->from('employee_checklists as c')
+                              ->whereColumn('c.employee_id', 'r.employee_id')->where('c.type', 'offboarding')))
+                      ->orWhere(fn ($q2) => $q2->whereNotIn('r.status', self::LEAVING)
+                          ->where('r.hire_date', '>=', today()->subDays(self::ONBOARDING_WINDOW_DAYS)->toDateString())
+                          ->whereNotExists(fn ($c) => $c->from('employee_checklists as c')
+                              ->whereColumn('c.employee_id', 'r.employee_id')->where('c.type', 'onboarding')));
+                });
+            }
+        }
+        $rows = $query ? $query->orderBy($order[0], $order[1])->paginate(20)->withQueryString() : null;
         if ($module === 'checklists') {
-            $extra['items'] = DB::table('checklist_items')->whereIn('checklist_id', $rows->pluck('id'))->orderBy('id')->get()->groupBy('checklist_id');
+            $lists = $hr
+                ? DB::table('employee_checklists')->whereIn('employee_id', $rows->pluck('employee_id'))->orderByDesc('id')->get()
+                : collect($rows->items());
+            $extra['checklists'] = $lists->groupBy('employee_id');
+            $extra['items'] = DB::table('checklist_items')->whereIn('checklist_id', $lists->pluck('id'))->orderBy('id')->get()->groupBy('checklist_id');
         }
         if ($module === 'reviews') {
             $extra['goals'] = DB::table('performance_goals')->whereIn('review_id', $rows->pluck('id'))->get()->groupBy('review_id');
@@ -89,8 +128,8 @@ class PeopleController extends Controller
         abort_unless(isset(self::MODULES[$module]), 404);
         if (! in_array($module, ['overtime', 'loans'], true)) PeopleAccess::hr();
         // Loans are requested from the employee portal only - see the view.
-        abort_if($hr && $module === 'loans', 403, 'Loans are requested by the employee.');
-        if (in_array($module, ['documents', 'overtime', 'shifts', 'checklists', 'reviews'], true) && $hr) {
+        abort_if($hr && in_array($module, ['loans', 'overtime'], true), 403, 'This is requested by the employee.');
+        if (in_array($module, ['documents', 'shifts', 'checklists', 'reviews'], true) && $hr) {
             $request->validate(['employee_id' => 'required|integer|exists:employees,employee_id']);
             $employeeId = (int) $request->input('employee_id');
         }

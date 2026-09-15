@@ -111,6 +111,34 @@ class PeopleFeaturesTest extends TestCase
         $this->actingAs($this->other)->get('/employee/people/shifts?month=2018-01')->assertDontSee('Evening');
     }
 
+    public function test_the_checklist_screen_lists_the_people_who_need_one(): void
+    {
+        // Hired in 2018 and still here: settled, so not on the list by default.
+        $this->actingAs($this->hr)->get('/hr/people/checklists')->assertOk()->assertDontSee($this->staff->full_name);
+        $this->get('/hr/people/checklists?all=1')->assertOk()->assertSee($this->staff->full_name);
+
+        // A new starter appears without anybody having to start anything...
+        DB::table('employees')->where('employee_id', $this->employeeId)->update(['hire_date' => today()->subDays(3)->toDateString()]);
+        $this->get('/hr/people/checklists')->assertOk()->assertSee($this->staff->full_name)->assertSee("No onboarding checklist");
+
+        // ...and stays while the checklist is open, whatever their hire date.
+        $this->post('/hr/people/checklists', ['employee_id' => $this->employeeId, 'type' => 'onboarding', 'due_on' => '2018-02-01'])->assertRedirect();
+        DB::table('employees')->where('employee_id', $this->employeeId)->update(['hire_date' => '2018-01-01']);
+        $this->get('/hr/people/checklists')->assertOk()->assertSee('Complete orientation');
+
+        // Once it is finished they drop off again.
+        foreach (DB::table('checklist_items')->where('checklist_id', DB::table('employee_checklists')->where('employee_id', $this->employeeId)->value('id'))->pluck('id') as $itemId) {
+            $id = DB::table('employee_checklists')->where('employee_id', $this->employeeId)->value('id');
+            $this->post('/hr/people/checklists/'.$id, ['action' => 'toggle', 'item_id' => $itemId])->assertRedirect();
+        }
+        $this->post('/hr/people/checklists/'.DB::table('employee_checklists')->where('employee_id', $this->employeeId)->value('id'), ['action' => 'complete'])->assertRedirect();
+        $this->get('/hr/people/checklists')->assertOk()->assertDontSee($this->staff->full_name);
+
+        // Somebody who has left needs clearing, so they come back.
+        DB::table('employees')->where('employee_id', $this->employeeId)->update(['status' => 'terminated']);
+        $this->get('/hr/people/checklists')->assertOk()->assertSee($this->staff->full_name)->assertSee('has left and has not been cleared');
+    }
+
     public function test_checklists_enforce_task_owner_and_completion_gate(): void
     {
         $this->actingAs($this->hr)->post('/hr/people/checklists', ['employee_id' => $this->employeeId, 'type' => 'offboarding', 'due_on' => '2018-02-01'])->assertRedirect();

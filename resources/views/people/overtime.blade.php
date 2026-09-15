@@ -1,11 +1,16 @@
+{{-- Requested from the employee portal only, like a loan: the hours are the
+     employee's claim about their own evening, and HR or the supervisor
+     decides. --}}
+@unless($hr)
 <details class="card" @if($errors->any()) open @endif><summary>Request overtime</summary>
 <form method="POST" action="{{ $base }}" class="grid divider">@csrf
-    @include('people.employee-select')
     <x-people.field name="starts_at" label="Starts at" type="datetime-local" />
     <x-people.field name="ends_at" label="Ends at" type="datetime-local" />
     <label class="people-field wide"><span>Reason / work performed</span><textarea name="reason" required minlength="5" maxlength="3000">{{ old('reason') }}</textarea></label>
     <div><button>Submit request</button></div>
 </form></details>
+@endunless
+
 <p class="muted">Approved amounts are included in the next generated eligible payslip. Existing payslips are not changed.</p>
 @forelse($rows as $row)
 <article class="card"><div class="row between"><h2>{{ $row->full_name }}</h2><span class="badge">{{ $row->status }}</span></div>
