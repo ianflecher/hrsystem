@@ -152,19 +152,23 @@ new #[Layout('components.layouts.landing')] class extends Component
             display: none;
             background-image: url("{{ asset('hero-staff.jpg') }}");
             background-size: cover;
-            background-position: center right;
+            /* Centred, not right-aligned: this frame has people across its
+               width and a right crop would cut the group in half. */
+            background-position: center;
         }
 
-        /* The photograph is lit dark on its left edge, so the caption sits
-           there and the scrim only has to deepen what is already dark. */
+        /* Bottom-weighted, because the caption sits along the bottom and the
+           faces are in the upper half. A side gradient would have dimmed the
+           people and left the type on a busy tabletop. */
         .auth-split__aside::after {
             content: "";
             position: absolute;
             inset: 0;
-            background: linear-gradient(80deg,
-                rgba(12, 22, 38, .90) 0%,
-                rgba(12, 22, 38, .55) 45%,
-                rgba(12, 22, 38, .20) 100%);
+            background: linear-gradient(to top,
+                rgba(12, 22, 38, .92) 0%,
+                rgba(12, 22, 38, .72) 22%,
+                rgba(12, 22, 38, .28) 48%,
+                rgba(12, 22, 38, .12) 100%);
         }
 
         .auth-split__caption {
