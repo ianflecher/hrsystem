@@ -610,7 +610,9 @@
         <div class="user-info">
             <div class="user-badge">
                 <span style="color: var(--dept-accent);">👤</span>
-                <span>{{ Auth::user()->full_name ?? 'Employee' }}</span>
+                <a href="{{ route('account.edit') }}" style="color: inherit; text-decoration: none;" title="My account">
+                    {{ Auth::user()->full_name ?? 'Employee' }}
+                </a>
                 <span class="employee-role">
                     EMPLOYEE
                 </span>

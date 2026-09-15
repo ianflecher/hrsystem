@@ -34,6 +34,9 @@ Route::middleware('auth')->group(function () {
     // before they can reach their own portal.
     Volt::route('/password/change', 'auth.change-password')->name('password.change');
 
+    // Every signed-in person, whichever portal they belong to.
+    Volt::route('/account', 'account')->name('account.edit');
+
     Volt::route('/admin/hr', 'hr.home')->name('hr.home');
     Volt::route('/hr/employees', 'hr.employees')->name('hr.employees');
     Volt::route('/hr/positions', 'hr.positions')->name('hr.positions');

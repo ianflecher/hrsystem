@@ -61,6 +61,16 @@ they meant something. Everything else is entered through the app.
 Both start with the password `imprint123`, matching Imprint Production.
 **Change them after the first sign-in.**
 
+## My account
+
+Every signed-in person has `/account`, reached from their name in the sidebar or
+header. They can set a profile picture, change their name and email, and change
+their password - and nothing else. Job title, department, salary and shift are
+HR's to set, so they appear there as read-only context rather than as fields.
+
+The page wears whichever chrome the person already knows: the HR sidebar for the
+back office, the staff header for everyone else.
+
 ## Employee accounts
 
 Staff accounts are created by HR at `/hr/employees`, not by the staff

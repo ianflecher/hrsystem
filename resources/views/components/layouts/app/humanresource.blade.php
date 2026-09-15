@@ -735,6 +735,22 @@
 
     .hr-sidebar__user i { color: var(--brand, #E31B23); }
 
+    .hr-sidebar__user {
+        text-decoration: none;
+        border-radius: 8px;
+        transition: background-color .12s ease;
+    }
+
+    .hr-sidebar__user:hover { background: rgba(255, 255, 255, .06); }
+
+    .hr-sidebar__avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex: none;
+    }
+
     .hr-sidebar__logout {
         width: 100%;
         display: inline-flex;
@@ -845,12 +861,17 @@
 
         <div class="hr-sidebar__foot">
             @auth
-                <div class="hr-sidebar__user">
-                    <i class="fas fa-user-tie"></i>
+                <a href="{{ route('account.edit') }}" class="hr-sidebar__user" title="My account">
+                    @if (Auth::user()->profile_photo_path)
+                        <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url(Auth::user()->profile_photo_path) }}"
+                             alt="" class="hr-sidebar__avatar">
+                    @else
+                        <i class="fas fa-user-tie"></i>
+                    @endif
                     {{-- The column is full_name; ->name was always null, so every
                          signed-in user showed the same fallback. --}}
                     <span>{{ Auth::user()->full_name ?? 'HR' }}</span>
-                </div>
+                </a>
                 <form method="POST" action="{{ route('admin.logout') }}">
                     @csrf
                     <button type="submit" class="hr-sidebar__logout">
