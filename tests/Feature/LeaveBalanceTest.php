@@ -57,6 +57,10 @@ class LeaveBalanceTest extends TestCase
 
     public function test_a_type_with_no_entitlement_set_is_not_limited(): void
     {
+        // Explicit rather than assumed: the table may already hold a policy,
+        // and this test is about what happens when it does not.
+        DB::table('leave_entitlements')->where('leave_type', 'vacation')->delete();
+
         $id = $this->leave('vacation', 30, 'pending');
         $leave = DB::table('leaves')->where('leave_id', $id)->first();
 

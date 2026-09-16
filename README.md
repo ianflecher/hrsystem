@@ -165,15 +165,35 @@ earned.
 
 ## Test data
 
-`php artisan demo:employees --count=100` fills the Employees screen with
-clearly-marked test people, for trying it at a realistic size. Deliberately a
-command rather than a seeder: invented records must never appear because
-somebody ran the normal setup.
+```bash
+php artisan demo:data --employees=50 --applicants=50
+```
 
-Every row is marked - usernames start with `demo-`, emails end in
-`@example.test`, a domain RFC 6761 reserves so it can never receive mail - and
-`php artisan demo:employees --purge` finds them by exactly that and removes
-them. Run it before going live.
+Fills every part of the system at a realistic size, so each screen can be tried
+against something: departments and job openings, employees with shifts and rest
+days and biometric IDs, 45 days of attendance with the usual lateness, undertime
+and absences, two holidays a quarter of the shop worked, leave at every status,
+overtime, loans part-way through repayment, documents including some expiring,
+half-finished onboarding checklists, performance reviews at each stage, two
+finished payroll cutoffs (one paid, one approved), payslip disputes waiting for
+an answer, and applicants at every stage of hiring.
+
+Deliberately a command rather than a seeder: invented records must never appear
+because somebody ran the normal setup. Running it twice adds nothing.
+
+Everything is marked. Accounts are `demo-NNNN` and `appl-NNNN` at
+`@example.test`, a domain RFC 6761 reserves so it can never receive mail;
+departments, openings and holidays carry a `(demo)` suffix. Demo employees and
+applicants sign in with the password `demo-password`.
+
+```bash
+php artisan demo:data --purge
+```
+
+finds them by exactly those markers and removes them along with everything
+attached. **Run it before going live.** Leave entitlements are the one thing it
+leaves behind - those are company policy rather than test data, and it only
+writes them when the table is empty.
 
 ## Job openings
 

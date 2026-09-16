@@ -449,7 +449,10 @@ class PeopleFeaturesTest extends TestCase
         $this->post('/hr/people/loans', ['employee_id' => $this->employeeId, 'type' => 'loan',
             'amount' => 5000, 'installment' => 500, 'starts_on' => '2018-01-01', 'reason' => 'On their behalf'])
             ->assertForbidden();
-        $this->assertDatabaseCount('employee_loans', 0);
+
+        // Scoped to this employee: a global count would depend on whatever else
+        // happens to be in the database, demo data included.
+        $this->assertSame(0, DB::table('employee_loans')->where('employee_id', $this->employeeId)->count());
     }
 
     public function test_loan_and_overtime_integrate_with_payroll_exactly_once(): void
