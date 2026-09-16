@@ -202,6 +202,29 @@ managed in the HR back office at `/hr/positions`. Posting, editing or closing a
 role there changes what applicants see straight away - no code edit, and the
 two lists cannot drift apart.
 
+## Statutory contributions
+
+SSS, PhilHealth and Pag-IBIG live in `config/statutory.php`, not in the payroll
+code, so they can be corrected without a developer:
+
+```php
+'philhealth' => ['premium_rate' => 0.05, 'employee_share' => 0.5, ...],
+```
+
+`timing` decides when the monthly contributions come off: `split` halves each one
+across the two cutoffs so both payslips are the same size, `second_cutoff` takes
+the whole month on the 16th-to-end payslip. That is a company decision about
+timing, not about amount.
+
+**Confirm the rates against the current circulars before anyone is paid.** They
+change by circular, usually in January, and neither the config nor the code is
+the authority on them. The figures that shipped before this file existed were
+wrong: PhilHealth was fixed at 4% when the premium is 5%, SSS used round
+brackets nobody had checked, and Pag-IBIG was a flat 100 with no rate behind it.
+
+The withholding tax brackets are still in `App\Support\PayrollCalculator` and
+need the same check.
+
 ## Backups
 
 Payroll history cannot be reconstructed from anything else, so there is a dump command:

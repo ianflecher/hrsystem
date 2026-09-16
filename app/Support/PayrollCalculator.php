@@ -11,10 +11,9 @@ namespace App\Support;
  * the 16th-end one carries the lot. That makes the two payslips different
  * sizes on purpose.
  *
- * WARNING: the contribution figures are simplified and were carried over from
- * the original code - the SSS brackets are coarse, PhilHealth has no floor or
- * ceiling applied, and Pag-IBIG is the flat maximum. Check them against the
- * current SSS, PhilHealth and BIR tables before anyone is paid from them.
+ * The contribution rates live in config/statutory.php, so they can be
+ * corrected without touching this file. They still need checking against the
+ * current circulars before anyone is paid - see the warning there.
  */
 class PayrollCalculator
 {
@@ -32,10 +31,14 @@ class PayrollCalculator
     ): array {
         $gross = round($monthlySalary / 2 + $overtimePay + $holidayPay, 2);
 
-        // Contributions are monthly amounts, taken whole on one cutoff.
-        $sss        = $isSecondCutoff ? self::sss($monthlySalary) : 0.0;
-        $philhealth = $isSecondCutoff ? self::philHealth($monthlySalary) : 0.0;
-        $pagibig    = $isSecondCutoff ? 100.0 : 0.0;
+        // Contributions are monthly amounts. Whether they come off whole on
+        // the second cutoff or half on each is a company decision about
+        // timing, so it is a setting rather than a rule baked in here.
+        $share = self::monthlyShare($isSecondCutoff);
+
+        $sss        = round(self::sss($monthlySalary) * $share, 2);
+        $philhealth = round(self::philHealth($monthlySalary) * $share, 2);
+        $pagibig    = round(self::pagIbig($monthlySalary) * $share, 2);
 
         // Tax follows what is actually taxable: the half-month gross, less the
         // contributions that fall in this cutoff, less time not worked - which
@@ -60,22 +63,61 @@ class PayrollCalculator
         ];
     }
 
-    /** Monthly SSS contribution. Coarse brackets - see the class note. */
-    public static function sss(float $monthlySalary): float
+    /**
+     * How much of a monthly contribution belongs to this cutoff.
+     */
+    public static function monthlyShare(bool $isSecondCutoff): float
     {
-        if ($monthlySalary <= 10000) return 450;
-        if ($monthlySalary <= 20000) return 900;
-        if ($monthlySalary <= 30000) return 1350;
-        if ($monthlySalary <= 40000) return 1800;
-        if ($monthlySalary <= 50000) return 2250;
+        if (Statutory::timing() === 'split') {
+            return 0.5;
+        }
 
-        return 2700;
+        return $isSecondCutoff ? 1.0 : 0.0;
     }
 
-    /** Monthly PhilHealth employee share: 4% of salary, split with the employer. */
+    /**
+     * Monthly SSS employee share.
+     *
+     * A percentage of the Monthly Salary Credit, which steps rather than
+     * following the salary exactly, and is held between a floor and a ceiling.
+     */
+    public static function sss(float $monthlySalary): float
+    {
+        $c = Statutory::table('sss');
+
+        $credit = min(max($monthlySalary, $c['msc_floor']), $c['msc_ceiling']);
+
+        if (($c['step'] ?? 0) > 0) {
+            // The salary credit is a step, not the salary: 24,300 contributes
+            // at 24,500, the same as everybody else in that step.
+            $credit = min(ceil($credit / $c['step']) * $c['step'], $c['msc_ceiling']);
+        }
+
+        return round($credit * $c['employee_rate'], 2);
+    }
+
+    /**
+     * Monthly PhilHealth employee share: the premium on the monthly salary,
+     * bounded by the floor and ceiling, split with the employer.
+     */
     public static function philHealth(float $monthlySalary): float
     {
-        return ($monthlySalary * 0.04) / 2;
+        $c = Statutory::table('philhealth');
+
+        $base = min(max($monthlySalary, $c['salary_floor']), $c['salary_ceiling']);
+
+        return round($base * $c['premium_rate'] * $c['employee_share'], 2);
+    }
+
+    /**
+     * Monthly Pag-IBIG employee share: a rate on compensation, capped - which
+     * is where the familiar flat amount comes from for anybody above the cap.
+     */
+    public static function pagIbig(float $monthlySalary): float
+    {
+        $c = Statutory::table('pagibig');
+
+        return round(min($monthlySalary, $c['salary_cap']) * $c['employee_rate'], 2);
     }
 
     /**

@@ -120,59 +120,57 @@ class PayrollRunTest extends TestCase
         }
     }
 
-    public function test_the_second_cutoff_carries_the_monthly_contributions(): void
+    public function test_both_cutoffs_carry_half_the_monthly_contributions(): void
     {
-        // 25,000 a month is 12,500 a payslip. The whole monthly contribution
-        // lands on this cutoff: SSS 1,350 + PhilHealth 500 + Pag-IBIG 100 =
-        // 1,950, leaving 10,550 taxable. The semi-monthly exemption is 10,417,
-        // so 133 is taxed at 15% = 19.95.
+        // 25,000 a month is 12,500 a payslip. Half of each monthly
+        // contribution lands here: SSS 625 + PhilHealth 312.50 + Pag-IBIG 50 =
+        // 987.50, leaving 11,512.50 taxable. The semi-monthly exemption is
+        // 10,417, so 1,095.50 is taxed at 15% = 164.33.
         $id = $this->employee(25000);
 
         $this->screen()->call('generatePeriod');
-
-        $row = DB::table('hr_payroll')->where('employee_id', $id)->first();
-
-        $this->assertEqualsWithDelta(12500.00, (float) $row->gross_pay, 0.01,
-            'a payslip is half the monthly salary');
-        $this->assertEqualsWithDelta(1969.95, (float) $row->deductions, 0.01);
-        $this->assertEqualsWithDelta(10530.05, (float) $row->net_pay, 0.01);
-    }
-
-    public function test_the_first_cutoff_carries_none_of_them(): void
-    {
-        $id = $this->employee(25000);
-
-        Volt::actingAs($this->hr())->test('hr.payroll')
-            ->set('payPeriod', '2019-03-01')
-            ->call('generatePeriod');
-
-        $row = DB::table('hr_payroll')
-            ->where('employee_id', $id)
-            ->where('period_start', '2019-03-01')
-            ->first();
+        $row = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->first();
 
         $this->assertNotNull($row);
-        $this->assertStringContainsString('second cutoff', $row->notes);
+        $this->assertEqualsWithDelta(12500.00, (float) $row->gross_pay, 0.01);
+        $this->assertEqualsWithDelta(625.00, (float) $row->sss, 0.01);
+        $this->assertEqualsWithDelta(312.50, (float) $row->philhealth, 0.01);
+        $this->assertEqualsWithDelta(50.00, (float) $row->pagibig, 0.01);
+        $this->assertEqualsWithDelta(1151.83, (float) $row->deductions, 0.01);
+        $this->assertEqualsWithDelta(11348.17, (float) $row->net_pay, 0.02);
+    }
 
-        // 12,500 taxable, less the 10,417 exemption, at 15% = 312.45.
-        $this->assertEqualsWithDelta(312.45, (float) $row->deductions, 0.01);
+    public function test_the_other_cutoff_carries_the_same(): void
+    {
+        // The two payslips are the same size now, which is the point of
+        // splitting the contributions rather than landing them all at once.
+        $id = $this->employee(25000);
+
+        $this->screen()->call('generatePeriod');
+        $this->screen()->set('payPeriod', '2019-03-01')->call('generatePeriod');
+
+        $first = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', '2019-03-01')->first();
+        $second = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->first();
+
+        $this->assertNotNull($first);
+        $this->assertEqualsWithDelta((float) $second->deductions, (float) $first->deductions, 0.01);
 
         DB::table('hr_payroll')->where('period_start', '2019-03-01')->delete();
     }
 
     public function test_someone_below_the_threshold_pays_no_tax(): void
     {
-        // 15,000 a month is 7,500 a payslip, under the 10,417 exemption before
-        // anything is deducted. Second cutoff, so SSS 900 + PhilHealth 300 +
-        // Pag-IBIG 100 still come off.
+        // 15,000 a month is 7,500 a payslip, well under the 10,417 exemption.
+        // Half the monthly contributions still come off: SSS 375 +
+        // PhilHealth 187.50 + Pag-IBIG 50 = 612.50.
         $id = $this->employee(15000);
 
         $this->screen()->call('generatePeriod');
+        $row = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->first();
 
-        $row = DB::table('hr_payroll')->where('employee_id', $id)->first();
-
-        $this->assertEqualsWithDelta(1300.00, (float) $row->deductions, 0.01);
-        $this->assertEqualsWithDelta(6200.00, (float) $row->net_pay, 0.01);
+        $this->assertEqualsWithDelta(0.00, (float) $row->tax, 0.01);
+        $this->assertEqualsWithDelta(612.50, (float) $row->deductions, 0.01);
+        $this->assertEqualsWithDelta(6887.50, (float) $row->net_pay, 0.01);
     }
 
     public function test_lateness_comes_off_the_payslip(): void

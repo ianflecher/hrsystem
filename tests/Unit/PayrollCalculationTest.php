@@ -100,38 +100,88 @@ class PayrollCalculationTest extends TestCase
         $this->assertSame(11000.0, PayrollCalculator::forCutoff(22000, 0, true)['gross']);
     }
 
-    public function test_contributions_fall_on_the_second_cutoff_only(): void
+    public function test_contributions_are_split_across_the_two_cutoffs(): void
     {
+        // 22,000 a month: SSS is 5% of the 22,000 salary credit = 1,100;
+        // PhilHealth is 5% halved with the employer = 550; Pag-IBIG is 2% of
+        // compensation capped at 5,000 = 100. Half of each lands per cutoff.
         $first = PayrollCalculator::forCutoff(22000, 0, false);
-        $this->assertSame(0.0, $first['sss']);
-        $this->assertSame(0.0, $first['philhealth']);
-        $this->assertSame(0.0, $first['pagibig']);
-
-        // 22,000 sits in the 1,350 SSS bracket; PhilHealth is 4% halved = 440.
         $second = PayrollCalculator::forCutoff(22000, 0, true);
-        $this->assertSame(1350.0, $second['sss']);
-        $this->assertSame(440.0, $second['philhealth']);
-        $this->assertSame(100.0, $second['pagibig']);
+
+        foreach ([$first, $second] as $cutoff) {
+            $this->assertSame(550.0, $cutoff['sss']);
+            $this->assertSame(275.0, $cutoff['philhealth']);
+            $this->assertSame(50.0, $cutoff['pagibig']);
+        }
+    }
+
+    public function test_the_whole_month_can_be_taken_on_one_cutoff_instead(): void
+    {
+        // Timing is a company decision, so both are supported. Under
+        // 'second_cutoff' the first payslip carries none and the second all.
+        $this->withTiming('second_cutoff', function () {
+            $first = PayrollCalculator::forCutoff(22000, 0, false);
+            $this->assertSame(0.0, $first['sss']);
+            $this->assertSame(0.0, $first['philhealth']);
+            $this->assertSame(0.0, $first['pagibig']);
+
+            $second = PayrollCalculator::forCutoff(22000, 0, true);
+            $this->assertSame(1100.0, $second['sss']);
+            $this->assertSame(550.0, $second['philhealth']);
+            $this->assertSame(100.0, $second['pagibig']);
+        });
+    }
+
+    public function test_philhealth_is_the_premium_split_with_the_employer(): void
+    {
+        // The rate is 5% of the monthly salary, half of it the employee's.
+        $this->assertSame(800.0, PayrollCalculator::philHealth(32000));
+        $this->assertSame(400.0, PayrollCalculator::philHealth(16000));
+    }
+
+    public function test_philhealth_has_a_floor_and_a_ceiling(): void
+    {
+        // Below the floor everybody pays the floor; above the ceiling, the
+        // ceiling. Neither was applied before, at any salary.
+        $this->assertSame(250.0, PayrollCalculator::philHealth(4000));
+        $this->assertSame(PayrollCalculator::philHealth(100000), PayrollCalculator::philHealth(250000));
+    }
+
+    public function test_sss_follows_the_salary_credit_and_stops_at_the_ceiling(): void
+    {
+        // The credit steps in 500s, so a salary between two steps contributes
+        // at the higher one...
+        $this->assertSame(PayrollCalculator::sss(24500), PayrollCalculator::sss(24300));
+
+        // ...and above the ceiling everybody pays the same.
+        $this->assertSame(1750.0, PayrollCalculator::sss(35000));
+        $this->assertSame(1750.0, PayrollCalculator::sss(90000));
+    }
+
+    public function test_pagibig_is_a_rate_on_capped_compensation(): void
+    {
+        // 2% of compensation, capped - which is where the familiar flat 100
+        // comes from for anybody earning above the cap.
+        $this->assertSame(100.0, PayrollCalculator::pagIbig(32000));
+        $this->assertSame(60.0, PayrollCalculator::pagIbig(3000));
     }
 
     public function test_tax_uses_the_semi_monthly_brackets(): void
     {
-        // First cutoff: nothing deducted before tax, so taxable is the full
-        // 11,000. The semi-monthly exemption is 10,417, leaving 583 taxed at
-        // 15% = 87.45.
-        $first = PayrollCalculator::forCutoff(22000, 0, false);
-        $this->assertEqualsWithDelta(87.45, $first['tax'], 0.01);
+        // 11,000 gross less 875 of contributions is 10,125, under the 10,417
+        // exemption, so nothing is withheld.
+        $this->assertSame(0.0, PayrollCalculator::forCutoff(22000, 0, false)['tax']);
 
-        // Second cutoff: 11,000 less 1,890 of contributions is 9,110, which is
-        // under the exemption, so no tax at all.
-        $second = PayrollCalculator::forCutoff(22000, 0, true);
-        $this->assertSame(0.0, $second['tax']);
+        // Somebody paid enough to clear the exemption after contributions is.
+        $this->assertGreaterThan(0.0, PayrollCalculator::forCutoff(40000, 0, false)['tax']);
     }
 
     public function test_lateness_reduces_the_payslip_and_what_is_taxed(): void
     {
-        $clean = PayrollCalculator::forCutoff(22000, 0, false);
-        $late  = PayrollCalculator::forCutoff(22000, 500, false);
+        // A salary that actually clears the exemption, or there is no tax for
+        // the deduction to reduce and the test proves nothing.
+        $clean = PayrollCalculator::forCutoff(40000, 0, false);
+        $late  = PayrollCalculator::forCutoff(40000, 500, false);
 
         $this->assertSame(500.0, $late['late']);
         $this->assertEqualsWithDelta($clean['net'] - 500 + ($clean['tax'] - $late['tax']), $late['net'], 0.01);
@@ -149,12 +199,43 @@ class PayrollCalculationTest extends TestCase
         $this->assertSame(0.0, $c['taxable']);
     }
 
-    public function test_the_note_says_when_contributions_are_absent(): void
+    public function test_the_note_names_the_contributions_it_took(): void
     {
-        $first = PayrollCalculator::forCutoff(22000, 0, false);
-        $this->assertStringContainsString('second cutoff', PayrollCalculator::note($first));
+        $this->assertStringContainsString('SSS', PayrollCalculator::note(PayrollCalculator::forCutoff(22000, 0, true)));
 
-        $second = PayrollCalculator::forCutoff(22000, 0, true);
-        $this->assertStringContainsString('SSS', PayrollCalculator::note($second));
+        // And says so when a cutoff carries none, which it does under the
+        // other timing.
+        $this->withTiming('second_cutoff', function () {
+            $first = PayrollCalculator::forCutoff(22000, 0, false);
+            $this->assertStringContainsString('second cutoff', PayrollCalculator::note($first));
+        });
+    }
+
+    /**
+     * Runs something with a different contribution timing configured, and puts
+     * the setting back afterwards however it ends.
+     */
+    private function withTiming(string $timing, callable $test): void
+    {
+        $app = \Illuminate\Container\Container::getInstance();
+        $had = $app->bound('config') ? $app->make('config')->get('statutory.timing') : null;
+
+        if ($app->bound('config')) {
+            $app->make('config')->set('statutory.timing', $timing);
+        } else {
+            // No application: give the calculator a config to read.
+            $config = new \Illuminate\Config\Repository(['statutory' => ['timing' => $timing]]);
+            $app->instance('config', $config);
+        }
+
+        try {
+            $test();
+        } finally {
+            if ($had === null) {
+                $app->forgetInstance('config');
+            } else {
+                $app->make('config')->set('statutory.timing', $had);
+            }
+        }
     }
 }
