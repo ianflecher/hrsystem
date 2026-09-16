@@ -1,5 +1,8 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
+{{-- No class="dark": the page is light, and forcing the dark variants on
+     gave dark cards on a light background, with headings that all but
+     disappeared. --}}
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     @include('partials.head')
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -8,6 +11,9 @@
     <!-- Add custom department-based theme colors -->
     <script>
         tailwind.config = {
+            // 'media' by default, which let the operating system's dark mode
+            // turn every card dark on a page that is light either way.
+            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
@@ -94,14 +100,15 @@
             margin: 0;
             padding: 0;
             overflow-x: hidden;
-            background: linear-gradient(135deg, #f9fafb 0%, var(--dept-light) 50%);
+            background: #F1F4F8;
+            color: #17233A;
         }
         
         .main-header {
-            background: linear-gradient(135deg, var(--dept-dark) 0%, var(--dept-primary) 100%);
+            background: #0C1626;
             color: white;
             padding: 0.8rem 1.5rem;
-            box-shadow: 0 2px 12px rgba(var(--dept-primary-rgb), 0.2);
+            box-shadow: 0 1px 0 rgba(255, 255, 255, .06);
             position: fixed;
             top: 0;
             left: 0;
@@ -112,7 +119,7 @@
         }
         
         .sidebar {
-            background: linear-gradient(180deg, var(--dept-dark) 0%, var(--dept-primary) 100%);
+            background: #0C1626;
             color: white;
             width: 65px;
             min-height: calc(100vh - 60px);
@@ -177,9 +184,9 @@
         }
         
         .nav-item.active {
-            background: var(--dept-primary);
+            background: rgba(255, 255, 255, .08);
             color: white;
-            box-shadow: 0 2px 8px rgba(var(--dept-primary-rgb), 0.3);
+            box-shadow: inset 3px 0 0 var(--dept-primary);
         }
         
         .main-content {
@@ -187,7 +194,7 @@
             margin-top: 60px;
             padding: 1.5rem;
             min-height: calc(100vh - 60px);
-            background: linear-gradient(135deg, #f8fafc 0%, var(--dept-light) 50%);
+            background: #F1F4F8;
             transition: margin-left 0.3s ease;
         }
         
@@ -219,7 +226,7 @@
         }
         
         .employee-badge {
-            background: linear-gradient(135deg, var(--dept-accent), var(--dept-primary));
+            background: rgba(255, 255, 255, .12);
             color: white;
             padding: 2px 6px;
             border-radius: 10px;
@@ -289,7 +296,7 @@
         }
         
         .employee-role {
-            background: linear-gradient(135deg, var(--dept-accent), var(--dept-primary));
+            background: rgba(255, 255, 255, .12);
             color: white;
             padding: 2px 8px;
             border-radius: 12px;
@@ -299,7 +306,7 @@
         }
         
         .logout-btn {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            background: var(--dept-primary);
             color: white;
             border: none;
             padding: 6px 16px;
@@ -404,9 +411,7 @@
             50% { box-shadow: 0 2px 12px rgba(var(--dept-primary-rgb), 0.5); }
         }
         
-        .nav-item.active {
-            animation: gentle-pulse-dept 3s infinite;
-        }
+        /* No pulse on the active item: it is a signpost, not an alarm. */
         
         .menu-toggle {
             display: none;
@@ -444,7 +449,7 @@
             right: 0;
             width: 200px;
             height: 200px;
-            background: radial-gradient(circle at 30% 30%, rgba(var(--dept-accent-rgb), 0.1) 0%, transparent 70%);
+            background: none;
             pointer-events: none;
         }
         
@@ -454,7 +459,7 @@
             right: 20px;
             width: 100px;
             height: 100px;
-            background: radial-gradient(circle at 70% 70%, rgba(var(--dept-primary-rgb), 0.05) 0%, transparent 70%);
+            background: none;
             pointer-events: none;
         }
         
@@ -473,7 +478,7 @@
         }
         
         .btn-primary {
-            background: linear-gradient(135deg, var(--dept-primary), var(--dept-dark));
+            background: var(--dept-primary);
             color: white;
             border: none;
             padding: 8px 20px;

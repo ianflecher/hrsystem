@@ -12,3 +12,16 @@
 
 @vite(['resources/css/app.css', 'resources/js/app.js'])
 @fluxAppearance
+
+{{-- Pinned light, deliberately.
+
+     Flux's appearance script follows the computer's dark mode and puts
+     class="dark" on <html>, which switches every Tailwind dark: variant in the
+     employee screens. The portal's own CSS - header, sidebar, page, cards - is
+     light only, so anybody whose laptop was set to dark got dark cards on a
+     light page and headings they could barely read. The HR side never had this
+     because it does not include this partial.
+
+     One appearance for the whole product until there is a real dark theme to
+     switch to. --}}
+<script>window.Flux?.applyAppearance('light')</script>
