@@ -629,20 +629,26 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $employees = $this->employees->items();
         $period = $this->period()->label();
         
-        $csvData = "Employee Name,Department,Position,Basic Salary,Gross Pay,Deductions,Net Pay,Status\n";
-        
+        // No thousands separator: a comma inside an unquoted CSV field splits
+        // it into two columns, so every amount landed one cell to the right.
+        $money = fn ($amount) => number_format((float) $amount, 2, '.', '');
+
+        $csvData = "Employee Name,Department,Position,Basic Salary,Gross Pay,Deductions,Net Pay,Status
+";
+
         foreach ($employees as $emp) {
-            $csvData .= "\"{$emp->full_name}\",";
-            $csvData .= "\"{$emp->department_name}\",";
-            $csvData .= "\"{$emp->job_title}\",";
-            $csvData .= number_format($emp->salary, 2) . ",";
-            $csvData .= number_format($emp->gross_pay ?? 0, 2) . ",";
-            $csvData .= number_format($emp->deductions ?? 0, 2) . ",";
-            $csvData .= number_format($emp->net_pay ?? 0, 2) . ",";
+            $csvData .= '"'.str_replace('"', '""', (string) $emp->full_name).'",';
+            $csvData .= '"'.str_replace('"', '""', (string) $emp->department_name).'",';
+            $csvData .= '"'.str_replace('"', '""', (string) $emp->job_title).'",';
+            $csvData .= $money($emp->salary).",";
+            $csvData .= $money($emp->gross_pay ?? 0).",";
+            $csvData .= $money($emp->deductions ?? 0).",";
+            $csvData .= $money($emp->net_pay ?? 0).",";
             $csvData .= $emp->payroll_status;
-            $csvData .= "\n";
+            $csvData .= "
+";
         }
-        
+
         $filename = "payroll-export-{$this->payPeriod}-" . date('YmdHis') . ".csv";
         
         return response()->streamDownload(function () use ($csvData) {
@@ -1092,28 +1098,25 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Employee
                             </th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Department & Position
                             </th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Basic Salary
-                            </th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Gross Pay
                             </th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Deductions
                             </th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Net Pay
                             </th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Payroll Status
                             </th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Actions
                             </th>
                         </tr>
@@ -1121,7 +1124,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     <tbody class="bg-white divide-y divide-gray-200">
                         @forelse($this->employees as $employee)
                             <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4">
                                     <div class="flex items-center">
                                         <div class="flex-shrink-0 h-10 w-10">
                                             <div class="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -1140,31 +1143,26 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4">
                                     <div class="text-sm text-gray-900">{{ $employee->department_name ?? 'N/A' }}</div>
                                     <div class="text-sm text-gray-500">{{ $employee->job_title }}</div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="text-sm text-gray-900">
-                                        ₱{{ number_format($employee->salary, 2) }}
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4">
                                     <span class="text-sm text-gray-900">
                                         ₱{{ number_format($employee->gross_pay ?? 0, 2) }}
                                     </span>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4">
                                     <span class="text-sm text-red-600">
                                         -₱{{ number_format($employee->deductions ?? 0, 2) }}
                                     </span>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4">
                                     <span class="text-sm font-medium text-red-600">
                                         ₱{{ number_format($employee->net_pay ?? 0, 2) }}
                                     </span>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4">
                                     @php
                                         $statusColors = [
                                             'draft' => 'bg-gray-100 text-gray-800',
@@ -1182,7 +1180,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         {{ $statusText }}
                                     </span>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                                <td class="px-4 py-4 text-sm font-medium space-x-2">
                                     <button wire:click="viewPayrollDetails({{ $employee->employee_id }})" 
                                             class="text-blue-600 hover:text-blue-900">
                                         View
@@ -1208,7 +1206,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="px-6 py-4 text-center text-gray-500">
+                                <td colspan="8" class="px-4 py-4 text-center text-gray-500">
                                     No employees found matching your criteria.
                                 </td>
                             </tr>
