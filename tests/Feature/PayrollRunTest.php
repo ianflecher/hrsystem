@@ -213,6 +213,32 @@ class PayrollRunTest extends TestCase
         $this->assertSame(1, $gaps['people']);
     }
 
+    public function test_the_breakdown_names_every_deduction_it_shows(): void
+    {
+        $id = $this->employee(16000);
+        DB::table('employees')->where('employee_id', $id)
+            ->update(['shift_start' => '08:00:00', 'rest_days' => null]);
+
+        // One day an hour late. At 16,000 a month the daily rate is 727.27,
+        // so half a day is 363.64.
+        DB::table('hr_attendance')->where('employee_id', $id)->where('date', '2019-03-18')
+            ->update(['time_in' => '2019-03-18 09:00:00', 'status' => 'late']);
+
+        $screen = $this->screen();
+        $screen->call('generatePeriod')->call('viewPayrollDetails', $id);
+
+        $breakdown = $screen->get('payrollBreakdown');
+        $row = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->first();
+
+        // The lateness has a name of its own...
+        $this->assertEqualsWithDelta(363.64, $breakdown['time'], 0.01);
+
+        // ...and nothing is left over: "other" means unaccounted for, and an
+        // unaccounted deduction is a bug, not a category.
+        $this->assertEqualsWithDelta(0.0, $breakdown['other_deductions'], 0.01);
+        $this->assertEqualsWithDelta((float) $row->deductions, $breakdown['total_deductions'], 0.01);
+    }
+
     public function test_a_second_run_does_not_duplicate_anyone(): void
     {
         $id = $this->employee(20000);

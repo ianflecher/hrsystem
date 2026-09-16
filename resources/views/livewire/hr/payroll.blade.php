@@ -34,6 +34,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         'philhealth' => 0,
         'pagibig' => 0,
         'tax' => 0,
+        'time' => 0,
+        'loan' => 0,
         'other_deductions' => 0,
         'total_deductions' => 0
     ];
@@ -157,27 +159,46 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     
     private function calculatePhilippinesDeductions()
     {
-        if (!$this->selectedEmployee) return;
-        
-        $basicSalary = $this->selectedEmployee->salary;
-        
-        // The same calculation the payslip is written from, so the preview
-        // cannot show one set of figures and the stored row another.
-        $calc = $this->computePayroll((float) $basicSalary);
+        if (! $this->selectedEmployee) return;
+
+        $row = $this->selectedEmployee;
+
+        if ($row->payroll_id) {
+            // What was actually withheld, read from the payslip itself.
+            // Recomputing describes today's salary rather than the one they
+            // were paid on, and whatever the recomputation did not account for
+            // used to pile into a single unnamed "other" line - which is how a
+            // lateness deduction ended up with no name on it.
+            $this->payrollBreakdown['sss']        = (float) $row->sss;
+            $this->payrollBreakdown['philhealth'] = (float) $row->philhealth;
+            $this->payrollBreakdown['pagibig']    = (float) $row->pagibig;
+            $this->payrollBreakdown['tax']        = (float) $row->tax;
+            $this->payrollBreakdown['time']       = (float) $row->time_deduction;
+            $this->payrollBreakdown['loan']       = (float) $row->loan_deduction;
+
+            $named = $this->payrollBreakdown['sss'] + $this->payrollBreakdown['philhealth']
+                + $this->payrollBreakdown['pagibig'] + $this->payrollBreakdown['tax']
+                + $this->payrollBreakdown['time'] + $this->payrollBreakdown['loan'];
+
+            // Only a genuine remainder is "other" now, and seeing one means
+            // something came off that nothing accounts for.
+            $this->payrollBreakdown['other_deductions'] = round((float) $row->deductions - $named, 2);
+            $this->payrollBreakdown['total_deductions'] = (float) $row->deductions;
+
+            return;
+        }
+
+        // No payslip yet, so this is a preview of what one would hold.
+        $calc = $this->computePayroll((float) $row->salary);
 
         $this->payrollBreakdown['sss']        = $calc['sss'];
         $this->payrollBreakdown['philhealth'] = $calc['philhealth'];
         $this->payrollBreakdown['pagibig']    = $calc['pagibig'];
         $this->payrollBreakdown['tax']        = $calc['tax'];
-
-        $phDeductions = $calc['deductions'];
-        
-        // If payroll exists, calculate other deductions
-        if ($this->selectedEmployee->payroll_id) {
-            $this->payrollBreakdown['other_deductions'] = max(0, $this->selectedEmployee->deductions - $phDeductions);
-        }
-        
-        $this->payrollBreakdown['total_deductions'] = $phDeductions + $this->payrollBreakdown['other_deductions'];
+        $this->payrollBreakdown['time']       = 0;
+        $this->payrollBreakdown['loan']       = 0;
+        $this->payrollBreakdown['other_deductions'] = 0;
+        $this->payrollBreakdown['total_deductions'] = $calc['deductions'];
     }
     
     public function closePayrollDetails()
@@ -189,6 +210,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'philhealth' => 0,
             'pagibig' => 0,
             'tax' => 0,
+            'time' => 0,
+            'loan' => 0,
             'other_deductions' => 0,
             'total_deductions' => 0
         ];
@@ -1357,15 +1380,29 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 </div>
                             </div>
                             
-                            <!-- Other Deductions -->
-                            @if($this->payrollBreakdown['other_deductions'] > 0)
+                            <!-- Everything else that came off, by name -->
+                            @if(($this->payrollBreakdown['time'] ?? 0) > 0 || ($this->payrollBreakdown['loan'] ?? 0) > 0 || $this->payrollBreakdown['other_deductions'] != 0)
                             <div class="mb-4">
-                                <h5 class="text-xs font-medium text-red-600 mb-2">OTHER DEDUCTIONS</h5>
+                                <h5 class="text-xs font-medium text-gray-500 mb-2">OTHER DEDUCTIONS</h5>
                                 <div class="space-y-1">
-                                    <div class="flex justify-between">
-                                        <span class="text-sm">Other Deductions:</span>
-                                        <span class="text-sm">-₱{{ number_format($this->payrollBreakdown['other_deductions'], 2) }}</span>
-                                    </div>
+                                    @if(($this->payrollBreakdown['time'] ?? 0) > 0)
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Late, undertime and absence:</span>
+                                            <span class="text-sm">-PHP {{ number_format($this->payrollBreakdown['time'], 2) }}</span>
+                                        </div>
+                                    @endif
+                                    @if(($this->payrollBreakdown['loan'] ?? 0) > 0)
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Loan repayment:</span>
+                                            <span class="text-sm">-PHP {{ number_format($this->payrollBreakdown['loan'], 2) }}</span>
+                                        </div>
+                                    @endif
+                                    @if($this->payrollBreakdown['other_deductions'] != 0)
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Unaccounted for:</span>
+                                            <span class="text-sm">-PHP {{ number_format($this->payrollBreakdown['other_deductions'], 2) }}</span>
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                             @endif
