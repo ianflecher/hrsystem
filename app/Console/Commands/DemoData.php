@@ -545,7 +545,69 @@ class DemoData extends Command
             $made++;
         }
 
+        $this->terminationCase($people);
         $this->components->twoColumnDetail('Performance reviews', $made.' at every stage');
+    }
+
+    /**
+     * One case carried all the way through, so the whole process can be read
+     * on screen rather than imagined: a Notice to Explain that was answered,
+     * decided as termination, and followed by the Notice of Termination.
+     *
+     * It lands on somebody already marked terminated, so the demo roster stays
+     * internally consistent.
+     */
+    private function terminationCase(array $people): void
+    {
+        $subject = collect($people)->firstWhere('status', 'terminated') ?: collect($people)->last();
+
+        if (! $subject || DB::table('employee_notices')->where('employee_id', $subject->employee_id)->where('kind', 'not')->exists()) {
+            return;
+        }
+
+        $hrId = DB::table('users')->where('username', 'hr')->value('user_id');
+
+        $nte = DB::table('employee_notices')->insertGetId([
+            'employee_id'    => $subject->employee_id,
+            'kind'           => 'nte',
+            'occurred_on'    => today()->subDays(40)->toDateString(),
+            'type'           => 'absence',
+            'allegation'     => 'Demo notice: absent without leave for five consecutive working days. Please explain in writing.',
+            'respond_by'     => today()->subDays(35)->toDateString(),
+            'issued_by'      => $hrId,
+            'issued_at'      => now()->subDays(40),
+            'explanation'    => 'Demo explanation: I was unwell and could not send word.',
+            'explained_at'   => now()->subDays(37),
+            'decision'       => 'termination',
+            'decision_notes' => 'Demo decision: explanation noted but not substantiated. Employment to end.',
+            'decided_by'     => $hrId,
+            'decided_at'     => now()->subDays(34),
+            'status'         => 'closed',
+            'created_at'     => now(),
+            'updated_at'     => now(),
+        ]);
+
+        DB::table('employee_notices')->insert([
+            'employee_id'  => $subject->employee_id,
+            'kind'         => 'not',
+            'parent_id'    => $nte,
+            'effective_on' => today()->subDays(4)->toDateString(),
+            'occurred_on'  => today()->subDays(40)->toDateString(),
+            'type'         => 'absence',
+            'allegation'   => 'Demo notice: employment ends following the decision on the notice of '
+                .today()->subDays(40)->toDateString().'.',
+            'issued_by'    => $hrId,
+            'issued_at'    => now()->subDays(34),
+            'status'       => 'closed',
+            'created_at'   => now(),
+            'updated_at'   => now(),
+        ]);
+
+        DB::table('employees')->where('employee_id', $subject->employee_id)
+            ->update(['status' => 'terminated', 'updated_at' => now()]);
+
+        $user = DB::table('users')->where('user_id', $subject->user_id)->value('username');
+        $this->components->twoColumnDetail('Termination case', $user.' - NTE answered, decided, NOT issued');
     }
 
     /**
