@@ -65,6 +65,12 @@ class PeopleController extends Controller
                 $query->where('u.full_name', 'like', '%'.$request->input('search').'%');
             }
         }
+        // A draft belongs to HR until it is graded: the employee gets the
+        // evaluation, not the work in progress.
+        if ($module === 'reviews' && ! $hr) {
+            $query->where('r.status', 'finalized');
+        }
+
         if ($module === 'documents') {
             $extra['expiring'] = (clone $query)->whereNotNull('r.expires_on')->where('r.expires_on', '<=', today()->addDays(30)->toDateString())->count();
             if ($request->boolean('expiring')) {
@@ -120,7 +126,36 @@ class PeopleController extends Controller
             $extra['items'] = DB::table('checklist_items')->whereIn('checklist_id', $lists->pluck('id'))->orderBy('id')->get()->groupBy('checklist_id');
         }
         if ($module === 'reviews') {
-            $extra['goals'] = DB::table('performance_goals')->whereIn('review_id', $rows->pluck('id'))->get()->groupBy('review_id');
+            $summary = new \App\Services\ReviewSummary;
+            $extra['attendance'] = [];
+            $extra['notices'] = [];
+
+            // Notices an employee still owes an answer on are shown whatever
+            // period they belong to: a deadline is not a filing question.
+            $extra['awaiting'] = $hr
+                ? collect()
+                : $summary->awaiting((int) $employeeId);
+
+            // A Notice of Termination is not something to answer, so it is
+            // handed to the view on its own rather than sitting in a list.
+            $extra['termination'] = $hr ? null : DB::table('employee_notices as n')
+                ->leftJoin('users as u', 'u.user_id', '=', 'n.issued_by')
+                ->where('n.employee_id', $employeeId)->where('n.kind', 'not')
+                ->orderByDesc('n.id')->select('n.*', 'u.full_name as issued_by_name')->first();
+
+            $extra['terminations'] = $summary->terminationsFor(
+                collect($extra['notices'])->flatten(1));
+
+            foreach ($rows as $review) {
+                $subject = DB::table('employees')->where('employee_id', $review->employee_id)->first();
+
+                if ($subject) {
+                    $extra['attendance'][$review->id] = $summary->attendance($subject, $review->period_start, $review->period_end);
+                }
+
+                $extra['notices'][$review->id] = $summary->notices(
+                    (int) $review->employee_id, $review->period_start, $review->period_end);
+            }
         }
         if ($module === 'loans') {
             $extra['installments'] = DB::table('loan_installments as i')->join('hr_payroll as p', 'p.payroll_id', '=', 'i.payroll_id')
@@ -281,24 +316,39 @@ class PeopleController extends Controller
             }
             if ($module === 'reviews') {
                 abort_if($row->status === 'finalized', 422, 'Finalized reviews are locked.');
-                if ($action === 'goal') {
-                    PeopleAccess::hr();
-                    $data = $request->validate(['title' => 'required|string|max:200']);
-                    DB::table('performance_goals')->insert($data + ['review_id' => $id, 'created_at' => now(), 'updated_at' => now()]);
-                } elseif ($action === 'progress') {
-                    $request->validate(['progress' => 'required|integer|between:0,100']);
-                    $goal = DB::table('performance_goals')->where('review_id', $id)->where('id', $request->input('goal_id'))->first();
-                    abort_unless($goal, 404);
-                    DB::table('performance_goals')->where('id', $goal->id)->update(['progress' => $request->input('progress'), 'updated_at' => now()]);
-                } elseif ($action === 'self-assessment') {
-                    abort_unless(PeopleAccess::employeeId() === (int) $row->employee_id, 403);
-                    $data = $request->validate(['self_assessment' => 'required|string|min:10|max:10000']);
-                    DB::table('performance_reviews')->where('id', $id)->update($data + ['status' => 'submitted', 'updated_at' => now()]);
+
+                // The review itself is HR's to write. The employee's part is
+                // answering the notices and reading the result.
+                PeopleAccess::hr();
+
+                if ($action === 'notice') {
+                    $data = $request->validate([
+                        'occurred_on' => 'required|date_format:Y-m-d',
+                        'type'        => ['required', Rule::in(array_keys(\App\Services\ReviewSummary::TYPES))],
+                        'allegation'  => 'required|string|min:10|max:5000',
+                        'respond_by'  => 'required|date_format:Y-m-d|after_or_equal:today',
+                    ]);
+
+                    DB::table('employee_notices')->insert($data + [
+                        'employee_id' => $row->employee_id,
+                        'issued_by'   => auth()->id(),
+                        'issued_at'   => now(),
+                        'status'      => 'issued',
+                        'created_at'  => now(),
+                        'updated_at'  => now(),
+                    ]);
                 } else {
-                    PeopleAccess::hr();
                     abort_unless($action === 'finalize', 422);
-                    $data = $request->validate(['rating' => 'required|integer|between:1,5', 'feedback' => 'required|string|min:10|max:10000']);
-                    DB::table('performance_reviews')->where('id', $id)->update($data + ['status' => 'finalized', 'reviewed_by' => auth()->id(), 'finalized_at' => now(), 'updated_at' => now()]);
+
+                    $data = $request->validate([
+                        'rating'   => ['required', 'integer', Rule::in(array_keys(\App\Services\ReviewSummary::GRADES))],
+                        'feedback' => 'required|string|min:10|max:10000',
+                    ]);
+
+                    DB::table('performance_reviews')->where('id', $id)->update($data + [
+                        'status' => 'finalized', 'reviewed_by' => auth()->id(),
+                        'finalized_at' => now(), 'updated_at' => now(),
+                    ]);
                 }
                 return;
             }
@@ -308,6 +358,105 @@ class PeopleController extends Controller
             if ($module === 'documents') Storage::disk('local')->delete($row->path);
         });
         return back()->with('success', 'Updated successfully.');
+    }
+
+    /**
+     * The two halves of a notice that are not HR writing it: the employee
+     * answering, and HR deciding once they have.
+     *
+     * Its own route rather than an action on a review, because a notice exists
+     * whether or not a review does - somebody served in March should not have
+     * to wait for the June appraisal to answer it.
+     */
+    public function notice(Request $request, int $id)
+    {
+        $notice = DB::table('employee_notices')->where('id', $id)->first();
+        abort_unless($notice, 404);
+
+        $action = $request->input('action');
+
+        if ($action === 'explain') {
+            // Only the person it is about, and only once.
+            abort_unless(PeopleAccess::employeeId() === (int) $notice->employee_id, 403);
+            abort_unless($notice->status === 'issued', 422, 'That notice has already been answered.');
+
+            $data = $request->validate(['explanation' => 'required|string|min:10|max:10000']);
+
+            DB::table('employee_notices')->where('id', $id)->update($data + [
+                'status' => 'explained', 'explained_at' => now(), 'updated_at' => now(),
+            ]);
+
+            \App\Services\Auditor::record('update', 'employee_notices', $id,
+                ['status' => 'issued'], ['status' => 'explained']);
+
+            return back()->with('success', 'Your explanation has been sent to HR.');
+        }
+
+        PeopleAccess::hr();
+
+        if ($action === 'terminate') {
+            // Only from a heard case, and only once: this is the second notice,
+            // and it has to have a first one behind it.
+            $already = DB::table('employee_notices')->where('parent_id', $id)->where('kind', 'not')->exists();
+
+            abort_unless(\App\Services\ReviewSummary::canTerminate($notice, $already), 422,
+                'A Notice of Termination can only follow a Notice to Explain that was answered and decided as termination.');
+
+            $data = $request->validate([
+                'effective_on' => 'required|date_format:Y-m-d|after_or_equal:today',
+                'allegation'   => 'required|string|min:10|max:5000',
+            ]);
+
+            DB::transaction(function () use ($data, $notice, $id) {
+                DB::table('employee_notices')->insert([
+                    'employee_id'  => $notice->employee_id,
+                    'kind'         => 'not',
+                    'parent_id'    => $id,
+                    'effective_on' => $data['effective_on'],
+                    'occurred_on'  => $notice->occurred_on,
+                    'type'         => $notice->type,
+                    'allegation'   => $data['allegation'],
+                    'issued_by'    => auth()->id(),
+                    'issued_at'    => now(),
+                    'status'       => 'closed',
+                    'created_at'   => now(),
+                    'updated_at'   => now(),
+                ]);
+
+                // The employment ends on the date the notice gives, so the
+                // record says so rather than somebody remembering to change it.
+                DB::table('employees')->where('employee_id', $notice->employee_id)
+                    ->update(['status' => 'terminated', 'updated_at' => now()]);
+            });
+
+            \App\Services\Auditor::record('create', 'employee_notices', $id, null,
+                ['kind' => 'not', 'effective_on' => $data['effective_on']]);
+
+            return back()->with('success', 'The Notice of Termination has been issued and they can see it.');
+        }
+
+        abort_unless($action === 'decide', 422);
+        abort_if($notice->status === 'closed', 422, 'That notice is already closed.');
+
+        // A decision before the explanation is the thing the twin-notice rule
+        // exists to prevent, so it is refused unless the time to answer has
+        // run out.
+        abort_if($notice->status === 'issued' && \Carbon\Carbon::parse($notice->respond_by)->gte(today()),
+            422, 'They still have until '.$notice->respond_by.' to explain.');
+
+        $data = $request->validate([
+            'decision'       => ['required', Rule::in(array_keys(\App\Services\ReviewSummary::DECISIONS))],
+            'decision_notes' => 'required|string|min:10|max:10000',
+        ]);
+
+        DB::table('employee_notices')->where('id', $id)->update($data + [
+            'status' => 'closed', 'decided_by' => auth()->id(), 'decided_at' => now(), 'updated_at' => now(),
+        ]);
+
+        \App\Services\Auditor::record('update', 'employee_notices', $id,
+            ['status' => $notice->status], ['status' => 'closed', 'decision' => $data['decision']]);
+
+        return back()->with('success', 'The decision has been recorded and the employee can see it.');
     }
 
     public function download(int $id)

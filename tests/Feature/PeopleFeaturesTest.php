@@ -431,18 +431,136 @@ class PeopleFeaturesTest extends TestCase
         $this->assertNotNull(DB::table('employee_checklists')->where('id', $id)->value('completed_at'));
     }
 
-    public function test_reviews_have_goals_self_assessment_and_locked_final_results(): void
+    public function test_a_notice_to_explain_is_answered_before_it_is_decided(): void
     {
-        $this->actingAs($this->hr)->post('/hr/people/reviews', ['employee_id' => $this->employeeId, 'period_start' => '2018-01-01', 'period_end' => '2018-03-31', 'due_on' => '2018-04-15'])->assertRedirect();
-        $id = DB::table('performance_reviews')->where('employee_id', $this->employeeId)->value('id');
-        $this->post('/hr/people/reviews/'.$id, ['action' => 'goal', 'title' => 'Finish training'])->assertRedirect();
-        $goal = DB::table('performance_goals')->where('review_id', $id)->value('id');
-        $this->actingAs($this->staff)->post('/employee/people/reviews/'.$id, ['action' => 'progress', 'goal_id' => $goal, 'progress' => 80])->assertRedirect();
-        $this->post('/employee/people/reviews/'.$id, ['action' => 'self-assessment', 'self_assessment' => 'Completed most training modules.'])->assertRedirect();
-        $this->actingAs($this->hr)->post('/hr/people/reviews/'.$id, ['action' => 'finalize', 'rating' => 4, 'feedback' => 'Strong progress, complete final module.'])->assertRedirect();
-        $this->actingAs($this->staff)->get('/employee/people/reviews')->assertOk()->assertSee('4/5')->assertSee('Finish training');
-        $this->post('/employee/people/reviews/'.$id, ['action' => 'progress', 'goal_id' => $goal, 'progress' => 100])->assertStatus(422);
-        $this->actingAs($this->other)->post('/employee/people/reviews/'.$id, ['action' => 'progress', 'goal_id' => $goal, 'progress' => 100])->assertForbidden();
+        $this->actingAs($this->hr)->post('/hr/people/reviews', ['employee_id' => $this->employeeId,
+            'period_start' => '2018-01-01', 'period_end' => '2018-03-31', 'due_on' => '2018-04-15'])->assertRedirect();
+        $review = DB::table('performance_reviews')->where('employee_id', $this->employeeId)->value('id');
+
+        $this->post('/hr/people/reviews/'.$review, ['action' => 'notice',
+            'occurred_on' => '2018-02-05', 'type' => 'lateness',
+            'allegation' => 'Late on eleven days in February. Please explain.',
+            'respond_by' => today()->addDays(5)->toDateString()])->assertRedirect()->assertSessionHasNoErrors();
+
+        $notice = DB::table('employee_notices')->where('employee_id', $this->employeeId)->first();
+        $this->assertSame('issued', $notice->status);
+
+        // A decision before they have answered is the thing the rule exists to
+        // prevent, and the deadline has not passed.
+        $this->post('/people/notices/'.$notice->id, ['action' => 'decide',
+            'decision' => 'written', 'decision_notes' => 'Deciding without hearing them.'])->assertStatus(422);
+
+        // The employee answers it, and nobody else can answer for them.
+        $this->actingAs($this->other)->post('/people/notices/'.$notice->id,
+            ['action' => 'explain', 'explanation' => 'Not my notice to answer.'])->assertForbidden();
+
+        $this->actingAs($this->staff)->post('/people/notices/'.$notice->id,
+            ['action' => 'explain', 'explanation' => 'The service jeepney route was closed for roadworks.'])
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame('explained', DB::table('employee_notices')->where('id', $notice->id)->value('status'));
+
+        // ...once.
+        $this->post('/people/notices/'.$notice->id,
+            ['action' => 'explain', 'explanation' => 'Changing my answer afterwards.'])->assertStatus(422);
+
+        // Now HR can decide, and the employee sees it.
+        $this->actingAs($this->hr)->post('/people/notices/'.$notice->id, ['action' => 'decide',
+            'decision' => 'verbal', 'decision_notes' => 'Explained. Verbal warning recorded.'])->assertRedirect();
+
+        $closed = DB::table('employee_notices')->where('id', $notice->id)->first();
+        $this->assertSame('closed', $closed->status);
+        $this->assertSame($this->hr->user_id, $closed->decided_by);
+    }
+
+    public function test_a_termination_notice_can_only_follow_one_that_was_heard(): void
+    {
+        $this->actingAs($this->hr)->post('/hr/people/reviews', ['employee_id' => $this->employeeId,
+            'period_start' => '2018-01-01', 'period_end' => '2018-03-31', 'due_on' => '2018-04-15'])->assertRedirect();
+        $review = DB::table('performance_reviews')->where('employee_id', $this->employeeId)->value('id');
+
+        $this->post('/hr/people/reviews/'.$review, ['action' => 'notice',
+            'occurred_on' => '2018-02-05', 'type' => 'conduct',
+            'allegation' => 'Please explain the incident on the floor that day.',
+            'respond_by' => today()->addDays(5)->toDateString()])->assertRedirect();
+        $notice = DB::table('employee_notices')->where('employee_id', $this->employeeId)->first();
+
+        // Not before they have answered and it has been decided.
+        $this->post('/people/notices/'.$notice->id, ['action' => 'terminate',
+            'effective_on' => today()->addDays(30)->toDateString(),
+            'allegation' => 'Ending employment without hearing them.'])->assertStatus(422);
+
+        $this->actingAs($this->staff)->post('/people/notices/'.$notice->id,
+            ['action' => 'explain', 'explanation' => 'My account of what happened that day.'])->assertRedirect();
+
+        // Decided as a warning: still no termination notice to be had.
+        $this->actingAs($this->hr)->post('/people/notices/'.$notice->id, ['action' => 'decide',
+            'decision' => 'written', 'decision_notes' => 'Written warning recorded.'])->assertRedirect();
+
+        $this->post('/people/notices/'.$notice->id, ['action' => 'terminate',
+            'effective_on' => today()->addDays(30)->toDateString(),
+            'allegation' => 'Not what was decided.'])->assertStatus(422);
+
+        // Decided as termination, and now it can be issued - once.
+        DB::table('employee_notices')->where('id', $notice->id)->update(['decision' => 'termination']);
+
+        $this->post('/people/notices/'.$notice->id, ['action' => 'terminate',
+            'effective_on' => today()->addDays(30)->toDateString(),
+            'allegation' => 'Employment ends following the decision of this case.'])
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $termination = DB::table('employee_notices')->where('kind', 'not')->where('parent_id', $notice->id)->first();
+        $this->assertNotNull($termination);
+        $this->assertSame('terminated', DB::table('employees')->where('employee_id', $this->employeeId)->value('status'));
+
+        $this->post('/people/notices/'.$notice->id, ['action' => 'terminate',
+            'effective_on' => today()->addDays(60)->toDateString(),
+            'allegation' => 'Issuing it twice.'])->assertStatus(422);
+
+        // The employee is told, on their own screen.
+        $this->actingAs($this->staff)->get('/employee/people/reviews')->assertOk()
+            ->assertSee('Notice of Termination')
+            ->assertSee('Employment ends following the decision of this case.');
+    }
+
+    public function test_an_employee_sees_the_evaluation_but_not_the_draft(): void
+    {
+        $this->actingAs($this->hr)->post('/hr/people/reviews', ['employee_id' => $this->employeeId,
+            'period_start' => '2018-01-01', 'period_end' => '2018-03-31', 'due_on' => '2018-04-15'])->assertRedirect();
+        $review = DB::table('performance_reviews')->where('employee_id', $this->employeeId)->value('id');
+
+        // While it is being written it is HR's.
+        $this->actingAs($this->staff)->get('/employee/people/reviews')->assertOk()
+            ->assertSee('no completed reviews yet');
+
+        $this->actingAs($this->hr)->post('/hr/people/reviews/'.$review, ['action' => 'finalize',
+            'rating' => 4, 'feedback' => 'Good year overall, watch the timekeeping.'])->assertRedirect();
+
+        $this->actingAs($this->staff)->get('/employee/people/reviews')->assertOk()
+            ->assertSee('Very good')
+            ->assertSee('Good year overall, watch the timekeeping.');
+
+        // And it is locked.
+        $this->actingAs($this->hr)->post('/hr/people/reviews/'.$review, ['action' => 'finalize',
+            'rating' => 1, 'feedback' => 'Changing my mind after the fact.'])->assertStatus(422);
+    }
+
+    public function test_the_review_reads_the_attendance_record_rather_than_asking(): void
+    {
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'shift_end' => '17:00:00', 'rest_days' => null, 'hire_date' => '2017-01-01']);
+
+        $this->attend($this->employeeId, '2018-02-01', '2018-02-28');
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-02-05')
+            ->update(['time_in' => '2018-02-05 09:30:00', 'status' => 'late']);
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-02-06')->delete();
+
+        $summary = (new \App\Services\ReviewSummary)->attendance(
+            DB::table('employees')->where('employee_id', $this->employeeId)->first(), '2018-02-01', '2018-02-28');
+
+        $this->assertSame(1, $summary['late']);
+        $this->assertSame(1, $summary['absent']);
+        $this->assertGreaterThan(20, $summary['days']);
     }
 
     public function test_hr_cannot_raise_a_loan_on_somebodys_behalf(): void

@@ -498,7 +498,8 @@ class DemoData extends Command
         $made = 0;
 
         foreach (array_slice($people, 0, 10) as $i => $person) {
-            // The table holds one review per person per period.
+            // The table holds one review per person per period, and the notice
+            // is written with it.
             if (DB::table('performance_reviews')->where('employee_id', $person->employee_id)->exists()) {
                 continue;
             }
@@ -510,7 +511,6 @@ class DemoData extends Command
                 'period_start'    => today()->subMonths(6)->startOfMonth()->toDateString(),
                 'period_end'      => today()->subMonth()->endOfMonth()->toDateString(),
                 'due_on'          => today()->addDays(14)->toDateString(),
-                'self_assessment' => $status === 'draft' ? null : 'Demo self-assessment, written for testing.',
                 'feedback'        => $status === 'finalized' ? 'Demo feedback from the reviewer.' : null,
                 'rating'          => $status === 'finalized' ? random_int(3, 5) : null,
                 'status'          => $status,
@@ -519,12 +519,28 @@ class DemoData extends Command
                 'updated_at'      => now(),
             ]);
 
-            foreach (['Reduce misprints on long runs', 'Finish the colour-matching training'] as $goal) {
-                DB::table('performance_goals')->insert([
-                    'review_id' => $id, 'title' => $goal, 'progress' => random_int(0, 100),
-                    'created_at' => now(), 'updated_at' => now(),
-                ]);
-            }
+            // A notice at each stage of the twin-notice process: one waiting on
+            // the employee, one they have answered, one already decided.
+            $stage = $i % 3;
+
+            DB::table('employee_notices')->insert([
+                'employee_id' => $person->employee_id,
+                'occurred_on' => today()->subDays(random_int(5, 60))->toDateString(),
+                'type'        => ['lateness', 'absence', 'conduct', 'quality'][$i % 4],
+                'allegation'  => 'Demo notice: please explain the record for this date.',
+                'respond_by'  => today()->addDays($stage === 0 ? 3 : -2)->toDateString(),
+                'issued_by'   => DB::table('users')->where('username', 'hr')->value('user_id'),
+                'issued_at'   => now(),
+                'explanation' => $stage === 0 ? null : 'Demo explanation, written for testing.',
+                'explained_at'=> $stage === 0 ? null : now(),
+                'decision'      => $stage === 2 ? 'verbal' : null,
+                'decision_notes'=> $stage === 2 ? 'Demo decision, for testing the screen.' : null,
+                'decided_by'    => $stage === 2 ? DB::table('users')->where('username', 'hr')->value('user_id') : null,
+                'decided_at'    => $stage === 2 ? now() : null,
+                'status'      => ['issued', 'explained', 'closed'][$stage],
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ]);
 
             $made++;
         }
@@ -710,7 +726,7 @@ class DemoData extends Command
 
             DB::table('loan_installments')->whereIn('loan_id', $loanIds)->orWhereIn('payroll_id', $payrollIds)->delete();
             DB::table('payroll_corrections')->whereIn('payroll_id', $payrollIds)->delete();
-            DB::table('performance_goals')->whereIn('review_id', $reviewIds)->delete();
+            DB::table('employee_notices')->whereIn('employee_id', $employeeIds)->delete();
             DB::table('checklist_items')->whereIn('checklist_id', $checklistIds)->delete();
             DB::table('application_documents')->whereIn('application_id', $applicationIds)->delete();
 
