@@ -1,778 +1,134 @@
 <!DOCTYPE html>
-{{-- No class="dark": the page is light, and forcing the dark variants on
-     gave dark cards on a light background, with headings that all but
-     disappeared. --}}
+{{-- No class="dark": the portal's own CSS is light only. The appearance is
+     pinned in partials/head.blade.php, where the reason is written down. --}}
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     @include('partials.head')
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Add custom department-based theme colors -->
+
     <script>
         tailwind.config = {
-            // 'media' by default, which let the operating system's dark mode
-            // turn every card dark on a page that is light either way.
+            // 'media' by default, which let the computer's dark mode turn every
+            // card dark on a page that is light either way.
             darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
-                        // Support Department Theme (Blue)
-                        support: {
-                            50: '#eff6ff',
-                            100: '#dbeafe',
-                            200: '#bfdbfe',
-                            300: '#93c5fd',
-                            400: '#60a5fa',
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                            700: '#1d4ed8',
-                            800: '#1e40af',
-                            900: '#1e3a8a',
-                        },
-                        // Warehouse Department Theme (Orange)
-                        warehouse: {
-                            50: '#fff7ed',
-                            100: '#ffedd5',
-                            200: '#fed7aa',
-                            300: '#fdba74',
-                            400: '#fb923c',
-                            500: '#f97316',
-                            600: '#ea580c',
-                            700: '#c2410c',
-                            800: '#9a3412',
-                            900: '#7c2d12',
-                        },
-                        // Procurement Department Theme (Purple)
-                        procurement: {
-                            50: '#faf5ff',
-                            100: '#f3e8ff',
-                            200: '#e9d5ff',
-                            300: '#d8b4fe',
-                            400: '#c084fc',
-                            500: '#a855f7',
-                            600: '#9333ea',
-                            700: '#7e22ce',
-                            800: '#6b21a8',
-                            900: '#581c87',
-                        },
-                        // Default Green Theme
-                        primary: {
-                            50: '#FDF6F6',
-                            100: '#FDECEC',
-                            200: '#93A0B4',
-                            300: '#93A0B4',
-                            400: '#F05A60',
-                            500: '#E31B23',
-                            600: '#C8161D',
-                            700: '#17233A',
-                            800: '#0C1626',
-                            900: '#0C1626',
-                        }
-                    }
-                }
-            }
-        }
+                        brand: '#E31B23',
+                        ink: '#17233A',
+                    },
+                },
+            },
+        };
     </script>
-    
-    <title>Imprint Customs PH - Employee Portal</title>
 
     <style>
-        :root {
-            --primary-green: #E31B23;
-            --dark-green: #17233A;
-            --light-green: #FDECEC;
-            --forest-green: #0C1626;
-            --mint-green: #93A0B4;
-        }
-        
-        /* Use default green theme for everyone */
-        body {
-            --dept-primary: #E31B23;
-            --dept-dark: #17233A;
-            --dept-light: #FDECEC;
-            --dept-accent: #93A0B4;
-            --dept-primary-rgb: 227, 27, 35;
-            --dept-accent-rgb: 147, 160, 180;
-        }
-        
         body {
             margin: 0;
-            padding: 0;
-            overflow-x: hidden;
-            background: #F1F4F8;
-            color: #17233A;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #F4F6F9;
+            color: #17202E;
         }
-        
-        .main-header {
-            background: #0C1626;
-            color: white;
-            padding: 0.8rem 1.5rem;
-            box-shadow: 0 1px 0 rgba(255, 255, 255, .06);
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 60px;
-            display: flex;
-            align-items: center;
-        }
-        
-        .sidebar {
-            background: #0C1626;
-            color: white;
-            width: 65px;
-            min-height: calc(100vh - 60px);
-            position: fixed;
-            left: 0;
-            top: 60px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding: 15px 0;
-            box-shadow: 3px 0 15px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .sidebar:hover {
-            width: 200px;
-        }
-        
-        .sidebar h3 {
-            padding: 0 15px;
-            margin-bottom: 15px;
-            color: var(--dept-accent);
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 600;
-            opacity: 0;
-            white-space: nowrap;
-            transition: opacity 0.3s ease;
-        }
-        
-        .sidebar:hover h3 {
-            opacity: 1;
-        }
-        
-        .sidebar nav ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        
-        .sidebar nav ul li {
-            margin-bottom: 2px;
-        }
-        
-        .nav-item {
-            display: flex;
-            align-items: center;
-            padding: 12px 15px;
-            color: rgba(255, 255, 255, 0.9);
-            text-decoration: none;
-            transition: all 0.3s ease;
-            border-radius: 6px;
-            margin: 0 5px;
-            font-weight: 500;
-            white-space: nowrap;
-            position: relative;
-        }
-        
-        .nav-item:hover {
-            background: rgba(255, 255, 255, 0.15);
-            color: white;
-        }
-        
-        .nav-item.active {
-            background: rgba(255, 255, 255, .08);
-            color: white;
-            box-shadow: inset 3px 0 0 var(--dept-primary);
-        }
-        
-        .main-content {
-            margin-left: 65px;
-            margin-top: 60px;
-            padding: 1.5rem;
-            min-height: calc(100vh - 60px);
-            background: #F1F4F8;
-            transition: margin-left 0.3s ease;
-        }
-        
-        .sidebar:hover + .main-content,
-        .main-content:hover {
-            margin-left: 200px;
-        }
-        
-        .module-icon {
-            min-width: 24px;
-            text-align: center;
-            font-size: 1.2rem;
-            margin-right: 0;
-            transition: margin-right 0.3s ease;
-        }
-        
-        .sidebar:hover .module-icon {
-            margin-right: 12px;
-        }
-        
-        .nav-text {
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            font-size: 0.9rem;
-        }
-        
-        .sidebar:hover .nav-text {
-            opacity: 1;
-        }
-        
-        .employee-badge {
-            background: rgba(255, 255, 255, .12);
-            color: white;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 0.7rem;
-            margin-left: auto;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            font-weight: bold;
-        }
-        
-        .sidebar:hover .employee-badge {
-            opacity: 1;
-        }
-        
-        .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-        }
-        
-        .logo-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .logo-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .logo-text {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .company-name {
-            font-size: 1.2rem;
-            font-weight: 700;
-            letter-spacing: 0.3px;
-        }
-        
-        .company-tagline {
-            font-size: 0.75rem;
-            opacity: 0.9;
-            color: var(--dept-accent);
-        }
-        
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .user-badge {
-            background: rgba(255, 255, 255, 0.15);
-            padding: 5px 12px;
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.85rem;
-        }
-        
-        .employee-role {
-            background: rgba(255, 255, 255, .12);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            font-weight: bold;
-            margin-left: 4px;
-        }
-        
-        .logout-btn {
-            background: var(--dept-primary);
-            color: white;
-            border: none;
-            padding: 6px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
-        }
-        
-        .logout-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 10px rgba(239, 68, 68, 0.4);
-        }
-        
-        .nav-tooltip {
-            position: absolute;
-            left: 100%;
-            top: 50%;
-            transform: translateY(-50%);
-            background: var(--dept-dark);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            white-space: nowrap;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
-            box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
-            z-index: 1001;
-            margin-left: 10px;
-        }
-        
-        .nav-tooltip::before {
-            content: '';
-            position: absolute;
-            right: 100%;
-            top: 50%;
-            transform: translateY(-50%);
-            border-width: 6px;
-            border-style: solid;
-            border-color: transparent var(--dept-dark) transparent transparent;
-        }
-        
-        .nav-item:hover .nav-tooltip {
-            opacity: 1;
-            visibility: visible;
-        }
-        
-        .sidebar:hover .nav-tooltip {
-            display: none;
-        }
-        
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 55px;
-            }
-            
-            .sidebar:hover {
-                width: 180px;
-            }
-            
-            .main-content {
-                margin-left: 55px;
-                padding: 1rem;
-            }
-            
-            .sidebar:hover + .main-content {
-                margin-left: 180px;
-            }
-            
-            .company-name {
-                font-size: 1rem;
-            }
-            
-            .company-tagline {
-                display: none;
-            }
-            
-            .user-badge span:first-child {
-                display: none;
-            }
-        }
-        
-        .sidebar::-webkit-scrollbar {
-            width: 4px;
-        }
-        
-        .sidebar::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-        }
-        
-        .sidebar::-webkit-scrollbar-thumb {
-            background: var(--dept-primary);
-            border-radius: 2px;
-        }
-        
-        @keyframes gentle-pulse-dept {
-            0%, 100% { box-shadow: 0 2px 8px rgba(var(--dept-primary-rgb), 0.3); }
-            50% { box-shadow: 0 2px 12px rgba(var(--dept-primary-rgb), 0.5); }
-        }
-        
-        /* No pulse on the active item: it is a signpost, not an alarm. */
-        
-        .menu-toggle {
-            display: none;
-            background: none;
-            border: none;
-            color: white;
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 5px;
-            margin-right: 10px;
-        }
-        
-        @media (max-width: 480px) {
-            .menu-toggle {
-                display: block;
-            }
-            
-            .sidebar {
-                transform: translateX(-100%);
-                width: 200px;
-            }
-            
-            .sidebar.mobile-open {
-                transform: translateX(0);
-            }
-            
-            .main-content {
-                margin-left: 0;
-            }
-        }
-        
-        .greenery-pattern {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 200px;
-            height: 200px;
-            background: none;
-            pointer-events: none;
-        }
-        
-        .leaf-decoration {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            width: 100px;
-            height: 100px;
-            background: none;
-            pointer-events: none;
-        }
-        
-        .dept-card {
-            background: white;
-            border: 1px solid var(--dept-light);
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 10px rgba(var(--dept-primary-rgb), 0.08);
-            transition: all 0.3s ease;
-        }
-        
-        .dept-card:hover {
-            box-shadow: 0 4px 20px rgba(var(--dept-primary-rgb), 0.12);
-            border-color: var(--dept-accent);
-        }
-        
-        .btn-primary {
-            background: var(--dept-primary);
-            color: white;
-            border: none;
-            padding: 8px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 8px rgba(var(--dept-primary-rgb), 0.3);
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(var(--dept-primary-rgb), 0.4);
-        }
-        
-        .btn-secondary {
-            background: white;
-            color: var(--dept-dark);
-            border: 2px solid var(--dept-primary);
-            padding: 8px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-secondary:hover {
-            background: var(--dept-light);
-            border-color: var(--dept-dark);
-        }
-        
-        /* Remove access control styles */
-        .nav-item.disabled {
-            opacity: 1;
-            cursor: pointer;
-            pointer-events: auto;
-        }
-        
-        .access-denied {
-            color: white;
-            font-style: normal;
-        }
+
+        /* The shell itself - sidebar, main column, mobile topbar - lives in
+           partials/theme.blade.php and is shared with the HR back office, so
+           both halves of the product are recognisably the same thing. */
+        .hr-content { padding: 0; }
     </style>
-    
-    <script>
-        // Set department class and RGB values - everyone gets default green theme
-        document.addEventListener('DOMContentLoaded', function() {
-            // Everyone uses default green theme
-            const departmentClass = 'department-default';
-            const colors = {
-                primary: '#E31B23',
-                dark: '#17233A',
-                light: '#FDECEC',
-                accent: '#93A0B4',
-                primaryRgb: '227, 27, 35',
-                accentRgb: '147, 160, 180'
-            };
-            
-            // Set CSS custom properties
-            document.documentElement.style.setProperty('--dept-primary', colors.primary);
-            document.documentElement.style.setProperty('--dept-dark', colors.dark);
-            document.documentElement.style.setProperty('--dept-light', colors.light);
-            document.documentElement.style.setProperty('--dept-accent', colors.accent);
-            document.documentElement.style.setProperty('--dept-primary-rgb', colors.primaryRgb);
-            document.documentElement.style.setProperty('--dept-accent-rgb', colors.accentRgb);
-            
-            // Enable all modules for everyone
-            document.querySelectorAll('.nav-item.disabled').forEach(item => {
-                item.classList.remove('disabled');
-                const icon = item.querySelector('.module-icon');
-                const text = item.querySelector('.nav-text');
-                const tooltip = item.querySelector('.nav-tooltip');
-                
-                // Reset icons to original (you'll need to set these based on actual module)
-                if (icon && text && tooltip) {
-                    // You can set specific icons based on href
-                    const href = item.getAttribute('href');
-                    if (href) {
-                        if (href.includes('support')) {
-                            icon.textContent = '🛠️';
-                            text.textContent = 'Support';
-                            tooltip.textContent = 'Support Tickets';
-                        } else if (href.includes('warehouse')) {
-                            icon.textContent = '🏪';
-                            text.textContent = 'Warehouse';
-                            tooltip.textContent = 'Warehouse Management';
-                        } else if (href.includes('procurement')) {
-                            icon.textContent = '📝';
-                            text.textContent = 'Purchase Request';
-                            tooltip.textContent = 'Create Purchase Requisition';
-                        }
-                    }
-                }
-                
-                if (text) text.classList.remove('access-denied');
-                if (tooltip) tooltip.style.background = '';
-            });
-        });
-    </script>
 
     @include('partials.theme')
 </head>
 <body>
 
-<!-- Decorative patterns -->
-<div class="greenery-pattern"></div>
-<div class="leaf-decoration"></div>
+<div class="hr-shell">
+    <aside class="hr-sidebar" id="empSidebar">
+        <a href="{{ route('employee.dashboard') }}" class="hr-sidebar__brand">
+            @if(file_exists(public_path('imprint-customs.jpg')))
+                <img src="{{ asset('imprint-customs.jpg') }}" alt="Imprint Customs">
+            @endif
+            <span>
+                <span class="hr-sidebar__brand-name">Imprint Customs</span><br>
+                <span class="hr-sidebar__brand-sub">Employee Portal</span>
+            </span>
+        </a>
 
-<!-- Main Header -->
-<header class="main-header">
-    <div class="header-content">
-        <button class="menu-toggle" onclick="toggleMobileMenu()">☰</button>
-        
-        <!-- Logo -->
-        <div class="logo-container">
-            <div class="logo-icon">
-                @if(file_exists(public_path('imprint-customs.jpg')))
-                    <img src="{{ asset('imprint-customs.jpg') }}" alt="Imprint Customs" style="height: 40px; width: 40px; object-fit: contain; background: #fff; border-radius: 50%; padding: 3px;">
-                @else
-                    <div style="background: rgba(255, 255, 255, 0.2); color: white; font-weight: bold; padding: 4px 8px; border-radius: 6px;">
-                        Imprint Customs
-                    </div>
-                @endif
-            </div>
-            <div class="logo-text">
-                <div class="company-name">Imprint Customs PH</div>
-                <div class="company-tagline">
-                    Employee Portal
-                </div>
-            </div>
-        </div>
-        
-        <!-- User info and logout -->
-        <div class="user-info">
-            <div class="user-badge">
-                <span style="color: var(--dept-accent);">👤</span>
-                <a href="{{ route('account.edit') }}" style="color: inherit; text-decoration: none;" title="My account">
-                    {{ Auth::user()->full_name ?? 'Employee' }}
+        <div class="hr-sidebar__label">My work</div>
+
+        <nav>
+            <a href="{{ route('employee.dashboard') }}" class="nav-link {{ request()->routeIs('employee.dashboard') ? 'active' : '' }}">
+                <i class="fas fa-gauge-high"></i>Dashboard
+            </a>
+            <a href="{{ route('employee.attendance') }}" class="nav-link {{ request()->routeIs('employee.attendance*') ? 'active' : '' }}">
+                <i class="fas fa-clock"></i>Attendance
+            </a>
+            <a href="{{ route('employee.payroll') }}" class="nav-link {{ request()->routeIs('employee.payroll*') ? 'active' : '' }}">
+                <i class="fas fa-money-bill-wave"></i>Payroll
+            </a>
+            <a href="{{ route('employee.leave') }}" class="nav-link {{ request()->routeIs('employee.leave*') ? 'active' : '' }}">
+                <i class="fas fa-umbrella-beach"></i>Leave
+            </a>
+
+            @foreach(\App\Http\Controllers\PeopleController::MODULES as $key => $label)
+                <a href="{{ route('people.employee', $key) }}"
+                   class="nav-link {{ request()->routeIs('people.employee') && request()->route('module') === $key ? 'active' : '' }}">
+                    <i class="fas fa-{{ ['documents' => 'folder-open', 'overtime' => 'clock', 'shifts' => 'calendar-days', 'checklists' => 'list-check', 'reviews' => 'star', 'loans' => 'wallet'][$key] ?? 'circle' }}"></i>{{ $label }}
                 </a>
-                <span class="employee-role">
-                    EMPLOYEE
-                </span>
-            </div>
-            
+            @endforeach
+
+            {{-- Under its own heading: the list above is the work, this is the
+                 one entry that is about the person doing it. --}}
+            <div class="hr-sidebar__label">You</div>
+
+            <a href="{{ route('account.edit') }}" class="nav-link {{ request()->routeIs('account.edit') ? 'active' : '' }}">
+                <i class="fas fa-id-card"></i>My account
+            </a>
+        </nav>
+
+        <div class="hr-sidebar__foot">
+            <a href="{{ route('account.edit') }}" class="hr-sidebar__user">
+                @if(auth()->user()?->profile_photo)
+                    <img class="hr-sidebar__avatar" src="{{ Storage::url(auth()->user()->profile_photo) }}" alt="">
+                @else
+                    <i class="fas fa-user"></i>
+                @endif
+                {{ auth()->user()?->full_name ?? 'Employee' }}
+            </a>
+
             <form method="POST" action="{{ route('employee.logout') }}">
                 @csrf
-                <button type="submit" class="logout-btn">
-                    Logout
+                <button type="submit" class="hr-sidebar__logout">
+                    <i class="fas fa-right-from-bracket"></i> Logout
                 </button>
             </form>
         </div>
+    </aside>
+
+    <div class="hr-backdrop" id="empBackdrop" onclick="toggleEmpSidebar()"></div>
+
+    <div class="hr-main">
+        <div class="hr-topbar">
+            <button class="hr-topbar__toggle" onclick="toggleEmpSidebar()" aria-label="Menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <span>Imprint Customs · Employee</span>
+        </div>
+
+        <div class="hr-content">
+            {{ $slot }}
+        </div>
     </div>
-</header>
+</div>
 
-<!-- Sidebar -->
-<aside class="sidebar" id="sidebar">
-    <h3>EMPLOYEE MODULES</h3>
-
-    <nav>
-        <ul>
-            <!-- Dashboard -->
-            <li>
-                <a href="{{ route('employee.dashboard') }}"
-                   class="nav-item {{ request()->routeIs('employee.dashboard') ? 'active' : '' }}">
-                    <span class="module-icon"><i class="fas fa-gauge-high"></i></span>
-                    <span class="nav-text">Dashboard</span>
-                    <span class="nav-tooltip">Dashboard</span>
-                    <span class="employee-badge"
-                          style="display: {{ request()->routeIs('employee.dashboard') ? 'block' : 'none' }}">
-                        Live
-                    </span>
-                </a>
-            </li>
-
-
-            <!-- Attendance -->
-            <li>
-                <a href="{{ route('employee.attendance') }}"
-                   class="nav-item {{ request()->routeIs('employee.attendance.*') ? 'active' : '' }}">
-                    <span class="module-icon"><i class="fas fa-clock"></i></span>
-                    <span class="nav-text">Attendance</span>
-                    <span class="nav-tooltip">Attendance Tracking</span>
-                </a>
-            </li>
-
-            <!-- Payroll -->
-            <li>
-                <a href="{{ route('employee.payroll') }}"
-                   class="nav-item {{ request()->routeIs('employee.payroll.*') ? 'active' : '' }}">
-                    <span class="module-icon"><i class="fas fa-money-bill-wave"></i></span>
-                    <span class="nav-text">Payroll</span>
-                    <span class="nav-tooltip">Payroll & Payslips</span>
-                </a>
-            </li>
-
-            <!-- Leave -->
-            @foreach(\App\Http\Controllers\PeopleController::MODULES as $key => $label)
-                <li><a href="{{ route('people.employee', $key) }}" class="nav-item {{ request()->routeIs('people.employee') && request()->route('module') === $key ? 'active' : '' }}"><span class="module-icon"><i class="fas fa-{{ ['documents'=>'folder-open','overtime'=>'clock','shifts'=>'calendar-days','checklists'=>'list-check','reviews'=>'star','loans'=>'wallet'][$key] }}"></i></span><span class="nav-text">{{ $label }}</span><span class="nav-tooltip">{{ $label }}</span></a></li>
-            @endforeach
-            <li>
-                <a href="{{ route('employee.leave') }}"
-                   class="nav-item {{ request()->routeIs('employee.leave.*') ? 'active' : '' }}">
-                    <span class="module-icon"><i class="fas fa-umbrella-beach"></i></span>
-                    <span class="nav-text">Leave</span>
-                    <span class="nav-tooltip">Leave Management</span>
-                </a>
-            </li>
-
-            <li>
-                <a href="{{ route('account.edit') }}"
-                   class="nav-item {{ request()->routeIs('account.edit') ? 'active' : '' }}">
-                    <span class="module-icon"><i class="fas fa-id-card"></i></span>
-                    <span class="nav-text">My account</span>
-                    <span class="nav-tooltip">My account</span>
-                </a>
-            </li>
-
-        </ul>
-    </nav>
-</aside>
-
-<!-- Main Content -->
-<main class="main-content" id="mainContent">
-    {{ $slot }}
-</main>
-
-<!-- JavaScript -->
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Toggle mobile menu
-        function toggleMobileMenu() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('mobile-open');
-        }
-        window.toggleMobileMenu = toggleMobileMenu;
-
-        // Handle sidebar hover behavior
-        const sidebar = document.getElementById('sidebar');
-        const mainContent = document.getElementById('mainContent');
-        
-        if (sidebar && mainContent) {
-            sidebar.addEventListener('mouseenter', function() {
-                if (window.innerWidth > 768) {
-                    this.style.width = '200px';
-                    mainContent.style.marginLeft = '200px';
-                }
-            });
-            
-            sidebar.addEventListener('mouseleave', function() {
-                if (window.innerWidth > 768) {
-                    this.style.width = '65px';
-                    mainContent.style.marginLeft = '65px';
-                }
-            });
-        }
-
-        // Update active state
-        const currentPath = window.location.pathname;
-        const navItems = document.querySelectorAll('.nav-item');
-        
-        navItems.forEach(item => {
-            const href = item.getAttribute('href');
-            if (href && currentPath.includes(href.replace(/\/$/, '')) && href !== '/') {
-                item.classList.add('active');
-                const badge = item.querySelector('.employee-badge');
-                if (badge) {
-                    badge.style.display = 'block';
-                }
-            }
-        });
-        
-        // Auto-close mobile menu on item click
-        if (window.innerWidth <= 480) {
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const sidebar = document.getElementById('sidebar');
-                    if (sidebar) sidebar.classList.remove('mobile-open');
-                });
-            });
-        }
-        
-        // Close mobile menu when clicking outside
-        document.addEventListener('click', function(event) {
-            const sidebar = document.getElementById('sidebar');
-            const menuToggle = document.querySelector('.menu-toggle');
-            
-            if (window.innerWidth <= 480 && sidebar && menuToggle && 
-                !sidebar.contains(event.target) && 
-                !menuToggle.contains(event.target) && 
-                sidebar.classList.contains('mobile-open')) {
-                sidebar.classList.remove('mobile-open');
-            }
-        });
-    });
+    function toggleEmpSidebar() {
+        document.getElementById('empSidebar').classList.toggle('open');
+        document.getElementById('empBackdrop').classList.toggle('show');
+    }
 </script>
+
 </body>
 </html>

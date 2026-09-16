@@ -271,4 +271,200 @@
     .status-onleave    { background: var(--accent-soft); color: var(--accent); border-color: #bfdbfe; }
     .status-inactive   { background: var(--surface-2);   color: var(--ink-2);  border-color: var(--border-strong); }
     .status-terminated { background: var(--bad-soft);    color: var(--bad);    border-color: var(--bad-border); }
+
+    /* ------------------------------------------------------------------
+       The application shell: a fixed navy sidebar and the page beside it.
+
+       It lived in the HR layout, while the employee portal had its own
+       hover-to-expand icon rail - a 65px strip that showed nothing until you
+       moused over it. One shell now, worn by both, so the two halves of the
+       product are recognisably the same thing. The .hr- names are kept
+       because every HR screen already uses them.
+       ------------------------------------------------------------------ */
+    .hr-shell {
+        display: flex;
+        min-height: 100vh;
+        background: var(--bg, #F4F6F9);
+    }
+
+    .hr-sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 60;
+        width: 244px;
+        display: flex;
+        flex-direction: column;
+        background: var(--sidebar-bg, #0C1626);
+        border-right: 1px solid rgba(255, 255, 255, .06);
+        transition: transform .2s ease;
+    }
+
+    .hr-sidebar__brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 18px 18px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, .08);
+        text-decoration: none;
+    }
+
+    .hr-sidebar__brand img {
+        height: 36px;
+        width: 36px;
+        object-fit: contain;
+        background: #fff;
+        border-radius: 50%;
+        padding: 2px;
+        flex: none;
+    }
+
+    .hr-sidebar__brand-name {
+        color: #fff;
+        font-family: var(--font-head, "Space Grotesk", system-ui, sans-serif);
+        font-size: .9375rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .hr-sidebar__brand-sub {
+        color: #7E8CA0;
+        font-size: .6875rem;
+        letter-spacing: .02em;
+    }
+
+    .hr-sidebar__label {
+        padding: 18px 18px 8px;
+        color: #64748B;
+        font-size: .6875rem;
+        font-weight: 600;
+        letter-spacing: .07em;
+        text-transform: uppercase;
+    }
+
+    .hr-sidebar nav { flex: 1; overflow-y: auto; padding: 0 10px 16px; }
+
+    .hr-sidebar .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 9px 12px;
+        margin-bottom: 2px;
+        border-radius: 8px;
+        color: #93A0B4;
+        font-size: .875rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: background-color .12s ease, color .12s ease;
+    }
+
+    .hr-sidebar .nav-link i { width: 18px; text-align: center; font-size: .9375rem; }
+    .hr-sidebar .nav-link:hover { background: rgba(255, 255, 255, .06); color: #E6EBF2; }
+
+    /* The current page, marked by a fill and a rule down its edge rather than
+       colour alone. */
+    .hr-sidebar .nav-link.active {
+        background: var(--sidebar-active, #17233A);
+        color: #fff;
+        box-shadow: inset 3px 0 0 var(--brand, #E31B23);
+    }
+
+    .hr-sidebar .nav-link.active i { color: var(--brand, #E31B23); }
+
+    .hr-sidebar__foot {
+        padding: 12px;
+        border-top: 1px solid rgba(255, 255, 255, .08);
+    }
+
+    .hr-sidebar__user {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 10px 10px;
+        color: #C6CFDC;
+        font-size: .8125rem;
+    }
+
+    .hr-sidebar__user i { color: var(--brand, #E31B23); }
+
+    .hr-sidebar__user {
+        text-decoration: none;
+        border-radius: 8px;
+        transition: background-color .12s ease;
+    }
+
+    .hr-sidebar__user:hover { background: rgba(255, 255, 255, .06); }
+
+    .hr-sidebar__avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex: none;
+    }
+
+    .hr-sidebar__logout {
+        width: 100%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .5rem;
+        padding: .5rem .75rem;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, .18);
+        background: transparent;
+        color: #C6CFDC;
+        font-size: .8125rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+    }
+
+    .hr-sidebar__logout:hover {
+        background: var(--brand, #E31B23);
+        border-color: var(--brand, #E31B23);
+        color: #fff;
+    }
+
+    .hr-main { flex: 1; min-width: 0; margin-left: 244px; }
+
+    .hr-topbar {
+        display: none;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        background: var(--sidebar-bg, #0C1626);
+        color: #fff;
+        position: sticky;
+        top: 0;
+        z-index: 50;
+    }
+
+    .hr-topbar__toggle {
+        background: none;
+        border: 0;
+        color: #fff;
+        font-size: 1.25rem;
+        cursor: pointer;
+        line-height: 1;
+    }
+
+    .hr-content { padding: 0; }
+
+    .hr-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 55;
+        background: rgba(12, 22, 38, .55);
+    }
+
+    .hr-backdrop.show { display: block; }
+
+    @media (max-width: 1024px) {
+        .hr-sidebar { transform: translateX(-100%); }
+        .hr-sidebar.open { transform: translateX(0); }
+        .hr-main { margin-left: 0; }
+        .hr-topbar { display: flex; }
+    }
+
 </style>

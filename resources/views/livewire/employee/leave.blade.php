@@ -112,12 +112,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                 </h1>
                 <p class="text-gray-600 mt-2">Submit and track your leave requests</p>
             </div>
-            <div class="flex items-center space-x-2 text-red-700">
-                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
-                </svg>
-                <span class="text-lg font-semibold">Employee Portal</span>
-            </div>
+
         </div>
 
         {{-- Before the form, not after: knowing the balance is what decides
@@ -179,7 +174,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
 
                     <form wire:submit.prevent="submit" class="p-8 space-y-8">
                         <!-- Leave Type -->
-                        <div class="bg-gradient-to-br from-green-50 to-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
                             <label class="block mb-4">
                                 <div class="flex items-center mb-2">
                                     <div class="w-1.5 h-5 bg-red-600 rounded-full mr-3"></div>
@@ -202,7 +197,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         </div>
 
                         <!-- Dates -->
-                        <div class="bg-gradient-to-br from-red-50 to-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
                             <div class="flex items-center mb-4">
                                 <div class="w-1.5 h-5 bg-red-600 rounded-full mr-3"></div>
                                 <span class="text-lg font-bold text-gray-800">Leave Period</span>
@@ -231,7 +226,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         </div>
 
                         <!-- Reason -->
-                        <div class="bg-gradient-to-br from-red-50 to-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
                             <label class="block">
                                 <div class="flex items-center mb-4">
                                     <div class="w-1.5 h-5 bg-red-600 rounded-full mr-3"></div>

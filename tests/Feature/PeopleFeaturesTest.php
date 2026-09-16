@@ -388,7 +388,11 @@ class PeopleFeaturesTest extends TestCase
     {
         // Hired in 2018 and still here: settled, so not on the list by default.
         $this->actingAs($this->hr)->get('/hr/people/checklists')->assertOk()->assertDontSee($this->staff->full_name);
-        $this->get('/hr/people/checklists?all=1')->assertOk()->assertSee($this->staff->full_name);
+        // Reachable, rather than on the first page of it: with a real roster
+        // "Show everyone" is many pages long, and this test is about whether
+        // the person can be found at all.
+        $this->get('/hr/people/checklists?all=1&search='.urlencode($this->staff->full_name))
+            ->assertOk()->assertSee($this->staff->full_name);
 
         // A new starter appears without anybody having to start anything...
         DB::table('employees')->where('employee_id', $this->employeeId)->update(['hire_date' => today()->subDays(3)->toDateString()]);
