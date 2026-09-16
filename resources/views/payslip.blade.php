@@ -14,7 +14,7 @@
         'SSS'                        => (float) $p->sss,
         'PhilHealth'                 => (float) $p->philhealth,
         'Pag-IBIG'                   => (float) $p->pagibig,
-        'Withholding tax'            => (float) $p->tax,
+        'Tax'                        => (float) $p->tax,
         'Late, undertime and absence'=> (float) $p->time_deduction,
         'Loan repayment'             => (float) $p->loan_deduction,
     ], fn ($amount) => $amount != 0);

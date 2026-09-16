@@ -1373,7 +1373,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     @endif
                                     @if($this->payrollBreakdown['tax'] > 0)
                                     <div class="flex justify-between">
-                                        <span class="text-sm">Tax Withheld:</span>
+                                        <span class="text-sm">Tax:</span>
                                         <span class="text-sm">-₱{{ number_format($this->payrollBreakdown['tax'], 2) }}</span>
                                     </div>
                                     @endif
