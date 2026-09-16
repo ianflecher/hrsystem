@@ -13,7 +13,7 @@
 <p class="muted">{{ $row->period_start }} to {{ $row->period_end }} · Due {{ $row->due_on }}</p>
 <h2>Goals</h2>
 @forelse($extra['goals']->get($row->id, collect()) as $goal)
-<div class="divider"><p>{{ $goal->title }} · <strong>{{ $goal->progress }}%</strong></p><progress value="{{ $goal->progress }}" max="100" aria-label="{{ $goal->title }} progress" style="width:100%"></progress>
+<div class="goal"><p>{{ $goal->title }} · <strong>{{ $goal->progress }}%</strong></p><progress value="{{ $goal->progress }}" max="100" aria-label="{{ $goal->title }} progress" style="width:100%"></progress>
 @if($row->status !== 'finalized')<form method="POST" action="{{ $base }}/{{ $row->id }}" class="row">@csrf<input type="hidden" name="goal_id" value="{{ $goal->id }}"><label>Progress % <input type="number" name="progress" value="{{ $goal->progress }}" min="0" max="100" required></label><button name="action" value="progress" class="secondary">Update progress</button></form>@endif</div>
 @empty<p class="muted">No goals assigned yet.</p>@endforelse
 @if($hr && $row->status !== 'finalized')<form method="POST" action="{{ $base }}/{{ $row->id }}" class="grid divider">@csrf<x-people.field name="title" label="New goal / measurable target" maxlength="200" /><div><button name="action" value="goal" class="secondary">Add goal</button></div></form>@endif

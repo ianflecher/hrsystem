@@ -29,16 +29,27 @@
         .people .rest {background:#f1f5f9;border-color:#94a3b8}.people .scroll {overflow-x:auto}
         .people table {width:100%;border-collapse:collapse;font-size:13px}.people td,.people th {text-align:left;padding:10px;border-bottom:1px solid #e2e8f0}
         .people details summary {cursor:pointer;font-weight:600}.people .prose {white-space:pre-wrap;overflow-wrap:anywhere}
+        /* A bare <progress> renders as the browser's own bright green bar,
+           which looked like it belonged to a different program. Slim track,
+           navy fill - progress is neither good news nor bad. */
+        .people progress {width:100%;height:8px;border:0;border-radius:99px;background:#e2e8f0;appearance:none;-webkit-appearance:none;display:block;margin:8px 0}
+        .people progress::-webkit-progress-bar {background:#e2e8f0;border-radius:99px}
+        .people progress::-webkit-progress-value {background:#17233a;border-radius:99px}
+        .people progress::-moz-progress-bar {background:#17233a;border-radius:99px}
+        /* One goal per block, so the rows stop running together. */
+        .people .goal {padding:14px 0;border-top:1px solid #eef1f6}
+        .people .goal:first-of-type {border-top:0}
+        .people .goal form {margin-top:8px;align-items:flex-end;gap:10px}
+        .people .goal label {font-size:12px;font-weight:600;color:#64748b}
+        .people .goal input[type=number] {width:92px}
         @media(max-width:640px){.people{padding:16px}.people .grid{grid-template-columns:1fr}.people h1{font-size:24px}}
     </style>
     <main class="people">
         <p class="muted">IMPRINT CUSTOMS · {{ $hr ? 'PEOPLE OPERATIONS' : 'EMPLOYEE SERVICES' }}</p>
         <h1>{{ $modules[$module] }}</h1>
-        <nav aria-label="People features">
-            @foreach ($modules as $key => $label)
-                    <a class="{{ $module === $key ? 'selected' : '' }}" href="{{ route('people.'.($hr ? 'hr' : 'employee'), $key) }}" @if($module === $key) aria-current="page" @endif>{{ $label }}</a>
-            @endforeach
-        </nav>
+        {{-- The module list was a row of tabs here and the same list again in
+             the sidebar. The sidebar keeps it: it is in the same place on
+             every screen, and it says where you are. --}}
         @if (session('success')) <div class="alert" role="status">{{ session('success') }}</div> @endif
         @if ($errors->any()) <div class="alert error" role="alert"><strong>Please check your entries.</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div> @endif
         @include('people.'.$module)
