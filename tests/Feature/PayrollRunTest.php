@@ -239,6 +239,57 @@ class PayrollRunTest extends TestCase
         $this->assertEqualsWithDelta((float) $row->deductions, $breakdown['total_deductions'], 0.01);
     }
 
+    public function test_somebody_on_work_immersion_is_paid_in_full(): void
+    {
+        $id = $this->employee(16000);
+        DB::table('employees')->where('employee_id', $id)
+            ->update(['immersion_until' => '2019-04-30']);
+
+        $this->screen()->call('generatePeriod');
+        $row = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->first();
+
+        // Nothing withheld: not a regular employee, so no contributions and
+        // no tax.
+        $this->assertEqualsWithDelta(0.0, (float) $row->sss, 0.01);
+        $this->assertEqualsWithDelta(0.0, (float) $row->philhealth, 0.01);
+        $this->assertEqualsWithDelta(0.0, (float) $row->pagibig, 0.01);
+        $this->assertEqualsWithDelta(0.0, (float) $row->tax, 0.01);
+        $this->assertEqualsWithDelta((float) $row->gross_pay, (float) $row->net_pay, 0.01);
+        $this->assertStringContainsString('Work immersion', $row->notes);
+    }
+
+    public function test_immersion_ends_on_its_date_without_anybody_changing_it(): void
+    {
+        $id = $this->employee(16000);
+
+        // It ended before this cutoff began, so this one is a regular payslip.
+        DB::table('employees')->where('employee_id', $id)
+            ->update(['immersion_until' => '2019-03-01']);
+
+        $this->screen()->call('generatePeriod');
+        $row = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->first();
+
+        $this->assertGreaterThan(0, (float) $row->sss);
+        $this->assertStringNotContainsString('Work immersion', $row->notes);
+    }
+
+    public function test_time_not_worked_still_comes_off_during_immersion(): void
+    {
+        $id = $this->employee(16000);
+        DB::table('employees')->where('employee_id', $id)
+            ->update(['immersion_until' => '2019-04-30', 'shift_start' => '08:00:00', 'rest_days' => null]);
+
+        DB::table('hr_attendance')->where('employee_id', $id)->where('date', '2019-03-18')
+            ->update(['time_in' => '2019-03-18 09:00:00', 'status' => 'late']);
+
+        $this->screen()->call('generatePeriod');
+        $row = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->first();
+
+        // Pay that was never earned is not a deduction from pay - it was never
+        // earned - so immersion does not make lateness free.
+        $this->assertGreaterThan(0, (float) $row->time_deduction);
+    }
+
     public function test_a_second_run_does_not_duplicate_anyone(): void
     {
         $id = $this->employee(20000);

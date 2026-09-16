@@ -226,6 +226,9 @@ class DemoData extends Command
                         'shift_end'     => $end,
                         'rest_days'     => $rest,
                         'biometric_id'  => (string) (9000 + $i),
+                        // Two of them are on work immersion, so that payroll
+                        // path has somebody standing on it.
+                        'immersion_until' => $i <= 2 ? today()->addMonths(2)->toDateString() : null,
                         'hire_date'     => now()->subDays(random_int(20, 2200))->toDateString(),
                         'salary'        => random_int(14, 45) * 1000,
                         'status'        => $statuses[array_rand($statuses)],

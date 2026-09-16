@@ -225,6 +225,20 @@ brackets nobody had checked, and Pag-IBIG was a flat 100 with no rate behind it.
 The withholding tax brackets are still in `App\Support\PayrollCalculator` and
 need the same check.
 
+## Work immersion
+
+Somebody on work immersion is not a regular employee, so nothing is withheld from
+their pay: no SSS, PhilHealth, Pag-IBIG or tax. Set **Work immersion until** on
+them under Employees and payroll pays them in full until that date.
+
+It is a date rather than a switch so it ends by itself: the first cutoff that
+starts after it is a normal payslip, with no one having to remember to change
+anything. The payslip says which it was.
+
+Time not worked still comes off. Lateness and absence are pay that was never
+earned rather than something withheld from pay, so immersion does not make them
+free.
+
 ## Backups
 
 Payroll history cannot be reconstructed from anything else, so there is a dump command:

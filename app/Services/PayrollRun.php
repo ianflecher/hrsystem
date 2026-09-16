@@ -24,8 +24,13 @@ class PayrollRun
             // Working a holiday earns a premium on top of the monthly salary,
             // which already covers the holidays nobody works.
             $holiday = (new HolidayPay)->forPeriod($employee, $period->start, $period->end);
+            // Work immersion ends on a date, not on somebody remembering: the
+            // cutoff that starts after it is a regular one.
+            $onImmersion = $employee->immersion_until
+                && $period->start <= substr((string) $employee->immersion_until, 0, 10);
+
             $c = PayrollCalculator::forCutoff((float) $employee->salary, $time['total'], $period->isSecondCutoff,
-                (float) $overtime->sum('approved_amount'), $holiday['amount']);
+                (float) $overtime->sum('approved_amount'), $holiday['amount'], ! $onImmersion);
             $remainingCents = max(0, (int) round($c['net'] * 100));
             $loans = DB::table('employee_loans')->where('employee_id', $employeeId)->where('status', 'active')->where('starts_on', '<=', $period->start)->orderBy('id')->lockForUpdate()->get();
             $installments = [];
@@ -39,6 +44,14 @@ class PayrollRun
             }
             $deduction = array_sum($installments);
             $notes = PayrollCalculator::note($c, $time);
+
+            if ($onImmersion) {
+                $immersion = 'Work immersion until '.substr((string) $employee->immersion_until, 0, 10)
+                    .' - paid in full, no contributions or tax.';
+                // Nothing withheld usually means nothing else to say, so the
+                // separator only appears when there is something after it.
+                $notes = $notes === '' ? $immersion : $immersion.' | '.$notes;
+            }
             if ($c['overtime'] > 0) $notes .= ' | Overtime: PHP '.number_format($c['overtime'], 2);
             if ($deduction > 0) $notes .= ' | Loan repayment: PHP '.number_format($deduction, 2);
             $id = DB::table('hr_payroll')->insertGetId([

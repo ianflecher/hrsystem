@@ -28,13 +28,16 @@ class PayrollCalculator
         bool $isSecondCutoff = true,
         float $overtimePay = 0.0,
         float $holidayPay = 0.0,
+        bool $statutory = true,
     ): array {
         $gross = round($monthlySalary / 2 + $overtimePay + $holidayPay, 2);
 
         // Contributions are monthly amounts. Whether they come off whole on
         // the second cutoff or half on each is a company decision about
         // timing, so it is a setting rather than a rule baked in here.
-        $share = self::monthlyShare($isSecondCutoff);
+        // Somebody on work immersion is not a regular employee: nothing is
+        // withheld, so they receive the whole of what they earned.
+        $share = $statutory ? self::monthlyShare($isSecondCutoff) : 0.0;
 
         $sss        = round(self::sss($monthlySalary) * $share, 2);
         $philhealth = round(self::philHealth($monthlySalary) * $share, 2);
@@ -44,7 +47,7 @@ class PayrollCalculator
         // contributions that fall in this cutoff, less time not worked - which
         // was never earned, so was never taxable.
         $taxable = max(0, $gross - ($sss + $philhealth + $pagibig) - $lateDeduction);
-        $tax = self::tax($taxable);
+        $tax = $statutory ? self::tax($taxable) : 0.0;
 
         $deductions = $sss + $philhealth + $pagibig + $tax + $lateDeduction;
 
@@ -167,7 +170,9 @@ class PayrollCalculator
         if ($c['philhealth'] > 0) $parts[] = 'PhilHealth: PHP '.number_format($c['philhealth'], 2);
         if ($c['pagibig'] > 0)    $parts[] = 'Pag-IBIG: PHP '.number_format($c['pagibig'], 2);
 
-        $parts[] = 'Tax: PHP '.number_format($c['tax'], 2);
+        if ($c['tax'] > 0) {
+            $parts[] = 'Tax: PHP '.number_format($c['tax'], 2);
+        }
 
         // $c['late'] is every time deduction together. Each is named from its
         // own figure so nothing on the payslip is an unexplained sum.
@@ -204,7 +209,11 @@ class PayrollCalculator
             $parts[] = 'Paid leave: '.$time['leaveDays'].' day'.($time['leaveDays'] === 1 ? '' : 's');
         }
 
-        if ($c['sss'] == 0 && $c['philhealth'] == 0 && $c['pagibig'] == 0) {
+        // Only worth saying when the timing is what put nothing here. Under
+        // the split timing an empty cutoff means something else entirely -
+        // work immersion, say - and the payslip should not claim otherwise.
+        if ($c['sss'] == 0 && $c['philhealth'] == 0 && $c['pagibig'] == 0
+            && Statutory::timing() === 'second_cutoff') {
             $parts[] = 'contributions fall on the second cutoff';
         }
 

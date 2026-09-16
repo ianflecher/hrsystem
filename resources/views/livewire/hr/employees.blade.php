@@ -30,6 +30,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public string $shift_start = '';
     public string $shift_end = '';
     public array $rest_days = [];
+    public string $immersion_until = '';
     public string $biometric_id = '';
     public $department_id = '';
     public string $hire_date = '';
@@ -166,6 +167,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->shift_start   = $row->shift_start ? substr($row->shift_start, 0, 5) : '';
         $this->shift_end     = $row->shift_end ? substr($row->shift_end, 0, 5) : '';
         $this->rest_days     = WorkWeek::days($row->rest_days);
+        $this->immersion_until = $row->immersion_until ? substr((string) $row->immersion_until, 0, 10) : '';
         $this->biometric_id  = (string) ($row->biometric_id ?? '');
         $this->department_id = $row->department_id ?? '';
         $this->hire_date     = $row->hire_date;
@@ -190,6 +192,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'shift_end'     => ['nullable', 'date_format:H:i'],
             'rest_days'     => ['array'],
             'rest_days.*'   => ['integer', 'between:1,7'],
+            'immersion_until' => ['nullable', 'date'],
             'biometric_id'  => ['nullable', 'string', 'max:50',
                                 Rule::unique('employees', 'biometric_id')->ignore($this->editingId, 'employee_id')],
             'department_id' => ['nullable'],
@@ -207,13 +210,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         // The calendar is drawn from these, so they are the whole schedule:
         // no rest day set means the person is shown as working every day.
         $restDays = WorkWeek::store($data['rest_days'] ?? []);
+        // Null once it is blank: an empty string is not a date, and a
+        // regular employee is simply one with no immersion end.
+        $immersionUntil = ($data['immersion_until'] ?? '') !== '' ? $data['immersion_until'] : null;
         // Null rather than empty string: the column is unique, and two blanks
         // would collide where two unenrolled people should not.
         $biometricId = ($data['biometric_id'] ?? '') !== '' ? $data['biometric_id'] : null;
         $salary = $data['salary'] === '' || $data['salary'] === null ? 0 : $data['salary'];
 
         if ($this->editingId) {
-            DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $biometricId, $salary, $userId) {
+            DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $userId) {
                 DB::table('users')->where('user_id', $userId)->update([
                     'full_name'  => $data['full_name'],
                     'username'   => $data['username'],
@@ -227,6 +233,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     'shift_start'   => $shiftStart,
                     'shift_end'     => $shiftEnd,
                     'rest_days'     => $restDays,
+                'immersion_until' => $immersionUntil,
+                    'immersion_until' => $immersionUntil,
                     'biometric_id'  => $biometricId,
                     'department_id' => $departmentId,
                     'hire_date'     => $data['hire_date'],
@@ -249,7 +257,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         // house default, and the account must replace it at first sign-in.
         $password = Str::password(12, symbols: false);
 
-        DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $biometricId, $salary, $password) {
+        DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $password) {
             $newUserId = DB::table('users')->insertGetId([
                 'full_name'            => $data['full_name'],
                 'username'             => $data['username'],
@@ -434,6 +442,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->shift_start   = '';
         $this->shift_end     = '';
         $this->rest_days     = [];
+        $this->immersion_until = '';
         $this->biometric_id  = '';
         $this->department_id = '';
         $this->hire_date     = now()->toDateString();
@@ -713,6 +722,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     The shift calendar is drawn from these, so nothing is entered per date.
                                 </p>
                                 @error('rest_days') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="form-label" for="immersion_until">Work immersion until</label>
+                                <input id="immersion_until" type="date" wire:model="immersion_until" class="form-input">
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Leave blank for a regular employee. While this date is in the future they are
+                                    paid in full - no SSS, PhilHealth, Pag-IBIG or tax - and payroll goes back to
+                                    normal on the first cutoff that starts after it, without anybody changing this.
+                                </p>
+                                @error('immersion_until') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
 
                             <div>
