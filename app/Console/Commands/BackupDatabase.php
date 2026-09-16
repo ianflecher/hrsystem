@@ -78,10 +78,37 @@ class BackupDatabase extends Command
         return self::SUCCESS;
     }
 
-    /** mysqldump is often not on PATH on Windows, so the path can be configured. */
+    /**
+     * Where mysqldump is.
+     *
+     * DB_DUMP_BINARY wins if it is set. Otherwise the usual places are tried,
+     * because on Windows mysqldump is almost never on PATH and a backup that
+     * needs a setting nobody knows about is a backup nobody has.
+     */
     private function binary(): string
     {
-        return env('DB_DUMP_BINARY', 'mysqldump');
+        $configured = env('DB_DUMP_BINARY');
+
+        if ($configured) {
+            return $configured;
+        }
+
+        foreach ([
+            'C:/xampp/mysql/bin/mysqldump.exe',
+            'C:/xampp1/mysql/bin/mysqldump.exe',
+            'C:/Program Files/MySQL/MySQL Server 8.0/bin/mysqldump.exe',
+            'C:/laragon/bin/mysql/mysql-8.0.30-winx64/bin/mysqldump.exe',
+            '/usr/bin/mysqldump',
+            '/usr/local/bin/mysqldump',
+        ] as $path) {
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+
+        // Nothing found; PATH is the last hope, and its failure message is the
+        // one that tells the user to set DB_DUMP_BINARY.
+        return 'mysqldump';
     }
 
     private function prune(string $directory, int $keep): void

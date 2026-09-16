@@ -25,7 +25,21 @@ and `username`.
   string literals inside raw `COUNT(CASE WHEN ...)` aggregates), so SQLite and
   Postgres will not work without rewriting those queries.
 
-## Setup
+## Starting it on Windows
+
+Double-click **`start.bat`**. On a fresh download it installs the dependencies,
+creates `.env`, starts MySQL, creates and migrates the database, and seeds the two
+starting accounts; on every run after that each of those steps is skipped, and it
+never touches data that is already there. It then serves on port 8003 - beside
+Imprint Production on 8000 rather than fighting it for the port - and opens the
+sign-in page.
+
+It prints the LAN address too, so other machines in the office can reach it.
+
+Keep the two minimised windows ("Imprint MySQL", "Imprint HRIS") open; closing
+them stops the system.
+
+## Setup by hand
 
 ```bash
 composer install
@@ -177,10 +191,11 @@ php artisan db:backup
 ```
 
 It writes a `.sql` file to `storage/app/backups` and keeps the last 14 (`--keep=`).
-`mysqldump` is usually not on PATH on Windows; set its full path in `.env`:
+`mysqldump` is usually not on PATH on Windows, so the command looks in the usual
+XAMPP and MySQL locations by itself. If yours is somewhere else, name it in `.env`:
 
 ```
-DB_DUMP_BINARY="C:/xampp/mysql/bin/mysqldump.exe"
+DB_DUMP_BINARY="D:/some/other/path/mysqldump.exe"
 ```
 
 A nightly run at 01:30 is already scheduled, but the scheduler has to be running for
