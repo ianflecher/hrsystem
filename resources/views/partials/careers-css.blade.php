@@ -382,6 +382,8 @@
             inset: 0;
             z-index: -2;
             background-size: cover;
+            /* 40% down suits a wide shot of a room, where the interest is
+               above the middle. */
             background-position: center 40%;
         }
 
@@ -1624,6 +1626,74 @@
         .hero--jobs .careers__display { font-size: clamp(2.25rem, 5.4vw, 4rem); }
 
         @media (max-width: 720px) { .hero--jobs { padding: 112px 0 48px; } }
+
+        /* ------------------------------------------------- hover on pictures */
+        /* Everything with a photograph in it answers to the pointer the same
+           way: pictures zoom a little inside their frame, cards that carry
+           words lift instead. Heroes are deliberately excluded - a hero is
+           the size of the screen and the headline sits on top of it. */
+        .floor__pic,
+        .welcome__pic,
+        .path__pic,
+        .bento__photo,
+        .event__hero,
+        .team__shot,
+        .founder__pic,
+        .story__detail {
+            transition: transform .4s ease;
+        }
+
+        /* These sit inside something that clips, so the picture grows and the
+           frame does not. */
+        .floor__card:hover .floor__pic,
+        .welcome__item:hover .welcome__pic,
+        .path:hover .path__pic,
+        .bento__photo:hover,
+        .event__hero:hover {
+            transform: scale(1.05);
+        }
+
+        /* These are their own frame, so a smaller move: enough to answer the
+           pointer, not enough to collide with the tile beside them. */
+        .team__shot:hover,
+        .founder__pic:hover,
+        .story__detail:hover {
+            transform: scale(1.02);
+        }
+
+        /* Cards with words on the photograph lift rather than zoom. */
+        .voice,
+        .explore__big {
+            transition: transform .2s ease, box-shadow .2s ease;
+        }
+
+        .voice:hover,
+        .explore__big:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 18px 34px rgba(12, 22, 38, .22);
+        }
+
+        /* A pointer, so the whole tile reads as one thing you can act on. */
+        .floor__card, .welcome__item, .voice, .team__shot, .event__hero,
+        .bento__photo, .story__detail { cursor: default; }
+
+        /* Somebody who has asked their system not to animate gets none of it. */
+        @media (prefers-reduced-motion: reduce) {
+            .floor__pic, .welcome__pic, .path__pic, .bento__photo, .event__hero,
+            .team__shot, .founder__pic, .story__detail, .voice, .explore__big,
+            .station img, .face img, .mosaic__img {
+                transition: none;
+            }
+
+            .floor__card:hover .floor__pic, .welcome__item:hover .welcome__pic,
+            .path:hover .path__pic, .bento__photo:hover, .event__hero:hover,
+            .team__shot:hover, .founder__pic:hover, .story__detail:hover,
+            .station:hover img, .face:hover img, .mosaic__card:hover .mosaic__img {
+                transform: none;
+            }
+
+            .voice:hover, .explore__big:hover { transform: none; }
+        }
 
         /* ---------------------------------------------------------- events */
         .event + .event { margin-top: 56px; padding-top: 48px; border-top: 1px solid var(--line); }

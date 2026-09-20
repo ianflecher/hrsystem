@@ -101,43 +101,9 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
         </div>
     </section>
 
-    {{-- --------------------------------------------------- store portraits --}}
-    {{-- Three of the shop staff, standing, looking straight at you.
-
-         The quote cards used to sit here - the same three faces and the same
-         words as the home page. One page saying it once is enough, and this
-         one is addressed to somebody wondering whether they would fit, which
-         a face looking back answers better than a second copy of a quote.
-
-         All three or none: two portraits in a three-wide grid leaves a hole. --}}
-    @php
-        $standing = array_values(array_filter([
-            $this->pic('who-1'), $this->pic('who-2'), $this->pic('who-3'),
-        ]));
-    @endphp
-    @if (count($standing) === 3)
-    <section class="section section--wash">
-        <div class="careers__wrap">
-            <div class="explore__head">
-                <div class="section__head" style="margin-bottom: 0">
-                    <span class="careers__eyebrow">On the team</span>
-                    <h2>The people you would join.</h2>
-                </div>
-                <p class="explore__note">
-                    Out front at the store, on an ordinary trading day.
-                </p>
-            </div>
-
-            <div class="faces">
-                @foreach ($standing as $portrait)
-                    <figure class="face">
-                        <img src="{{ $portrait }}" alt="" loading="lazy" decoding="async">
-                    </figure>
-                @endforeach
-            </div>
-        </div>
-    </section>
-    @endif
+    {{-- The three standing portraits that used to sit here are in the team
+         strip on Our people now, with the rest of the posed shots: one page
+         showing who works here, rather than a few faces on each. --}}
 
     {{-- ---------------------------------------------------------- trades --}}
     {{-- Uniqlo closes the page with "Teams behind the brand". Ours is the
