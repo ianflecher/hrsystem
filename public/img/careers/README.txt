@@ -199,9 +199,13 @@ Nobody in the front-* set is looking at the camera - they are people at
 work.
 
 The three standing portraits from the same shoot are who-1 .. who-3
-(DSC02704, DSC02713, DSC02726, all 3:4), shown on /careers/who-we-hire
+(DSC02704, DSC02713, DSC02727, all 3:4), shown on /careers/who-we-hire
 under "The people you would join". That section needs all three; with fewer
 it is not drawn, because two portraits in a three-wide grid leaves a hole.
+
+who-3 was DSC02726 first, which is the same pose without the smile. The
+other two are smiling, so the unsmiling one read as a different kind of
+photograph rather than as one of a set.
 
 The tiles are 3:4 portraits because that section renders them in the same
 grid as the faces. The originals are 3376x6000, so these are vertical crops
