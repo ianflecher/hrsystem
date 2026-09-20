@@ -153,8 +153,10 @@ Sportsfest 2026, shown on /careers/who-we-are under "What we get up to"
 (App\Support\CareersEvents).
 
 Cut from the share at
-  IMPRINT CUSTOMS - EVENTS15.26 - Imprint Sports fest
-    81.26 - SPORTSFEST83.26 - IC SPORTSFEST 2026 PHOTO OUTPUTS
+  IMPRINT CUSTOMS - EVENTS
+    0615.26 - Imprint Sports fest
+      0701.26 - SPORTSFEST
+        0703.26 - IC SPORTSFEST 2026 PHOTO OUTPUTS
 (311 frames; these seven were chosen from a contact sheet of the set).
 
   1  DSC09818-128  the whole company on the court   16:9, leads the block
