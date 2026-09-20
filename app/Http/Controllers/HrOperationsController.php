@@ -73,7 +73,7 @@ class HrOperationsController extends Controller
     public function approvalCenter()
     {
         \App\Support\PeopleAccess::hr();
-        $leave = DB::table('leaves as l')->join('employees as e','l.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('l.status','pending')->select('l.id','l.employee_id','l.start_date','l.end_date','l.reason','u.full_name')->orderBy('l.start_date')->get();
+        $leave = DB::table('leaves as l')->join('employees as e','l.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('l.status','pending')->select('l.leave_id as id','l.employee_id','l.start_date','l.end_date','l.reason','u.full_name')->orderBy('l.start_date')->get();
         $overtime = DB::table('overtime_requests as o')->join('employees as e','o.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('o.status','pending')->select('o.id','o.employee_id','o.starts_at','o.ends_at','o.minutes','o.reason','u.full_name')->orderBy('o.starts_at')->get();
         $attendance = Schema::hasTable('attendance_corrections') ? DB::table('attendance_corrections as a')->join('employees as e','a.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('a.status','pending')->select('a.*','u.full_name')->orderBy('a.attendance_date')->get() : collect();
         $requests = DB::table('employee_requests as r')->join('employees as e','r.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('r.status','pending')->select('r.*','u.full_name')->orderBy('r.created_at')->get();

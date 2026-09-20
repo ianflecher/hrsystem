@@ -56,16 +56,33 @@ class PortalSmokeTest extends TestCase
             'hr attendance'   => ['/hr/attendance'],
             'hr leave'        => ['/hr/leave'],
             'hr payroll'      => ['/hr/payroll'],
+            'hr employees'    => ['/hr/employees'],
+            'hr positions'    => ['/hr/positions'],
+
+            // The operations screens were not covered at all, and the whole
+            // suite stayed green while the approval centre answered every
+            // request with a 500: it asked the leaves table for a column
+            // called id, which is named leave_id. A page nobody renders in a
+            // test is a page nobody notices has stopped working.
+            'ops payroll control'  => ['/hr/operations/payroll-control'],
+            'ops payroll approval' => ['/hr/operations/payroll-approval'],
+            'ops approval centre'  => ['/hr/operations/approval-center'],
+            'ops admin centre'     => ['/hr/operations/admin-center'],
+            'ops analytics'        => ['/hr/operations/analytics'],
+            'ops attendance gaps'  => ['/hr/operations/attendance-exceptions'],
+            'ops manager'          => ['/hr/operations/manager'],
+            'ops inbox'            => ['/hr/operations/inbox'],
         ];
     }
 
     public static function employeePages(): array
     {
         return [
-            'employee dashboard'  => ['/employee/dashboard'],
-            'employee attendance' => ['/employee/attendance'],
-            'employee payroll'    => ['/employee/payroll'],
-            'employee leave'      => ['/employee/leave'],
+            'employee dashboard'    => ['/employee/dashboard'],
+            'employee attendance'   => ['/employee/attendance'],
+            'employee payroll'      => ['/employee/payroll'],
+            'employee leave'        => ['/employee/leave'],
+            'employee self service' => ['/employee/self-service'],
         ];
     }
 
