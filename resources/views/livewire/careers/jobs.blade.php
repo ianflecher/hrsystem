@@ -142,7 +142,7 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
              @if ($jobsHero) style="background-image: url('{{ $jobsHero }}')" @endif></div>
 
         <div class="careers__wrap">
-            <span class="careers__eyebrow hero__eyebrow">Open positions</span>
+            <span class="careers__eyebrow hero__eyebrow">Open positions &middot; Philippines</span>
             <h1 class="careers__display">Find your next role.</h1>
             <p class="hero__lede">
                 Choose a pathway to explore open roles at Imprint Customs, or

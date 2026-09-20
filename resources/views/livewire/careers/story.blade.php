@@ -39,7 +39,7 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
              @if ($storyHero) style="background-image: url('{{ $storyHero }}')" @endif></div>
 
         <div class="careers__wrap">
-            <span class="careers__eyebrow hero__eyebrow">Who we are</span>
+            <span class="careers__eyebrow hero__eyebrow">Who we are &middot; Philippines</span>
             <h1 class="careers__display">Made here, start to finish.</h1>
             <p class="hero__lede">
                 Imprint Customs PH is a custom printed apparel shop. Jerseys,
@@ -47,6 +47,9 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
                 embroidered, cut, sewn, pressed and packed in the same building,
                 by the same team.
             </p>
+            <a class="cta__btn" href="{{ route('careers.jobs') }}" style="margin-top: 28px">
+                Explore openings <i class="fas fa-arrow-right"></i>
+            </a>
         </div>
     </section>
 

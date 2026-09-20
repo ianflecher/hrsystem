@@ -307,3 +307,22 @@ under, so it is not used.
 The check is scratch/audit_dupes.py in the session notes: it fingerprints
 every source frame at several crops and pairs each slot with its nearest
 match, printing anything that pairs twice. Re-run it after adding images.
+
+-----------------------------------------------------------------------
+ONE HERO PER PAGE
+
+Every page opens the same way now, as Uniqlo's section pages do: a
+photograph, an eyebrow naming the area and the country, the headline over
+the picture, a sentence, and one button into the openings.
+
+  /                     hero.jpg         (the sewing floor)
+  /careers/who-we-are   story-hero.jpg
+  /careers/who-we-hire  who-hero.jpg     DSC02745  three of the shop staff
+  /careers/inside       inside-hero.jpg
+  /careers/front        front-hero.jpg
+  /careers/jobs         jobs-hero.jpg    DSC02731  the shopfront
+  /careers/our-people   people-hero.jpg  DSC02362  the office desks
+
+Jobs and Who we hire were borrowing - Jobs showed the home page's hero and
+Who we hire showed the card photograph from Who we are - so both now have
+one of their own. Our people had no hero at all.

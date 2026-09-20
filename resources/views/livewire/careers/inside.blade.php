@@ -49,15 +49,15 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
              @if ($insideHero) style="background-image: url('{{ $insideHero }}')" @endif></div>
 
         <div class="careers__wrap">
-            <span class="careers__eyebrow hero__eyebrow">The production floor</span>
+            <span class="careers__eyebrow hero__eyebrow">The production floor &middot; Philippines</span>
             <h1 class="careers__display">Step onto the floor.</h1>
             <p class="hero__lede">
                 Printing, embroidery, cutting, sewing, press and the store out
                 front &mdash; every order passes through the same building, and
                 through somebody&rsquo;s hands.
             </p>
-            <a class="cta__btn" href="{{ route('applicant.login') }}" style="margin-top: 28px">
-                Apply now <i class="fas fa-arrow-right"></i>
+            <a class="cta__btn" href="{{ route('careers.jobs') }}" style="margin-top: 28px">
+                Explore openings <i class="fas fa-arrow-right"></i>
             </a>
         </div>
     </section>
