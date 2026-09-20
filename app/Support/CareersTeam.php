@@ -20,8 +20,12 @@ class CareersTeam
     {
         $shots = [];
 
-        foreach (['team-1', 'team-2', 'team-3', 'team-4', 'team-5', 'team-6'] as $name) {
-            if ($src = CareersMedia::pic($name)) {
+        // Twelve slots rather than six: the strip was only the studio session,
+        // so the shop, the barbershop and the gate - the posed portraits from
+        // the later shoots - had nowhere to go. Any slot without a file is
+        // simply skipped.
+        for ($i = 1; $i <= 12; $i++) {
+            if ($src = CareersMedia::pic('team-'.$i)) {
                 $shots[] = ['src' => $src, 'wide' => false];
             }
         }
