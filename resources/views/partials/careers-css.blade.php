@@ -515,11 +515,12 @@
             margin: 0;
             padding: 0;
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 18px;
+            /* Two across, like the doors on the home page. Four made each card
+               327px wide and the photograph in it a thumbnail. */
+            grid-template-columns: repeat(2, 1fr);
+            gap: 22px;
         }
 
-        @media (max-width: 1040px) { .welcome__list { grid-template-columns: repeat(2, 1fr); } }
 
         .welcome__item {
             display: flex;
@@ -1158,10 +1159,14 @@
         .search--light { margin-top: 4px; }
 
         /* ------------------------------------------- the home page's doors */
+        /* Two across, not four. At four the card was 327px wide and the
+           photograph in it was the size of a thumbnail - too small to see who
+           was in it, and asking the browser to shrink a photograph that far is
+           what made them look coarse. */
         .paths {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 18px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 22px;
         }
 
         .path {
@@ -1197,7 +1202,6 @@
         .path__go i { margin-left: 7px; transition: transform .15s ease; }
         .path:hover .path__go i { transform: translateX(3px); }
 
-        @media (max-width: 1040px) { .paths { grid-template-columns: repeat(2, 1fr); } }
         @media (max-width: 620px)  { .paths { grid-template-columns: 1fr; } }
 
         /* ------------------------------------------------- who we are */
