@@ -39,14 +39,57 @@
             {{ $slot }}
         </div>
 
-        <div class="careers__wrap">
-            <div class="careers__foot">
-                <span>&copy; {{ date('Y') }} Imprint Customs PH</span>
-                <span><i class="fas fa-envelope" style="margin-right:8px"></i>hr@imprintcustoms.ph</span>
-                <a href="{{ route('applicant.login') }}">Track an application</a>
-                <a href="{{ route('portals') }}">Already an employee?</a>
+        <footer class="foot">
+            <div class="careers__wrap">
+                <div class="foot__top">
+                    <div class="foot__brand">
+                        <a class="foot__mark" href="{{ route('careers') }}">
+                            @if (file_exists(public_path('imprint-customs.jpg')))
+                                <img src="{{ asset('imprint-customs.jpg') }}" alt="">
+                            @endif
+                            <span>IC <b>Careers</b></span>
+                        </a>
+                        <p>
+                            Custom apparel made start to finish in one building
+                            &mdash; printed, embroidered, cut, sewn and sold by
+                            the same team.
+                        </p>
+                        <a class="foot__cta" href="{{ route('careers.jobs') }}">
+                            See what is open <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </div>
+
+                    <div class="foot__cols">
+                        <div class="foot__col">
+                            <h3>The company</h3>
+                            <a href="{{ route('careers.story') }}">Who we are</a>
+                            <a href="{{ route('careers.inside') }}">Inside the floor</a>
+                            <a href="{{ route('careers.front') }}">Store, barbershop &amp; caf&eacute;</a>
+                            <a href="{{ route('careers.people') }}">Our people</a>
+                        </div>
+
+                        <div class="foot__col">
+                            <h3>Working here</h3>
+                            <a href="{{ route('careers.who') }}">Who we hire</a>
+                            <a href="{{ route('careers.jobs') }}">Open positions</a>
+                            <a href="{{ route('careers.jobs') }}#benefits">Pay and benefits</a>
+                            <a href="{{ route('applicant.login') }}">Track an application</a>
+                        </div>
+
+                        <div class="foot__col">
+                            <h3>Get in touch</h3>
+                            <a href="mailto:hr@imprintcustoms.ph">hr@imprintcustoms.ph</a>
+                            <a href="{{ route('portals') }}">Already an employee?</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="foot__bar">
+                    <span>&copy; {{ date('Y') }} Imprint Customs PH</span>
+                    <span>Philippines</span>
+                </div>
             </div>
-        </div>
+        </footer>
     </div>
 
     {{-- Transparent only at the very top of a page that opens on a photograph.

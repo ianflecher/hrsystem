@@ -9,6 +9,21 @@
             --brand:  #E31B23;
             --wash:   #F6F8FB;
 
+            /* Three radii, three shadows, and everything picks from them.
+               Before this there were six radii chosen a section at a time. */
+            --r-sm: 12px;   /* tiles in a grid, inputs, small controls */
+            --r-md: 16px;   /* cards and photographs */
+            --r-lg: 20px;   /* the big feature panels */
+            --r-pill: 999px;
+
+            --shadow-rest:  0 1px 2px rgba(12, 22, 38, .04), 0 8px 20px rgba(12, 22, 38, .05);
+            --shadow-hover: 0 2px 4px rgba(12, 22, 38, .06), 0 18px 34px rgba(12, 22, 38, .12);
+
+            /* One size for every section heading, and one for the rank below
+               it. They had drifted to three different clamps. */
+            --h2: clamp(1.875rem, 3.6vw, 2.75rem);
+            --h3: clamp(1.0625rem, 1.4vw, 1.1875rem);
+
             background: #fff;
             color: var(--ink);
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -110,7 +125,7 @@
         .cnav__link {
             flex-shrink: 0;
             padding: 8px 12px;
-            border-radius: 6px;
+            border-radius: 10px;
             color: var(--ink);
             font-size: 1rem;
             font-weight: 500;
@@ -148,7 +163,7 @@
             align-items: center;
             height: 44px;
             padding: 0 28px;
-            border-radius: 999px;
+            border-radius: var(--r-pill);
             background: var(--brand);
             color: #fff;
             font-size: .9375rem;
@@ -355,7 +370,7 @@
             .cnav__apply {
                 height: 54px;
                 justify-content: center;
-                border-radius: 6px;
+                border-radius: 10px;
                 font-size: 1rem;
             }
         }
@@ -459,7 +474,7 @@
             height: 60px;
             padding: 0 20px 0 50px;
             border: 0;
-            border-radius: 6px;
+            border-radius: 10px;
             background: #fff;
             color: var(--ink);
             font-size: 1rem;
@@ -473,7 +488,7 @@
             height: 60px;
             padding: 0 38px;
             border: 0;
-            border-radius: 6px;
+            border-radius: 10px;
             background: var(--brand);
             color: #fff;
             font: inherit;
@@ -492,7 +507,7 @@
         .section__head { max-width: 46rem; margin-bottom: 56px; }
 
         .section__head h2 {
-            font-size: clamp(2rem, 4.2vw, 3.25rem);
+            font-size: var(--h2);
             font-family: var(--font-head, 'Space Grotesk', system-ui, sans-serif);
             font-weight: 700;
             line-height: 1.05;
@@ -526,7 +541,7 @@
             flex-direction: column;
             background: #fff;
             border: 1px solid var(--line);
-            border-radius: 14px;
+            border-radius: var(--r-md);
             overflow: hidden;
         }
 
@@ -575,7 +590,7 @@
             height: 42px;
             padding: 0 36px 0 14px;
             border: 1px solid var(--line);
-            border-radius: 6px;
+            border-radius: 10px;
             background: #fff url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235A6A80' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center / 16px;
             color: var(--ink);
             font: inherit;
@@ -632,7 +647,7 @@
             display: inline-flex;
             align-items: center;
             padding: 3px 11px;
-            border-radius: 999px;
+            border-radius: var(--r-pill);
             background: #FDECEC;
             color: #A3131A;
             font-size: .75rem;
@@ -656,7 +671,7 @@
             gap: 10px;
             height: 46px;
             padding: 0 26px;
-            border-radius: 6px;
+            border-radius: 10px;
             border: 1.5px solid var(--ink);
             color: var(--ink);
             font-size: .9375rem;
@@ -724,7 +739,7 @@
             grid-column: span 5;
             background: var(--brand);
             color: #fff;
-            border-radius: 16px;
+            border-radius: var(--r-md);
             padding: 34px 36px 34px;
             display: flex;
             flex-direction: column;
@@ -738,7 +753,7 @@
         .bento__red h3 {
             margin: auto 0 0;
             font-family: var(--font-head, 'Space Grotesk', system-ui, sans-serif);
-            font-size: clamp(1.75rem, 3.1vw, 2.5rem);
+            font-size: var(--h2);
             font-weight: 700;
             line-height: 1.12;
             letter-spacing: -0.025em;
@@ -750,7 +765,7 @@
             grid-column: span 7;
             position: relative;
             min-height: 19rem;
-            border-radius: 16px;
+            border-radius: var(--r-md);
             overflow: hidden;
             background: var(--ink) center/cover;
             display: flex;
@@ -775,7 +790,7 @@
             grid-column: span 4;
             background: #fff;
             border: 1px solid var(--line);
-            border-radius: 16px;
+            border-radius: var(--r-md);
             padding: 30px 28px 32px;
         }
 
@@ -803,7 +818,7 @@
             grid-column: span 4;
             background: #fff;
             border: 1px solid var(--line);
-            border-radius: 16px;
+            border-radius: var(--r-md);
             padding: 30px 28px 32px;
         }
 
@@ -816,7 +831,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 11px;
+            border-radius: var(--r-sm);
             background: var(--ink);
             color: #fff;
         }
@@ -869,7 +884,7 @@
             margin-top: 24px;
             padding: 26px 28px 24px;
             border: 1px solid var(--line);
-            border-radius: 14px;
+            border-radius: var(--r-md);
             background: #fff;
         }
 
@@ -893,7 +908,7 @@
 
         .lawful li {
             padding: 7px 14px;
-            border-radius: 999px;
+            border-radius: var(--r-pill);
             background: var(--wash);
             border: 1px solid var(--line);
             font-size: .875rem;
@@ -921,7 +936,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 10px;
+            border-radius: var(--r-sm);
             background: #FDECEC;
             color: var(--brand);
             margin-bottom: 22px;
@@ -967,7 +982,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 999px;
+            border-radius: var(--r-pill);
             border: 1.5px solid var(--ink);
             background: #fff;
             color: var(--ink);
@@ -986,7 +1001,7 @@
             flex: 0 0 auto;
             width: 15rem;
             aspect-ratio: 3 / 4;
-            border-radius: 12px;
+            border-radius: var(--r-sm);
             background-size: cover;
             background-position: center top;
             background-color: var(--ink);
@@ -1016,7 +1031,7 @@
         .station {
             margin: 0;
             position: relative;
-            border-radius: 10px;
+            border-radius: var(--r-sm);
             overflow: hidden;
             background: var(--ink);
         }
@@ -1050,7 +1065,7 @@
 
         /* ---------------------------------------------------------- video */
         .clip {
-            border-radius: 14px;
+            border-radius: var(--r-md);
             overflow: hidden;
             background: var(--ink);
             border: 1px solid var(--line);
@@ -1108,7 +1123,7 @@
             margin-top: 38px;
             height: 58px;
             padding: 0 36px;
-            border-radius: 6px;
+            border-radius: 10px;
             background: var(--brand);
             color: #fff;
             font-size: 1rem;
@@ -1119,19 +1134,101 @@
         .cta__btn:hover { background: #B5141A; transform: translateY(-2px); }
 
         /* --------------------------------------------------------- footer */
-        .careers__foot {
-            padding: 40px 0;
-            border-top: 1px solid var(--line);
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px 28px;
-            align-items: center;
-            font-size: .875rem;
-            color: var(--muted);
+        .foot {
+            margin-top: 0;
+            padding: 72px 0 28px;
+            background: var(--ink);
+            color: rgba(255, 255, 255, .72);
+            font-size: .9375rem;
         }
 
-        .careers__foot a { color: var(--ink); font-weight: 600; }
-        .careers__foot a:hover { color: var(--brand); }
+        .foot__top {
+            display: grid;
+            grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+            gap: 48px 64px;
+            padding-bottom: 44px;
+        }
+
+        .foot__mark {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            color: #fff;
+            font-size: 1.0625rem;
+        }
+
+        .foot__mark img {
+            width: 38px;
+            height: 38px;
+            object-fit: contain;
+            border-radius: 50%;
+            background: #fff;
+            padding: 2px;
+        }
+
+        .foot__mark b { font-weight: 700; }
+
+        .foot__brand p {
+            margin: 18px 0 0;
+            max-width: 34ch;
+            line-height: 1.7;
+            color: rgba(255, 255, 255, .62);
+            font-size: .9375rem;
+        }
+
+        .foot__cta {
+            display: inline-block;
+            margin-top: 20px;
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .foot__cta i { margin-left: 8px; transition: transform .15s ease; }
+        .foot__cta:hover { color: #FF7A80; }
+        .foot__cta:hover i { transform: translateX(4px); }
+
+        .foot__cols {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 32px;
+        }
+
+        .foot__col h3 {
+            margin: 0 0 16px;
+            color: rgba(255, 255, 255, .52);
+            font-size: .6875rem;
+            font-weight: 700;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+        }
+
+        .foot__col a {
+            display: block;
+            padding: 6px 0;
+            color: rgba(255, 255, 255, .82);
+            transition: color .15s ease;
+        }
+
+        .foot__col a:hover { color: #fff; }
+
+        .foot__bar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 8px 24px;
+            padding-top: 22px;
+            border-top: 1px solid rgba(255, 255, 255, .14);
+            color: rgba(255, 255, 255, .5);
+            font-size: .8125rem;
+        }
+
+        @media (max-width: 900px) {
+            .foot__top { grid-template-columns: 1fr; gap: 36px; }
+        }
+
+        @media (max-width: 620px) {
+            .foot__cols { grid-template-columns: 1fr 1fr; gap: 24px; }
+        }
 
         @media (max-width: 860px) {
             .careers__wrap { padding: 0 20px; }
@@ -1169,7 +1266,7 @@
             flex-direction: column;
             background: #fff;
             border: 1px solid var(--line);
-            border-radius: 14px;
+            border-radius: var(--r-md);
             overflow: hidden;
             transition: transform .15s ease, box-shadow .15s ease;
         }
@@ -1213,7 +1310,7 @@
             position: relative;
             margin-top: 28px;
             min-height: 17rem;
-            border-radius: 16px;
+            border-radius: var(--r-md);
             overflow: hidden;
             background-size: cover;
             background-position: center;
@@ -1230,7 +1327,7 @@
             gap: 1px;
             background: var(--line);
             border: 1px solid var(--line);
-            border-radius: 14px;
+            border-radius: var(--r-md);
             overflow: hidden;
         }
 
@@ -1252,7 +1349,7 @@
         .floor__card {
             background: #fff;
             border: 1px solid var(--line);
-            border-radius: 14px;
+            border-radius: var(--r-md);
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -1300,7 +1397,7 @@
             justify-content: space-between;
             min-height: 25rem;
             padding: 26px 28px 28px;
-            border-radius: 16px;
+            border-radius: var(--r-md);
             overflow: hidden;
             background: var(--ink) center/cover;
             color: #fff;
@@ -1330,7 +1427,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 12px;
+            border-radius: var(--r-sm);
             background: rgba(255, 255, 255, .16);
             -webkit-backdrop-filter: blur(8px);
             backdrop-filter: blur(8px);
@@ -1368,7 +1465,7 @@
             padding: 18px 20px;
             background: #fff;
             border: 1px solid var(--line);
-            border-radius: 14px;
+            border-radius: var(--r-md);
             transition: border-color .15s ease, transform .15s ease;
         }
 
@@ -1381,7 +1478,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 12px;
+            border-radius: var(--r-sm);
             background: #FDECEC;
             color: var(--brand);
         }
@@ -1409,7 +1506,7 @@
             justify-content: space-between;
             aspect-ratio: 3 / 4;
             padding: 18px;
-            border-radius: 14px;
+            border-radius: var(--r-md);
             overflow: hidden;
             background: var(--ink) center/cover;
             color: #fff;
@@ -1427,7 +1524,7 @@
         .voice__badge {
             align-self: flex-start;
             padding: 6px 13px;
-            border-radius: 999px;
+            border-radius: var(--r-pill);
             background: var(--brand);
             color: #fff;
             font-size: .6875rem;
@@ -1456,7 +1553,7 @@
 
         .founder__pic {
             aspect-ratio: 4 / 5;
-            border-radius: 16px;
+            border-radius: var(--r-md);
             background-size: cover;
             background-position: center;
             background-color: var(--ink);
@@ -1517,7 +1614,7 @@
         .dayone__card {
             background: #fff;
             border: 1px solid var(--line);
-            border-radius: 14px;
+            border-radius: var(--r-md);
             padding: 26px 24px 28px;
         }
 
@@ -1527,7 +1624,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 12px;
+            border-radius: var(--r-sm);
             background: #FDECEC;
             color: var(--brand);
             margin-bottom: 18px;
@@ -1554,7 +1651,7 @@
             position: relative;
             display: block;
             aspect-ratio: 4 / 3;
-            border-radius: 14px;
+            border-radius: var(--r-md);
             overflow: hidden;
             background: var(--ink);
             color: #fff;
@@ -1626,6 +1723,70 @@
         .hero--jobs .careers__display { font-size: clamp(2.25rem, 5.4vw, 4rem); }
 
         @media (max-width: 720px) { .hero--jobs { padding: 112px 0 48px; } }
+
+        /* --------------------------------------- where a pale photo ends */
+        /* Several of these were shot against a white backdrop, and a white
+           photograph on a white card has no edge: it reads as a picture
+           floating in a margin rather than as the top of the card. A hairline
+           gives it somewhere to stop. */
+        .welcome__pic,
+        .path__pic,
+        .floor__pic {
+            border-bottom: 1px solid var(--line);
+            background-color: var(--wash);
+        }
+
+        /* ------------------------------------------------------- card depth */
+        .path,
+        .floor__card,
+        .welcome__item,
+        .dayone__card,
+        .lawful,
+        .benefit,
+        .pack {
+            box-shadow: var(--shadow-rest);
+        }
+
+        .path:hover,
+        .floor__card:hover,
+        .welcome__item:hover,
+        .dayone__card:hover {
+            box-shadow: var(--shadow-hover);
+        }
+
+        .floor__card,
+        .welcome__item,
+        .dayone__card {
+            transition: box-shadow .2s ease, transform .2s ease;
+        }
+
+        .floor__card:hover,
+        .welcome__item:hover,
+        .dayone__card:hover {
+            transform: translateY(-3px);
+        }
+
+        /* --------------------------------------------- the keyboard's turn */
+        /* There was no focus style at all: somebody tabbing through this site
+           could not see where they were. Only :focus-visible, so it appears
+           for the keyboard and not on every mouse click. */
+        .careers a:focus-visible,
+        .careers button:focus-visible,
+        .careers input:focus-visible,
+        .careers select:focus-visible,
+        .cnav a:focus-visible,
+        .cnav button:focus-visible {
+            outline: 3px solid var(--brand);
+            outline-offset: 3px;
+            border-radius: 4px;
+        }
+
+        .cnav.is-over-hero a:focus-visible,
+        .cnav.is-over-hero button:focus-visible {
+            outline-color: #fff;
+        }
+
+        .careers ::selection { background: rgba(227, 27, 35, .18); }
 
         /* ------------------------------------------------- hover on pictures */
         /* Everything with a photograph in it answers to the pointer the same
@@ -1720,7 +1881,7 @@
         .event__head h3 {
             margin: 0;
             font-family: var(--font-head, 'Space Grotesk', system-ui, sans-serif);
-            font-size: clamp(1.5rem, 3vw, 2.125rem);
+            font-size: var(--h2);
             font-weight: 700;
             letter-spacing: -0.025em;
         }
@@ -1732,7 +1893,7 @@
             position: relative;
             margin: 0;
             aspect-ratio: 16 / 9;
-            border-radius: 16px;
+            border-radius: var(--r-md);
             overflow: hidden;
             background: var(--ink) center/cover;
         }
@@ -1760,7 +1921,7 @@
         /* ------------------------------------------------------------ faces */
         .faces { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 
-        .face { margin: 0; position: relative; border-radius: 14px; overflow: hidden; background: var(--ink); }
+        .face { margin: 0; position: relative; border-radius: var(--r-md); overflow: hidden; background: var(--ink); }
 
         .face img {
             display: block;
