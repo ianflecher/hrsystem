@@ -380,6 +380,18 @@
         </a>
 
         <!-- Navigation -->
+        @auth
+            <nav class="applicant-nav">
+                <a href="{{ route('applicant.index') }}"
+                   class="nav-link {{ request()->routeIs('applicant.index') ? 'active' : '' }}">
+                    <i class="fas fa-file-lines mr-2"></i>My application
+                </a>
+                <a href="{{ route('applicant.inside') }}"
+                   class="nav-link {{ request()->routeIs('applicant.inside') ? 'active' : '' }}">
+                    <i class="fas fa-building mr-2"></i>About the company
+                </a>
+            </nav>
+        @endauth
 
         <!-- User Actions -->
         <div class="user-actions">

@@ -16,6 +16,16 @@ class PeopleAccess
         abort_unless(self::isHr(), 403);
     }
 
+    public static function isManager(): bool
+    {
+        return auth()->check() && in_array(auth()->user()->role, ['admin','hr','supervisor','leader'], true);
+    }
+
+    public static function manager(): void
+    {
+        abort_unless(self::isManager(), 403);
+    }
+
     public static function employeeId(): int
     {
         $id = DB::table('employees')->where('user_id', auth()->id())->value('employee_id');

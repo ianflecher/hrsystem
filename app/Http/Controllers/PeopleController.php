@@ -14,8 +14,8 @@ class PeopleController extends Controller
 {
     public const MODULES = [
         'documents' => 'Document vault', 'overtime' => 'Overtime', 'shifts' => 'Shift calendar',
-        'checklists' => 'Onboarding & offboarding',
-        'reviews' => 'Performance reviews', 'loans' => 'Loans & cash advances',
+        'announcements' => 'Announcements', 'checklists' => 'Onboarding & offboarding',
+        'reviews' => 'Performance reviews', 'loans' => 'Loans & cash advances', 'reports' => 'Reports',
     ];
 
     /** Employment statuses that mean the person is on their way out. */
@@ -39,20 +39,29 @@ class PeopleController extends Controller
     {
         [$hr, $employeeId] = $this->context($request);
         abort_unless(isset(self::MODULES[$module]), 404);
-        $request->validate(['month' => 'nullable|date_format:Y-m', 'search' => 'nullable|string|max:100']);
+        $requestStatuses = match ($module) {
+            'overtime' => ['pending', 'approved', 'rejected', 'cancelled'],
+            'loans' => ['pending', 'approved', 'active', 'repaid', 'rejected', 'cancelled'],
+            default => [],
+        };
+        $request->validate([
+            'month' => 'nullable|date_format:Y-m',
+            'search' => 'nullable|string|max:100',
+            'status' => $requestStatuses ? ['nullable', 'string', Rule::in($requestStatuses)] : 'nullable|string|max:30',
+        ]);
         $month = Carbon::parse(($request->input('month') ?: now()->format('Y-m')).'-01');
         $employees = $hr ? DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
             ->select('e.employee_id', 'u.full_name')->orderBy('u.full_name')->get() : collect();
         $departments = $hr ? DB::table('departments')->orderBy('department_name')->get() : collect();
         $query = null;
-        $extra = [];
+        $extra = ['requestStatuses' => $requestStatuses];
         $tables = ['documents' => 'employee_documents', 'overtime' => 'overtime_requests',
             'checklists' => 'employee_checklists',
             'reviews' => 'performance_reviews', 'loans' => 'employee_loans'];
         if (isset($tables[$module])) {
             $query = DB::table($tables[$module].' as r')
                 ->join('employees as e', 'e.employee_id', '=', 'r.employee_id')
-                ->join('users as u', 'u.user_id', '=', 'e.user_id')->select('r.*', 'u.full_name');
+                ->join('users as u', 'u.user_id', '=', 'e.user_id')->select('r.*', 'u.full_name', 'u.user_id as request_user_id');
             if (! $hr) {
                 $query->where(function ($q) use ($module, $employeeId) {
                     $q->where('r.employee_id', $employeeId);
@@ -62,7 +71,16 @@ class PeopleController extends Controller
                 });
             }
             if ($request->filled('search')) {
-                $query->where('u.full_name', 'like', '%'.$request->input('search').'%');
+                $query->where(function ($q) use ($request, $requestStatuses) {
+                    $term = '%'.$request->input('search').'%';
+                    $q->where('u.full_name', 'like', $term);
+                    if ($requestStatuses) {
+                        $q->orWhere('r.reason', 'like', $term);
+                    }
+                });
+            }
+            if ($requestStatuses && $request->filled('status')) {
+                $query->where('r.status', $request->input('status'));
             }
         }
         // A draft belongs to HR until it is graded: the employee gets the
@@ -78,8 +96,6 @@ class PeopleController extends Controller
             }
         }
         if ($module === 'shifts') {
-            // Nothing is assigned per date any more: the calendar is drawn from
-            // each person's own shift and rest days, and the holidays on top.
             $extra['holidays'] = DB::table('holidays')
                 ->whereBetween('date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()])
                 ->orderBy('date')->get()->keyBy('date');
@@ -87,6 +103,14 @@ class PeopleController extends Controller
                 ->when($hr, fn ($q) => $q->where('e.status', 'active'), fn ($q) => $q->where('e.employee_id', $employeeId))
                 ->select('e.employee_id', 'e.shift_start', 'e.shift_end', 'e.rest_days', 'u.full_name')
                 ->orderBy('u.full_name')->get();
+            $extra['assignments'] = DB::table('shift_assignments as s')
+                ->join('employees as e', 'e.employee_id', '=', 's.employee_id')
+                ->join('users as u', 'u.user_id', '=', 'e.user_id')
+                ->whereBetween('s.work_date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+                ->when(! $hr, fn ($q) => $q->where('s.employee_id', $employeeId))
+                ->select('s.*', 'u.full_name')
+                ->orderBy('s.work_date')->orderBy('u.full_name')->get()
+                ->groupBy(fn ($row) => substr((string) $row->work_date, 0, 10));
         }
         // Onboarding and offboarding is a roster, not a queue: HR is looking at
         // people, so everybody is listed - including whoever has no checklist
@@ -161,6 +185,26 @@ class PeopleController extends Controller
             $extra['installments'] = DB::table('loan_installments as i')->join('hr_payroll as p', 'p.payroll_id', '=', 'i.payroll_id')
                 ->whereIn('i.loan_id', $rows->pluck('id'))->select('i.*', 'p.period_start', 'p.status')->get()->groupBy('loan_id');
         }
+        if ($module === 'announcements') {
+            $query = DB::table('announcements as a')
+                ->leftJoin('departments as d', 'd.department_id', '=', 'a.department_id')
+                ->leftJoin('announcement_reads as ar', fn ($join) => $join->on('ar.announcement_id', '=', 'a.id')->where('ar.user_id', auth()->id()))
+                ->select('a.*', 'd.department_name', 'ar.acknowledged_at');
+            if (! $hr) {
+                $departmentId = DB::table('employees')->where('employee_id', $employeeId)->value('department_id');
+                $query->where('a.archived', false)
+                    ->where(fn ($q) => $q->whereNull('a.published_at')->orWhere('a.published_at', '<=', now()))
+                    ->where(fn ($q) => $q->whereNull('a.expires_at')->orWhere('a.expires_at', '>=', now()))
+                    ->where(fn ($q) => $q->whereNull('a.department_id')->orWhere('a.department_id', $departmentId));
+            }
+            $rows = $query->orderByDesc('a.published_at')->orderByDesc('a.id')->paginate(20)->withQueryString();
+            $extra['readCounts'] = $hr
+                ? DB::table('announcement_reads')->whereIn('announcement_id', $rows->pluck('id'))->select('announcement_id', DB::raw('count(*) as total'))->groupBy('announcement_id')->pluck('total', 'announcement_id')
+                : collect();
+        }
+        if ($module === 'reports') {
+            $rows = null;
+        }
         return view('people.index', compact('hr', 'employeeId', 'module', 'employees', 'departments', 'month', 'rows', 'extra'));
     }
 
@@ -209,15 +253,39 @@ class PeopleController extends Controller
                 });
                 break;
             case 'shifts':
-                // A holiday is the company's, not any one employee's, so this is
-                // the whole of the input for the calendar.
+                if ($request->input('kind') === 'holiday' || $request->filled(['date', 'name', 'type'])) {
+                    $data = $request->validate([
+                        'date' => 'required|date_format:Y-m-d',
+                        'name' => 'required|string|max:120',
+                        'type' => ['required', Rule::in(['regular', 'special_non_working', 'special_working', 'special'])],
+                    ]);
+                    DB::table('holidays')->updateOrInsert(['date' => $data['date']],
+                        ['name' => $data['name'], 'type' => in_array($data['type'], ['special_non_working', 'special_working', 'special'], true) ? 'special' : 'regular', 'classification' => $data['type'] === 'special' ? 'special_non_working' : $data['type'], 'created_at' => now(), 'updated_at' => now()]);
+                    break;
+                }
+
                 $data = $request->validate([
-                    'date' => 'required|date_format:Y-m-d',
-                    'name' => 'required|string|max:120',
-                    'type' => ['required', Rule::in(['regular', 'special'])],
+                    'employee_id' => 'required|integer|exists:employees,employee_id',
+                    'from' => 'required|date_format:Y-m-d',
+                    'to' => 'required|date_format:Y-m-d|after_or_equal:from',
+                    'starts_at' => 'nullable|required_unless:rest_day,1|date_format:H:i',
+                    'ends_at' => 'nullable|required_unless:rest_day,1|date_format:H:i',
+                    'rest_day' => 'nullable|boolean',
+                    'label' => 'nullable|string|max:80',
                 ]);
-                DB::table('holidays')->updateOrInsert(['date' => $data['date']],
-                    ['name' => $data['name'], 'type' => $data['type'], 'created_at' => now(), 'updated_at' => now()]);
+                $from = Carbon::parse($data['from']);
+                $to = Carbon::parse($data['to']);
+                if ($from->diffInDays($to) > 93) throw ValidationException::withMessages(['to' => 'Schedule at most 93 days at a time.']);
+                for ($day = $from->copy(); $day->lte($to); $day->addDay()) {
+                    DB::table('shift_assignments')->updateOrInsert(
+                        ['employee_id' => (int) $data['employee_id'], 'work_date' => $day->toDateString()],
+                        ['starts_at' => $request->boolean('rest_day') ? null : $data['starts_at'],
+                            'ends_at' => $request->boolean('rest_day') ? null : $data['ends_at'],
+                            'rest_day' => $request->boolean('rest_day'),
+                            'label' => $data['label'] ?: ($request->boolean('rest_day') ? 'Rest day' : 'Assigned shift'),
+                            'created_at' => now(), 'updated_at' => now()]
+                    );
+                }
                 break;
             case 'checklists':
                 $data = $request->validate(['type' => ['required', Rule::in(['onboarding', 'offboarding'])], 'due_on' => 'required|date_format:Y-m-d']);
@@ -241,6 +309,25 @@ class PeopleController extends Controller
                     'installment' => 'required|numeric|min:1|lte:amount', 'starts_on' => 'required|date_format:Y-m-d', 'reason' => 'required|string|min:5|max:3000']);
                 DB::table('employee_loans')->insert($base + $data);
                 break;
+            case 'announcements':
+                $data = $request->validate([
+                    'title' => 'required|string|max:160',
+                    'body' => 'required|string|min:5|max:10000',
+                    'department_id' => 'nullable|integer|exists:departments,department_id',
+                    'published_at' => 'nullable|date_format:Y-m-d\TH:i',
+                    'expires_at' => 'nullable|date_format:Y-m-d\TH:i|after:published_at',
+                ]);
+                DB::table('announcements')->insert([
+                    'title' => $data['title'],
+                    'body' => $data['body'],
+                    'department_id' => $data['department_id'] ?? null,
+                    'published_at' => isset($data['published_at']) ? Carbon::parse($data['published_at']) : now(),
+                    'expires_at' => isset($data['expires_at']) ? Carbon::parse($data['expires_at']) : null,
+                    'created_by' => auth()->id(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                break;
         }
         return back()->with('success', 'Saved successfully.');
     }
@@ -251,19 +338,40 @@ class PeopleController extends Controller
         $action = $request->input('action');
         $tables = ['overtime' => 'overtime_requests', 'loans' => 'employee_loans',
             'checklists' => 'employee_checklists', 'reviews' => 'performance_reviews', 'shifts' => 'holidays', 'documents' => 'employee_documents'];
+        if ($module === 'announcements') {
+            $announcement = DB::table('announcements')->where('id', $id)->first();
+            abort_unless($announcement, 404);
+            if ($action === 'acknowledge') {
+                [$hr, $employeeId] = $this->context($request);
+                abort_if($hr, 403);
+                $departmentId = DB::table('employees')->where('employee_id', $employeeId)->value('department_id');
+                abort_if($announcement->archived || ($announcement->department_id && (int) $announcement->department_id !== (int) $departmentId), 403);
+                DB::table('announcement_reads')->updateOrInsert(['announcement_id' => $id, 'user_id' => auth()->id()],
+                    ['acknowledged_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+                return back()->with('success', 'Updated successfully.');
+            }
+            PeopleAccess::hr();
+            abort_unless(in_array($action, ['archive', 'restore'], true), 422);
+            DB::table('announcements')->where('id', $id)->update(['archived' => $action === 'archive', 'updated_at' => now()]);
+            return back()->with('success', 'Updated successfully.');
+        }
         abort_unless(isset($tables[$module]), 404);
+        if ($module === 'shifts') {
+            PeopleAccess::hr();
+            abort_unless(in_array($action, ['delete', 'delete-holiday'], true), 422);
+            if ($action === 'delete') {
+                $deleted = DB::table('shift_assignments')->where('id', $id)->delete();
+                if (! $deleted) {
+                    DB::table('holidays')->where('id', $id)->delete();
+                }
+            } else {
+                DB::table('holidays')->where('id', $id)->delete();
+            }
+            return back()->with('success', 'Updated successfully.');
+        }
         DB::transaction(function () use ($request, $module, $id, $action, $tables) {
             $row = DB::table($tables[$module])->where('id', $id)->lockForUpdate()->first();
             abort_unless($row, 404);
-            if ($module === 'shifts') {
-                // A holiday belongs to no employee, so it is handled before any
-                // of the ownership checks below - there is no owner to check.
-                PeopleAccess::hr();
-                abort_unless($action === 'delete', 422);
-                DB::table('holidays')->where('id', $id)->delete();
-
-                return;
-            }
             if ($module === 'overtime' || $module === 'loans') {
                 if ($action === 'cancel') {
                     PeopleAccess::ownOrHr((int) $row->employee_id);
@@ -287,8 +395,15 @@ class PeopleController extends Controller
                 if ($module === 'overtime') {
                     $update['reviewed_at'] = now();
                     if ($action === 'approve') {
-                        $request->validate(['approved_amount' => 'required|numeric|min:0.01|max:1000000']);
-                        $update['approved_amount'] = round((float) $request->input('approved_amount'), 2);
+                        $request->validate(['approved_amount' => 'nullable|numeric|min:0.01|max:1000000']);
+                        $employee = DB::table('employees')->where('employee_id', $row->employee_id)->first();
+                        abort_unless($employee, 404);
+                        $suggestion = app(\App\Services\PhilippineOvertime::class)->suggest($employee, $row->starts_at, $row->ends_at);
+                        $approved = $request->filled('approved_amount')
+                            ? round((float) $request->input('approved_amount'), 2)
+                            : $suggestion['suggested_amount'];
+                        $update['approved_amount'] = $approved;
+                        $update['decision_note'] = trim(($update['decision_note'] ?? '').' Auto-calculated suggestion: PHP '.number_format($suggestion['suggested_amount'], 2).' at '.$suggestion['multiplier'].'x; HR-approved amount: PHP '.number_format($approved, 2).'.');
                     }
                 }
                 DB::table($tables[$module])->where('id', $id)->update($update);

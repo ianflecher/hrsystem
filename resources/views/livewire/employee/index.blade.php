@@ -149,9 +149,13 @@ new #[Layout('components.layouts.employeeland')] class extends Component
     {
         $today = Carbon::today();
         
+        // For overnight shifts, the open attendance row belongs to the
+        // shift's start date, so do not restrict clock-out to today's date.
         $attendance = DB::table('hr_attendance')
             ->where('employee_id', $this->employee->employee_id)
-            ->whereDate('date', $today)
+            ->whereNotNull('time_in')
+            ->whereNull('time_out')
+            ->orderByDesc('date')
             ->first();
         
         if (!$attendance || !$attendance->time_in) {

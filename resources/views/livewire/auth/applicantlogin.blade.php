@@ -49,6 +49,23 @@ new #[Layout('components.layouts.employee')] class extends Component
     public $experience = '';
     public $resume = null;
     
+    /*
+     * Arriving from a job row on /careers, with that role in the querystring:
+     * open on the registration form with the position already chosen, rather
+     * than making somebody pick it out of the list a second time.
+     */
+    public function mount()
+    {
+        $wanted = trim((string) request()->query('position', ''));
+
+        if ($wanted === '') {
+            return;
+        }
+
+        $this->showLogin = false;
+        $this->position = $this->openPositions()->contains('title', $wanted) ? $wanted : 'Other';
+    }
+
     public function toggleForm()
     {
         $this->showLogin = !$this->showLogin;
@@ -550,9 +567,12 @@ new #[Layout('components.layouts.employee')] class extends Component
                                             <option value="">Select Position</option>
                                             {{-- Same source as the openings list above. --}}
                                             @foreach ($this->openPositions() as $position)
-                                                <option value="{{ $position->title }}">{{ $position->title }}</option>
+                                                {{-- Marked selected server-side as well as by wire:model: a
+                                                     role arriving from /careers should already be chosen in the
+                                                     first paint, not once Livewire has booted. --}}
+                                                <option value="{{ $position->title }}" @selected($this->position === $position->title)>{{ $position->title }}</option>
                                             @endforeach
-                                            <option value="Other">Other</option>
+                                            <option value="Other" @selected($this->position === 'Other')>Other</option>
                                         </select>
                                     </div>
                                     @error('position')

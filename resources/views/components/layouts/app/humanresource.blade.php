@@ -13,7 +13,7 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Green theme for HR -->
+    <!-- Brand palette for HR -->
     <script>
         tailwind.config = {
             theme: {
@@ -55,7 +55,7 @@
             margin: 0;
             padding: 0;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #f8fafc 0%, #FDF6F6 50%);
+            background: #F4F6F9;
             min-height: 100vh;
         }
         
@@ -624,203 +624,14 @@
     @include('partials.theme')
 </head>
 
-<style>
-    /* One navigation for the whole HR module.
 
-       The dashboard sat on the generic app layout with its icon rail while
-       every other HR page used a row of tabs across the top, so moving between
-       them changed the furniture. All six now share this sidebar. */
-    .hr-shell {
-        display: flex;
-        min-height: 100vh;
-        background: var(--bg, #F4F6F9);
-    }
-
-    .hr-sidebar {
-        position: fixed;
-        inset: 0 auto 0 0;
-        z-index: 60;
-        width: 244px;
-        display: flex;
-        flex-direction: column;
-        background: var(--sidebar-bg, #0C1626);
-        border-right: 1px solid rgba(255, 255, 255, .06);
-        transition: transform .2s ease;
-    }
-
-    .hr-sidebar__brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 18px 18px 16px;
-        border-bottom: 1px solid rgba(255, 255, 255, .08);
-        text-decoration: none;
-    }
-
-    .hr-sidebar__brand img {
-        height: 36px;
-        width: 36px;
-        object-fit: contain;
-        background: #fff;
-        border-radius: 50%;
-        padding: 2px;
-        flex: none;
-    }
-
-    .hr-sidebar__brand-name {
-        color: #fff;
-        font-family: var(--font-head, "Space Grotesk", system-ui, sans-serif);
-        font-size: .9375rem;
-        font-weight: 700;
-        line-height: 1.2;
-    }
-
-    .hr-sidebar__brand-sub {
-        color: #7E8CA0;
-        font-size: .6875rem;
-        letter-spacing: .02em;
-    }
-
-    .hr-sidebar__label {
-        padding: 18px 18px 8px;
-        color: #64748B;
-        font-size: .6875rem;
-        font-weight: 600;
-        letter-spacing: .07em;
-        text-transform: uppercase;
-    }
-
-    .hr-sidebar nav { flex: 1; overflow-y: auto; padding: 0 10px 16px; }
-
-    .hr-sidebar .nav-link {
-        display: flex;
-        align-items: center;
-        gap: 11px;
-        padding: 9px 12px;
-        margin-bottom: 2px;
-        border-radius: 8px;
-        color: #93A0B4;
-        font-size: .875rem;
-        font-weight: 500;
-        text-decoration: none;
-        transition: background-color .12s ease, color .12s ease;
-    }
-
-    .hr-sidebar .nav-link i { width: 18px; text-align: center; font-size: .9375rem; }
-    .hr-sidebar .nav-link:hover { background: rgba(255, 255, 255, .06); color: #E6EBF2; }
-
-    /* The current page, marked by a fill and a rule down its edge rather than
-       colour alone. */
-    .hr-sidebar .nav-link.active {
-        background: var(--sidebar-active, #17233A);
-        color: #fff;
-        box-shadow: inset 3px 0 0 var(--brand, #E31B23);
-    }
-
-    .hr-sidebar .nav-link.active i { color: var(--brand, #E31B23); }
-
-    .hr-sidebar__foot {
-        padding: 12px;
-        border-top: 1px solid rgba(255, 255, 255, .08);
-    }
-
-    .hr-sidebar__user {
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        padding: 8px 10px 10px;
-        color: #C6CFDC;
-        font-size: .8125rem;
-    }
-
-    .hr-sidebar__user i { color: var(--brand, #E31B23); }
-
-    .hr-sidebar__user {
-        text-decoration: none;
-        border-radius: 8px;
-        transition: background-color .12s ease;
-    }
-
-    .hr-sidebar__user:hover { background: rgba(255, 255, 255, .06); }
-
-    .hr-sidebar__avatar {
-        width: 22px;
-        height: 22px;
-        border-radius: 50%;
-        object-fit: cover;
-        flex: none;
-    }
-
-    .hr-sidebar__logout {
-        width: 100%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: .5rem;
-        padding: .5rem .75rem;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, .18);
-        background: transparent;
-        color: #C6CFDC;
-        font-size: .8125rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background-color .12s ease, border-color .12s ease, color .12s ease;
-    }
-
-    .hr-sidebar__logout:hover {
-        background: var(--brand, #E31B23);
-        border-color: var(--brand, #E31B23);
-        color: #fff;
-    }
-
-    .hr-main { flex: 1; min-width: 0; margin-left: 244px; }
-
-    .hr-topbar {
-        display: none;
-        align-items: center;
-        gap: 12px;
-        padding: 10px 16px;
-        background: var(--sidebar-bg, #0C1626);
-        color: #fff;
-        position: sticky;
-        top: 0;
-        z-index: 50;
-    }
-
-    .hr-topbar__toggle {
-        background: none;
-        border: 0;
-        color: #fff;
-        font-size: 1.25rem;
-        cursor: pointer;
-        line-height: 1;
-    }
-
-    .hr-content { padding: 0; }
-
-    .hr-backdrop {
-        display: none;
-        position: fixed;
-        inset: 0;
-        z-index: 55;
-        background: rgba(12, 22, 38, .55);
-    }
-
-    .hr-backdrop.show { display: block; }
-
-    @media (max-width: 1024px) {
-        .hr-sidebar { transform: translateX(-100%); }
-        .hr-sidebar.open { transform: translateX(0); }
-        .hr-main { margin-left: 0; }
-        .hr-topbar { display: flex; }
-    }
-</style>
 
 <body class="bg-gray-50">
+<a class="hr-skip-link" href="#hr-content">Skip to content</a>
 
-<div class="hr-shell">
-    <aside class="hr-sidebar" id="hrSidebar">
+<div class="hr-shell" data-portal-shell>
+    <aside class="hr-sidebar" id="hrSidebar" aria-label="Human resources navigation">
+        <div class="hr-sidebar__header">
         <a href="{{ route('hr.home') }}" class="hr-sidebar__brand">
             @if(file_exists(public_path('imprint-customs.jpg')))
                 <img src="{{ asset('imprint-customs.jpg') }}" alt="Imprint Customs">
@@ -830,45 +641,55 @@
                 <span class="hr-sidebar__brand-sub">Human Resources</span>
             </span>
         </a>
+        <button type="button" class="hr-sidebar__close" data-sidebar-close aria-label="Close navigation"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+        </div>
 
-        <div class="hr-sidebar__label">Modules</div>
-
-        <nav>
-            {{-- routeIs('hr.dashboard') used to mark the dashboard, but the
-                 route is named hr.home, so this item could never light up. --}}
-            <a href="{{ route('hr.home') }}" class="nav-link {{ request()->routeIs('hr.home') ? 'active' : '' }}">
-                <i class="fas fa-tachometer-alt"></i>Dashboard
-            </a>
-            <a href="{{ route('hr.employees') }}" class="nav-link {{ request()->routeIs('hr.employees') ? 'active' : '' }}">
-                <i class="fas fa-users"></i>Employees
-            </a>
-            <a href="{{ route('hr.attendance') }}" class="nav-link {{ request()->routeIs('hr.attendance') ? 'active' : '' }}">
-                <i class="fas fa-clock"></i>Attendance
-            </a>
-            <a href="{{ route('hr.payroll') }}" class="nav-link {{ request()->routeIs('hr.payroll') ? 'active' : '' }}">
-                <i class="fas fa-money-bill-wave"></i>Payroll
-            </a>
-            <a href="{{ route('hr.positions') }}" class="nav-link {{ request()->routeIs('hr.positions') ? 'active' : '' }}">
-                <i class="fas fa-bullhorn"></i>Openings
-            </a>
-            <a href="{{ route('hr.applications') }}" class="nav-link {{ request()->routeIs('hr.applications') ? 'active' : '' }}">
-                <i class="fas fa-briefcase"></i>Applications
-            </a>
-            <a href="{{ route('hr.leave') }}" class="nav-link {{ request()->routeIs('hr.leave') ? 'active' : '' }}">
-                <i class="fas fa-chart-bar"></i>Leave
-            </a>
-
-            @foreach(\App\Http\Controllers\PeopleController::MODULES as $key => $label)
-                <a href="{{ route('people.hr', $key) }}" class="nav-link {{ request()->routeIs('people.hr') && request()->route('module') === $key ? 'active' : '' }}"><i class="fas fa-{{ ['documents'=>'folder-open','overtime'=>'clock','shifts'=>'calendar-days','checklists'=>'list-check','reviews'=>'star','loans'=>'wallet'][$key] }}"></i>{{ $label }}</a>
+        @php
+            $moduleLabels = \App\Http\Controllers\PeopleController::MODULES;
+            $navigationGroups = [
+                'Overview' => [
+                    ['route' => 'hr.home', 'label' => 'Dashboard', 'icon' => 'gauge-high'],
+                    ['route' => 'people.hr', 'module' => 'announcements', 'icon' => 'bullhorn'],
+                    ['route' => 'people.hr', 'module' => 'reports', 'icon' => 'chart-column'],
+                ],
+                'People' => [
+                    ['route' => 'hr.employees', 'label' => 'Employees', 'icon' => 'users'],
+                    ['route' => 'people.hr', 'module' => 'documents', 'icon' => 'folder-open'],
+                    ['route' => 'people.hr', 'module' => 'checklists', 'icon' => 'list-check'],
+                    ['route' => 'people.hr', 'module' => 'reviews', 'icon' => 'star'],
+                ],
+                'Time & attendance' => [
+                    ['route' => 'hr.attendance', 'label' => 'Attendance', 'icon' => 'clock'],
+                    ['route' => 'hr.leave', 'label' => 'Leave', 'icon' => 'umbrella-beach'],
+                    ['route' => 'people.hr', 'module' => 'overtime', 'icon' => 'stopwatch'],
+                    ['route' => 'people.hr', 'module' => 'shifts', 'icon' => 'calendar-days'],
+                ],
+                'Payroll' => [
+                    ['route' => 'hr.payroll', 'label' => 'Payroll', 'icon' => 'money-bill-wave'],
+                    ['route' => 'people.hr', 'module' => 'loans', 'icon' => 'wallet'],
+                ],
+                'Recruitment' => [
+                    ['route' => 'hr.positions', 'label' => 'Openings', 'icon' => 'briefcase'],
+                    ['route' => 'hr.applications', 'label' => 'Applications', 'icon' => 'file-lines'],
+                ],
+            ];
+        @endphp
+        <nav aria-label="Human resources">
+            @foreach($navigationGroups as $group => $items)
+                <div class="hr-sidebar__group" role="group" aria-labelledby="hr-nav-group-{{ $loop->index }}">
+                    <p class="hr-sidebar__label" id="hr-nav-group-{{ $loop->index }}">{{ $group }}</p>
+                    @foreach($items as $item)
+                        @php
+                            $active = request()->routeIs($item['route']) && (!isset($item['module']) || request()->route('module') === $item['module']);
+                            $label = $item['label'] ?? $moduleLabels[$item['module']];
+                        @endphp
+                        <a href="{{ route($item['route'], isset($item['module']) ? ['module' => $item['module']] : []) }}"
+                           class="nav-link {{ $active ? 'active' : '' }}" @if($active) aria-current="page" @endif>
+                            <i class="fas fa-{{ $item['icon'] }}" aria-hidden="true"></i><span>{{ $label }}</span>
+                        </a>
+                    @endforeach
+                </div>
             @endforeach
-
-            {{-- Under its own heading: the list above is what HR administers,
-                 this is the one entry that is about the person using it. --}}
-            <div class="hr-sidebar__label">You</div>
-
-            <a href="{{ route('account.edit') }}" class="nav-link {{ request()->routeIs('account.edit') ? 'active' : '' }}">
-                <i class="fas fa-id-card"></i>My account
-            </a>
         </nav>
 
         <div class="hr-sidebar__foot">
@@ -898,90 +719,54 @@
         </div>
     </aside>
 
-    <div class="hr-backdrop" id="hrBackdrop" onclick="toggleMobileMenu()"></div>
+    <div class="hr-backdrop" id="hrBackdrop" aria-hidden="true"></div>
 
     <div class="hr-main">
         <header class="hr-topbar">
-            <button class="hr-topbar__toggle" onclick="toggleMobileMenu()" aria-label="Menu">
-                <i class="fas fa-bars"></i>
+            <button type="button" class="hr-topbar__toggle" data-sidebar-toggle aria-controls="hrSidebar" aria-expanded="false" aria-label="Open navigation">
+                <i class="fas fa-bars" aria-hidden="true"></i>
             </button>
             <strong style="font-size:.9375rem;">Imprint Customs HR</strong>
         </header>
 
-        <main class="hr-content">
+        <main class="hr-content" id="hr-content" tabindex="-1">
+            @unless(request()->routeIs('people.hr'))
             @if(session('success'))
-                <div class="alert alert-success">
-                    <i class="fas fa-check-circle"></i>
-                    {{ session('success') }}
+                <div class="portal-feedback portal-feedback--success" role="status">
+                    <i class="fas fa-check-circle" aria-hidden="true"></i>
+                    <span class="portal-feedback__message">{{ session('success') }}</span>
+                    <button type="button" data-feedback-dismiss aria-label="Dismiss success message"><i class="fas fa-xmark" aria-hidden="true"></i></button>
                 </div>
             @endif
 
             @if(session('error'))
-                <div class="alert alert-error">
-                    <i class="fas fa-exclamation-circle"></i>
-                    {{ session('error') }}
+                <div class="portal-feedback portal-feedback--error" role="alert">
+                    <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+                    <span class="portal-feedback__message">{{ session('error') }}</span>
                 </div>
             @endif
 
             @if(session('warning'))
-                <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    {{ session('warning') }}
+                <div class="portal-feedback portal-feedback--warning" role="status">
+                    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                    <span class="portal-feedback__message">{{ session('warning') }}</span>
                 </div>
             @endif
 
             @if(session('info'))
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i>
-                    {{ session('info') }}
+                <div class="portal-feedback portal-feedback--info" role="status">
+                    <i class="fas fa-info-circle" aria-hidden="true"></i>
+                    <span class="portal-feedback__message">{{ session('info') }}</span>
                 </div>
             @endif
+            @endunless
 
             {{ $slot }}
         </main>
     </div>
 </div>
 
-<!-- JavaScript -->
-<script>
-    // Toggle mobile menu
-    function toggleMobileMenu() {
-        const mobileMenu = document.getElementById('hrSidebar');
-        const overlay = document.getElementById('mobileOverlay');
-        
-        mobileMenu.classList.toggle('open');
-        overlay.classList.toggle('show');
-        
-        // Prevent body scroll when menu is open
-        document.body.style.overflow = mobileMenu.classList.contains('open') ? 'hidden' : '';
-    }
-    
-    // The active item is decided server-side with request()->routeIs().
-    // The script that used to do it here compared each link's href - an
-    // absolute URL - against window.location.pathname, which can never
-    // match, so it marked nothing and quietly did nothing.
 
-    
-    // Auto-dismiss alerts after 5 seconds
-    setTimeout(function() {
-        const alerts = document.querySelectorAll('.alert');
-        alerts.forEach(alert => {
-            alert.style.transition = 'opacity 0.5s ease';
-            alert.style.opacity = '0';
-            setTimeout(() => alert.remove(), 500);
-        });
-    }, 5000);
-    
-    // Close mobile menu on escape key
-    document.addEventListener('keydown', function(event) {
-        if (event.key === 'Escape') {
-            const mobileMenu = document.getElementById('hrSidebar');
-            if (mobileMenu.classList.contains('open')) {
-                toggleMobileMenu();
-            }
-        }
-    });
-</script>
 
 @stack('scripts')
 </body>

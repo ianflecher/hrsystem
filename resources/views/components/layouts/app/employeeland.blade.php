@@ -6,7 +6,6 @@
     @include('partials.head')
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -43,9 +42,11 @@
     @include('partials.theme')
 </head>
 <body>
+<a class="hr-skip-link" href="#employee-content">Skip to content</a>
 
-<div class="hr-shell">
-    <aside class="hr-sidebar" id="empSidebar">
+<div class="hr-shell" data-portal-shell>
+    <aside class="hr-sidebar" id="empSidebar" aria-label="Employee navigation">
+        <div class="hr-sidebar__header">
         <a href="{{ route('employee.dashboard') }}" class="hr-sidebar__brand">
             @if(file_exists(public_path('imprint-customs.jpg')))
                 <img src="{{ asset('imprint-customs.jpg') }}" alt="Imprint Customs">
@@ -55,43 +56,56 @@
                 <span class="hr-sidebar__brand-sub">Employee Portal</span>
             </span>
         </a>
+        <button type="button" class="hr-sidebar__close" data-sidebar-close aria-label="Close navigation"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+        </div>
 
-        <div class="hr-sidebar__label">My work</div>
-
-        <nav>
-            <a href="{{ route('employee.dashboard') }}" class="nav-link {{ request()->routeIs('employee.dashboard') ? 'active' : '' }}">
-                <i class="fas fa-gauge-high"></i>Dashboard
-            </a>
-            <a href="{{ route('employee.attendance') }}" class="nav-link {{ request()->routeIs('employee.attendance*') ? 'active' : '' }}">
-                <i class="fas fa-clock"></i>Attendance
-            </a>
-            <a href="{{ route('employee.payroll') }}" class="nav-link {{ request()->routeIs('employee.payroll*') ? 'active' : '' }}">
-                <i class="fas fa-money-bill-wave"></i>Payroll
-            </a>
-            <a href="{{ route('employee.leave') }}" class="nav-link {{ request()->routeIs('employee.leave*') ? 'active' : '' }}">
-                <i class="fas fa-umbrella-beach"></i>Leave
-            </a>
-
-            @foreach(\App\Http\Controllers\PeopleController::MODULES as $key => $label)
-                <a href="{{ route('people.employee', $key) }}"
-                   class="nav-link {{ request()->routeIs('people.employee') && request()->route('module') === $key ? 'active' : '' }}">
-                    <i class="fas fa-{{ ['documents' => 'folder-open', 'overtime' => 'clock', 'shifts' => 'calendar-days', 'checklists' => 'list-check', 'reviews' => 'star', 'loans' => 'wallet'][$key] ?? 'circle' }}"></i>{{ $label }}
-                </a>
+        @php
+            $moduleLabels = \App\Http\Controllers\PeopleController::MODULES;
+            $navigationGroups = [
+                'Overview' => [
+                    ['route' => 'employee.dashboard', 'label' => 'Dashboard', 'icon' => 'gauge-high'],
+                    ['route' => 'employee.operations.self-service', 'label' => 'Self-Service', 'icon' => 'user-gear'],
+                    ['route' => 'people.employee', 'module' => 'announcements', 'icon' => 'bullhorn'],
+                ],
+                'My employment' => [
+                    ['route' => 'people.employee', 'module' => 'documents', 'icon' => 'folder-open'],
+                    ['route' => 'people.employee', 'module' => 'checklists', 'icon' => 'list-check'],
+                    ['route' => 'people.employee', 'module' => 'reviews', 'icon' => 'star'],
+                ],
+                'Time & attendance' => [
+                    ['route' => 'employee.attendance', 'label' => 'Attendance', 'icon' => 'clock'],
+                    ['route' => 'employee.leave', 'label' => 'Leave', 'icon' => 'umbrella-beach'],
+                    ['route' => 'people.employee', 'module' => 'overtime', 'icon' => 'stopwatch'],
+                    ['route' => 'people.employee', 'module' => 'shifts', 'icon' => 'calendar-days'],
+                ],
+                'My pay' => [
+                    ['route' => 'employee.payroll', 'label' => 'Payroll', 'icon' => 'money-bill-wave'],
+                    ['route' => 'people.employee', 'module' => 'loans', 'icon' => 'wallet'],
+                ],
+            ];
+        @endphp
+        <nav aria-label="Employee services">
+            @foreach($navigationGroups as $group => $items)
+                <div class="hr-sidebar__group" role="group" aria-labelledby="emp-nav-group-{{ $loop->index }}">
+                    <p class="hr-sidebar__label" id="emp-nav-group-{{ $loop->index }}">{{ $group }}</p>
+                    @foreach($items as $item)
+                        @php
+                            $active = request()->routeIs($item['route']) && (!isset($item['module']) || request()->route('module') === $item['module']);
+                            $label = $item['label'] ?? $moduleLabels[$item['module']];
+                        @endphp
+                        <a href="{{ route($item['route'], isset($item['module']) ? ['module' => $item['module']] : []) }}"
+                           class="nav-link {{ $active ? 'active' : '' }}" @if($active) aria-current="page" @endif>
+                            <i class="fas fa-{{ $item['icon'] }}" aria-hidden="true"></i><span>{{ $label }}</span>
+                        </a>
+                    @endforeach
+                </div>
             @endforeach
-
-            {{-- Under its own heading: the list above is the work, this is the
-                 one entry that is about the person doing it. --}}
-            <div class="hr-sidebar__label">You</div>
-
-            <a href="{{ route('account.edit') }}" class="nav-link {{ request()->routeIs('account.edit') ? 'active' : '' }}">
-                <i class="fas fa-id-card"></i>My account
-            </a>
         </nav>
 
         <div class="hr-sidebar__foot">
-            <a href="{{ route('account.edit') }}" class="hr-sidebar__user">
-                @if(auth()->user()?->profile_photo)
-                    <img class="hr-sidebar__avatar" src="{{ Storage::url(auth()->user()->profile_photo) }}" alt="">
+            <a href="{{ route('account.edit') }}" class="hr-sidebar__user" title="My account">
+                @if(auth()->user()?->profile_photo_path)
+                    <img class="hr-sidebar__avatar" src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url(auth()->user()->profile_photo_path) }}" alt="">
                 @else
                     <i class="fas fa-user"></i>
                 @endif
@@ -107,28 +121,23 @@
         </div>
     </aside>
 
-    <div class="hr-backdrop" id="empBackdrop" onclick="toggleEmpSidebar()"></div>
+    <div class="hr-backdrop" id="empBackdrop" aria-hidden="true"></div>
 
     <div class="hr-main">
         <div class="hr-topbar">
-            <button class="hr-topbar__toggle" onclick="toggleEmpSidebar()" aria-label="Menu">
-                <i class="fas fa-bars"></i>
+            <button type="button" class="hr-topbar__toggle" data-sidebar-toggle aria-controls="empSidebar" aria-expanded="false" aria-label="Open navigation">
+                <i class="fas fa-bars" aria-hidden="true"></i>
             </button>
             <span>Imprint Customs · Employee</span>
         </div>
 
-        <div class="hr-content">
+        <div class="hr-content" id="employee-content" tabindex="-1">
             {{ $slot }}
         </div>
     </div>
 </div>
 
-<script>
-    function toggleEmpSidebar() {
-        document.getElementById('empSidebar').classList.toggle('open');
-        document.getElementById('empBackdrop').classList.toggle('show');
-    }
-</script>
+
 
 </body>
 </html>

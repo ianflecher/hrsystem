@@ -59,6 +59,18 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         return PayPeriod::fromStart($this->payPeriod);
     }
 
+    public function getControlCenterProperty(): array
+    {
+        return app(\App\Services\PayrollControlCenter::class)->summary($this->period());
+    }
+
+    public function lockPeriod(): void
+    {
+        \App\Support\PeopleAccess::hr();
+        app(\App\Services\PayrollControlCenter::class)->lock($this->period());
+        session()->flash('success', 'Payroll period locked.');
+    }
+
     public function getEmployeesProperty()
     {
         return DB::table('employees')
@@ -83,8 +95,24 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'hr_payroll.net_pay',
                 DB::raw('COALESCE(hr_payroll.status, "not_processed") as payroll_status'),
                 'hr_payroll.period_start',
-                'hr_payroll.period_end',
-                'hr_payroll.notes'
+            'hr_payroll.period_end',
+            'hr_payroll.notes',
+            'hr_payroll.overtime_pay',
+            'hr_payroll.holiday_pay',
+            'hr_payroll.nsd_pay',
+            'hr_payroll.basic_pay',
+            'hr_payroll.time_deduction',
+            'hr_payroll.employer_sss',
+            'hr_payroll.employer_ec',
+            'hr_payroll.employer_philhealth',
+            'hr_payroll.employer_pagibig',
+            'hr_payroll.taxable_compensation',
+            'hr_payroll.statutory_rule_version',
+            'hr_payroll.loan_deduction',
+            'hr_payroll.sss',
+            'hr_payroll.philhealth',
+            'hr_payroll.pagibig',
+            'hr_payroll.tax'
             )
             ->when($this->search, function ($query) {
                 $query->where(function ($q) {
@@ -164,26 +192,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $row = $this->selectedEmployee;
 
         if ($row->payroll_id) {
-            // What was actually withheld, read from the payslip itself.
-            // Recomputing describes today's salary rather than the one they
-            // were paid on, and whatever the recomputation did not account for
-            // used to pile into a single unnamed "other" line - which is how a
-            // lateness deduction ended up with no name on it.
+            $breakdown = \App\Support\PayslipBreakdown::fromPayroll($row);
+
             $this->payrollBreakdown['sss']        = (float) $row->sss;
             $this->payrollBreakdown['philhealth'] = (float) $row->philhealth;
             $this->payrollBreakdown['pagibig']    = (float) $row->pagibig;
             $this->payrollBreakdown['tax']        = (float) $row->tax;
-            $this->payrollBreakdown['time']       = (float) $row->time_deduction;
-            $this->payrollBreakdown['loan']       = (float) $row->loan_deduction;
-
-            $named = $this->payrollBreakdown['sss'] + $this->payrollBreakdown['philhealth']
-                + $this->payrollBreakdown['pagibig'] + $this->payrollBreakdown['tax']
-                + $this->payrollBreakdown['time'] + $this->payrollBreakdown['loan'];
-
-            // Only a genuine remainder is "other" now, and seeing one means
-            // something came off that nothing accounts for.
-            $this->payrollBreakdown['other_deductions'] = round((float) $row->deductions - $named, 2);
-            $this->payrollBreakdown['total_deductions'] = (float) $row->deductions;
+            $this->payrollBreakdown['time']       = $breakdown['time'];
+            $this->payrollBreakdown['loan']       = $breakdown['loan'];
+            $this->payrollBreakdown['other_deductions'] = $breakdown['other_deductions'];
+            $this->payrollBreakdown['total_deductions'] = $breakdown['total_deductions'];
 
             return;
         }
@@ -227,10 +245,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     /**
      * The statutory deductions for one monthly salary.
      *
-     * Inherited from the TGIF code and simplified: the SSS brackets are coarse,
-     * PhilHealth has no floor or ceiling applied, and Pag-IBIG is the flat
-     * maximum. Check these against the current SSS, PhilHealth and BIR tables
-     * before anyone is paid from them.
+     * Preview of the configured Philippine statutory calculation for an
+     * unprocessed monthly-paid employee. The live payroll service uses the
+     * effective rule snapshot and records that snapshot on the payslip.
      */
     private function computePayroll(float $monthlySalary, float $lateDeduction = 0.0): array
     {
@@ -296,47 +313,24 @@ new #[Layout('components.layouts.humanresource')] class extends Component
      */
     public function approvePeriod(): void
     {
-        $periodStart = $this->period()->start;
-
-        $ids = DB::table('hr_payroll')->where('period_start', $periodStart)
-            ->where('status', 'calculated')->pluck('payroll_id');
-
-        $n = DB::table('hr_payroll')
-            ->whereIn('payroll_id', $ids)
-            ->update(['status' => 'approved', 'updated_at' => now()]);
-
-        foreach ($ids as $id) {
-            \App\Services\Auditor::record('update', 'hr_payroll', $id,
-                ['status' => 'calculated'], ['status' => 'approved']);
+        \App\Support\PeopleAccess::hr();
+        try {
+            $n = app(\App\Services\PayrollControlCenter::class)->approve($this->period());
+            session()->flash($n ? 'success' : 'info', $n ? 'Approved '.$n.' payslip'.($n === 1 ? '' : 's').'.' : 'Nothing was waiting for approval in this period.');
+        } catch (\Throwable $e) {
+            session()->flash('error', $e->getMessage());
         }
-
-        session()->flash(
-            $n ? 'success' : 'info',
-            $n ? 'Approved '.$n.' payslip'.($n === 1 ? '' : 's').'.'
-               : 'Nothing was waiting for approval in this period.'
-        );
     }
 
     public function markPeriodPaid(): void
     {
-        $periodStart = $this->period()->start;
-
         \App\Support\PeopleAccess::hr();
-
-        $ids = DB::table('hr_payroll')->where('period_start', $periodStart)
-            ->where('status', 'approved')->pluck('payroll_id');
-
-        $n = app(\App\Services\PayrollRun::class)->markPaid($periodStart);
-
-        foreach ($ids as $id) {
-            \App\Services\Auditor::record('update', 'hr_payroll', $id,
-                ['status' => 'approved'], ['status' => 'paid']);
+        try {
+            $n = app(\App\Services\PayrollControlCenter::class)->markPaid($this->period());
+            session()->flash($n ? 'success' : 'info', $n ? 'Marked '.$n.' payslip'.($n === 1 ? '' : 's').' as paid and locked the period.' : 'Nothing was approved and waiting to be paid in this period.');
+        } catch (\Throwable $e) {
+            session()->flash('error', $e->getMessage());
         }
-        session()->flash(
-            $n ? 'success' : 'info',
-            $n ? 'Marked '.$n.' payslip'.($n === 1 ? '' : 's').' as paid.'
-               : 'Nothing was approved and waiting to be paid in this period.'
-        );
     }
 
     /**
@@ -542,40 +536,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         ];
     }
 
-    private function calculateSSS($salary)
+    public function payrollRuleVersion(): string
     {
-        // Simplified SSS calculation based on Philippines brackets
-        if ($salary <= 10000) return 450;
-        if ($salary <= 20000) return 900;
-        if ($salary <= 30000) return 1350;
-        if ($salary <= 40000) return 1800;
-        if ($salary <= 50000) return 2250;
-        return 2700; // Max contribution for salary > 50,000
-    }
-
-    private function calculatePhilHealth($salary)
-    {
-        // PhilHealth: 4% of salary, shared 50/50 between employee and employer.
-        return ($salary * 0.04) / 2;
-    }
-
-    private function calculateTax($taxableIncome)
-    {
-        // Monthly BIR brackets, simplified. Called with income after the
-        // statutory contributions have been taken off.
-        if ($taxableIncome <= 20833) {
-            return 0;
-        } elseif ($taxableIncome <= 33333) {
-            return ($taxableIncome - 20833) * 0.15;
-        } elseif ($taxableIncome <= 66667) {
-            return 1875 + ($taxableIncome - 33333) * 0.20;
-        } elseif ($taxableIncome <= 166667) {
-            return 8541.80 + ($taxableIncome - 66667) * 0.25;
-        } elseif ($taxableIncome <= 666667) {
-            return 33541.80 + ($taxableIncome - 166667) * 0.30;
-        }
-
-        return 183541.80 + ($taxableIncome - 666667) * 0.35;
+        return \App\Support\Statutory::version();
     }
 
     public function approvePayroll($employeeId)
@@ -893,6 +856,54 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             @endif
         </div>
 
+        {{-- Payroll control center: exceptions are visible before approval. --}}
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5 mb-6">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Control center</p>
+                    <h2 class="text-lg font-semibold text-gray-900 mt-1">{{ $this->period()->label() }}</h2>
+                    <p class="text-sm text-gray-600 mt-1">
+                        Rule version <strong>{{ $this->controlCenter['rule_version'] }}</strong> ·
+                        Period status <strong>{{ ucfirst($this->controlCenter['control']->status) }}</strong>
+                    </p>
+                </div>
+                @if($this->controlCenter['control']->status === 'locked' || $this->controlCenter['control']->status === 'paid')
+                    <span class="status-badge status-active">Locked</span>
+                @elseif($this->controlCenter['issues'])
+                    <span class="status-badge status-pending">{{ count($this->controlCenter['issues']) }} exception(s)</span>
+                @else
+                    <span class="status-badge status-active">Ready for review</span>
+                @endif
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
+                <div class="rounded-lg bg-gray-50 p-3"><div class="text-xs text-gray-500">Eligible</div><div class="text-xl font-semibold">{{ $this->controlCenter['eligible'] }}</div></div>
+                <div class="rounded-lg bg-gray-50 p-3"><div class="text-xs text-gray-500">Missing payslip</div><div class="text-xl font-semibold">{{ $this->controlCenter['pending'] }}</div></div>
+                <div class="rounded-lg bg-gray-50 p-3"><div class="text-xs text-gray-500">Calculated</div><div class="text-xl font-semibold">{{ $this->controlCenter['calculated'] }}</div></div>
+                <div class="rounded-lg bg-gray-50 p-3"><div class="text-xs text-gray-500">Approved</div><div class="text-xl font-semibold">{{ $this->controlCenter['approved'] }}</div></div>
+                <div class="rounded-lg bg-gray-50 p-3"><div class="text-xs text-gray-500">Paid</div><div class="text-xl font-semibold">{{ $this->controlCenter['paid'] }}</div></div>
+            </div>
+
+            @if($this->controlCenter['issues'])
+                <div class="mt-4 border border-amber-200 bg-amber-50 rounded-lg p-4">
+                    <h3 class="font-semibold text-amber-900">Resolve before approval</h3>
+                    <ul class="mt-2 space-y-1 text-sm text-amber-900">
+                        @foreach($this->controlCenter['issues'] as $issue)
+                            <li>• {{ $issue['count'] }} — {{ $issue['label'] }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @else
+                <div class="mt-4 border border-green-200 bg-green-50 rounded-lg p-4 text-sm text-green-900">
+                    No control-center exceptions detected for this period.
+                </div>
+            @endif
+
+            @if($this->controlCenter['control']->status === 'paid')
+                <div class="mt-3 text-sm text-gray-600">Paid periods are automatically locked to prevent silent changes.</div>
+            @endif
+        </div>
+
         {{-- The run itself. Payroll is the one thing in here that moves money,
              so it is three deliberate steps rather than one button: generate
              the figures, approve them, then record them as paid. Each says how
@@ -956,9 +967,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             </div>
 
             <p class="text-xs text-gray-500 mt-4">
-                Deductions use simplified SSS, PhilHealth and BIR figures carried over
-                from the original code. Check them against the current tables before
-                anyone is paid from them.
+                Payroll uses the effective Philippine rule snapshot shown above. Keep that snapshot
+                verified against current government issuances before each live payroll run.
             </p>
         </div>
 
@@ -1340,6 +1350,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         <span class="text-sm">Basic Salary:</span>
                                         <span class="text-sm">₱{{ number_format($selectedEmployee->salary, 2) }}</span>
                                     </div>
+                                    @if(($selectedEmployee->overtime_pay ?? 0) > 0)
+                                    <div class="flex justify-between"><span class="text-sm">Overtime:</span><span class="text-sm">₱{{ number_format($selectedEmployee->overtime_pay, 2) }}</span></div>
+                                    @endif
+                                    @if(($selectedEmployee->holiday_pay ?? 0) > 0)
+                                    <div class="flex justify-between"><span class="text-sm">Holiday premium:</span><span class="text-sm">₱{{ number_format($selectedEmployee->holiday_pay, 2) }}</span></div>
+                                    @endif
+                                    @if(($selectedEmployee->nsd_pay ?? 0) > 0)
+                                    <div class="flex justify-between"><span class="text-sm">Night shift differential:</span><span class="text-sm">₱{{ number_format($selectedEmployee->nsd_pay, 2) }}</span></div>
+                                    @endif
                                     <div class="flex justify-between border-t border-gray-200 pt-1 font-medium">
                                         <span>Total Gross Pay:</span>
                                         <span class="text-red-600">₱{{ number_format($selectedEmployee->gross_pay, 2) }}</span>
@@ -1405,6 +1424,18 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             </div>
                             @endif
                             
+                            <div class="mb-4 border-t border-gray-200 pt-3">
+                                <h5 class="text-xs font-medium text-gray-500 mb-2">EMPLOYER COST</h5>
+                                <div class="grid grid-cols-2 gap-1 text-sm">
+                                    <span>SSS + EC</span><span class="text-right">₱{{ number_format((float)($selectedEmployee->employer_sss ?? 0) + (float)($selectedEmployee->employer_ec ?? 0), 2) }}</span>
+                                    <span>PhilHealth</span><span class="text-right">₱{{ number_format((float)($selectedEmployee->employer_philhealth ?? 0), 2) }}</span>
+                                    <span>Pag-IBIG</span><span class="text-right">₱{{ number_format((float)($selectedEmployee->employer_pagibig ?? 0), 2) }}</span>
+                                </div>
+                                @if($selectedEmployee->statutory_rule_version)
+                                    <p class="mt-2 text-xs text-gray-500">Rules: {{ $selectedEmployee->statutory_rule_version }}</p>
+                                @endif
+                            </div>
+
                             <!-- Total Summary -->
                             <div class="bg-gray-50 p-3 rounded-lg">
                                 <div class="flex justify-between mb-1">

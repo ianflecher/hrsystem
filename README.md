@@ -85,6 +85,27 @@ HR's to set, so they appear there as read-only context rather than as fields.
 The page wears whichever chrome the person already knows: the HR sidebar for the
 back office, the staff header for everyone else.
 
+## People features
+
+HR gets a new People area, and employees get the matching self-service pages.
+It covers:
+
+- document vault uploads with private downloads and expiry indicators;
+- overtime requests, supervisor or HR approval, and payroll inclusion;
+- dated shift assignments, rest days and company holidays;
+- onboarding and offboarding checklists with HR-owned and employee-owned tasks;
+- performance reviews, goals, notices and final ratings;
+- employee loans and cash advances with payroll installment deductions;
+- CSV reports for headcount, attendance, leave and payroll.
+
+Announcements are available from both portals. HR can publish to everyone or to
+one department, archive old notices, and see who acknowledged them.
+
+Document expiry is shown in the app; it does not send email reminders. Overtime
+pay is entered as the approved peso amount rather than calculated from a rate,
+so payroll includes exactly what the reviewer approved. Loans are interest-free
+installment plans inside payroll; they do not move money by themselves.
+
 ## Employee accounts
 
 Staff accounts are created by HR at `/hr/employees`, not by the staff
@@ -143,8 +164,9 @@ anyone twice.
 
 ### Lateness
 
-Measured from each employee's own `shift_start`, set on the Employees screen.
-Leave it blank and that person is never marked late.
+Measured from a dated shift assignment when one exists, otherwise from the
+employee's own `shift_start` on the Employees screen. Leave it blank and that
+person is never marked late.
 
 | Late by | Deducted |
 | --- | --- |
@@ -304,3 +326,26 @@ Things that changed while carving these modules out:
   redirecting; guests are now sent to the matching portal's login screen.
 - **Added `vite.config.js`**, which was missing from the upstream repository.
 - The landing page is now a portal chooser rather than the e-commerce storefront.
+
+## Philippine payroll compliance layer
+
+The payroll module is now structured around Philippine statutory rules and preserves the rule set used for each generated payslip.
+
+### Included
+
+- Versioned statutory-rule snapshots on every payroll row.
+- SSS employee/employer shares and Employees' Compensation (EC).
+- PhilHealth employee/employer shares using monthly basic salary.
+- Pag-IBIG employee rate bands and employer counterpart.
+- BIR semi-monthly withholding brackets based on the current graduated compensation table represented in the configuration.
+- Night Shift Differential (10% minimum) calculated from actual attendance between 10:00 PM and 6:00 AM.
+- Philippine holiday classifications: regular holiday, special non-working day, and special working day.
+- Rest-day holiday multipliers for regular and special non-working days.
+- Employer-cost visibility on payroll details.
+- Employee SSS, PhilHealth, Pag-IBIG and TIN fields, plus employment type and work region.
+- Final-pay calculation service that keeps separation-pay entitlement as an HR-reviewed input rather than guessing the legal entitlement.
+- COE data service.
+
+### Important production control
+
+Government contribution tables and labor advisories can change. The application records a `statutory_rule_version` and JSON snapshot with each payslip so historical payroll remains explainable. Before production payroll is released, HR/accounting should verify the configured rule version against the latest SSS, PhilHealth, Pag-IBIG, BIR and DOLE issuances.

@@ -284,9 +284,9 @@
                 </a>
                 
                 <!-- Careers Button -->
-                <a href="{{ route('applicant.login') }}" class="btn-auth btn-signup">
+                <a href="{{ route('careers') }}#openings" class="btn-auth btn-signup">
                     <i class="fas fa-briefcase"></i>
-                    Careers
+                    Open jobs
                 </a>
             </nav>
 
@@ -312,10 +312,10 @@
                 </a>
                 
                 <!-- Careers -->
-                <a href="{{ route('applicant.login') }}" class="mobile-nav-item bg-green-600 text-white">
+                <a href="{{ route('careers') }}#openings" class="mobile-nav-item bg-green-600 text-white">
                     <div class="mobile-nav-left">
                         <i class="fas fa-briefcase"></i>
-                        <span>Careers</span>
+                        <span>Open jobs</span>
                     </div>
                     <i class="fas fa-chevron-right"></i>
                 </a>

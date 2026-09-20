@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
+use App\Support\Statutory;
 
 /**
  * 13th month pay: one twelfth of the basic salary earned in a calendar year.
@@ -43,7 +44,7 @@ class ThirteenthMonth
             ->where('kind', 'regular')
             ->where('status', '!=', 'cancelled')
             ->whereBetween('period_start', [$year.'-01-01', $year.'-12-31'])
-            ->selectRaw('COUNT(*) as payslips, COALESCE(SUM(gross_pay - overtime_pay - holiday_pay - time_deduction), 0) as basic')
+            ->selectRaw('COUNT(*) as payslips, COALESCE(SUM(gross_pay - overtime_pay - holiday_pay - nsd_pay - time_deduction - COALESCE(other_taxable_compensation, 0)), 0) as basic')
             ->first();
 
         $basic = round(max(0, (float) ($row->basic ?? 0)), 2);
@@ -132,6 +133,7 @@ class ThirteenthMonth
                     'period_start'   => $year.'-12-24',
                     'period_end'     => $year.'-12-24',
                     'gross_pay'      => $row['amount'],
+                    'basic_pay'      => $row['amount'],
                     'deductions'     => 0,
                     'net_pay'        => $row['amount'],
                     'overtime_pay'   => 0,
@@ -140,6 +142,8 @@ class ThirteenthMonth
                     'loan_deduction' => 0,
                     'kind'           => self::KIND,
                     'status'         => 'calculated',
+                    'statutory_rule_version' => Statutory::version(),
+                    'statutory_snapshot' => json_encode(Statutory::snapshot($year.'-12-24'), JSON_THROW_ON_ERROR),
                     'notes'          => $notes,
                     'created_at'     => now(),
                     'updated_at'     => now(),

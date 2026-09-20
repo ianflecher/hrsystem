@@ -160,6 +160,31 @@ class BiometricImportTest extends TestCase
         $this->assertSame('present', DB::table('hr_attendance')->where('employee_id', $id)->value('status'));
     }
 
+    public function test_a_dated_shift_decides_scanner_lateness_for_that_day(): void
+    {
+        $id = $this->employee('121', '08:00:00');
+
+        DB::table('shift_assignments')->insert([
+            'employee_id' => $id,
+            'work_date' => '2020-06-21',
+            'starts_at' => '10:00:00',
+            'ends_at' => '19:00:00',
+            'label' => 'Late shift',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        (new PunchImporter)->import([
+            ['biometric_id' => '121', 'timestamp' => '2020-06-21 09:30:00'],
+            ['biometric_id' => '121', 'timestamp' => '2020-06-22 09:30:00'],
+        ]);
+
+        $byDate = DB::table('hr_attendance')->where('employee_id', $id)->pluck('status', 'date');
+
+        $this->assertSame('present', $byDate['2020-06-21']);
+        $this->assertSame('late', $byDate['2020-06-22']);
+    }
+
     // ------------------------------------------------------- manual entries
 
     public function test_a_day_entered_by_hand_is_not_overwritten(): void

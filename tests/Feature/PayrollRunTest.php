@@ -27,6 +27,21 @@ class PayrollRunTest extends TestCase
     {
         DB::table('hr_payroll')->where('period_start', $this->period)->delete();
 
+        // These tests clean up after themselves rather than running in a
+        // transaction, so anything a run writes has to be named here. The
+        // control row is the one that bites: the lifecycle test approves and
+        // pays the period, which locks it, and a locked period refuses every
+        // later run - so one test poisoned the whole class on the next pass.
+        DB::table('payroll_period_controls')
+            ->whereIn('period_start', [$this->period, '2019-03-01', '2019-04-16'])
+            ->delete();
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('payroll_approval_events')) {
+            DB::table('payroll_approval_events')
+                ->whereIn('period_start', [$this->period, '2019-03-01', '2019-04-16'])
+                ->delete();
+        }
+
         foreach ($this->createdUserIds as $id) {
             DB::table('hr_payroll')->whereIn('employee_id', function ($q) use ($id) {
                 $q->select('employee_id')->from('employees')->where('user_id', $id);
@@ -123,9 +138,9 @@ class PayrollRunTest extends TestCase
     public function test_both_cutoffs_carry_half_the_monthly_contributions(): void
     {
         // 25,000 a month is 12,500 a payslip. Half of each monthly
-        // contribution lands here: SSS 625 + PhilHealth 312.50 + Pag-IBIG 50 =
-        // 987.50, leaving 11,512.50 taxable. The semi-monthly exemption is
-        // 10,417, so 1,095.50 is taxed at 15% = 164.33.
+        // contribution lands here: SSS 625 + PhilHealth 312.50 + Pag-IBIG 100
+        // = 1,037.50, leaving 11,462.50 taxable. The semi-monthly exemption is
+        // 10,417, so 1,045.50 is taxed at 15% = 156.83.
         $id = $this->employee(25000);
 
         $this->screen()->call('generatePeriod');
@@ -135,9 +150,10 @@ class PayrollRunTest extends TestCase
         $this->assertEqualsWithDelta(12500.00, (float) $row->gross_pay, 0.01);
         $this->assertEqualsWithDelta(625.00, (float) $row->sss, 0.01);
         $this->assertEqualsWithDelta(312.50, (float) $row->philhealth, 0.01);
-        $this->assertEqualsWithDelta(50.00, (float) $row->pagibig, 0.01);
-        $this->assertEqualsWithDelta(1151.83, (float) $row->deductions, 0.01);
-        $this->assertEqualsWithDelta(11348.17, (float) $row->net_pay, 0.02);
+        // 2% of the 10,000 maximum fund salary is 200 a month, so 100 a cutoff.
+        $this->assertEqualsWithDelta(100.00, (float) $row->pagibig, 0.01);
+        $this->assertEqualsWithDelta(1194.33, (float) $row->deductions, 0.01);
+        $this->assertEqualsWithDelta(11305.67, (float) $row->net_pay, 0.02);
     }
 
     public function test_the_other_cutoff_carries_the_same(): void
@@ -162,15 +178,15 @@ class PayrollRunTest extends TestCase
     {
         // 15,000 a month is 7,500 a payslip, well under the 10,417 exemption.
         // Half the monthly contributions still come off: SSS 375 +
-        // PhilHealth 187.50 + Pag-IBIG 50 = 612.50.
+        // PhilHealth 187.50 + Pag-IBIG 100 = 662.50.
         $id = $this->employee(15000);
 
         $this->screen()->call('generatePeriod');
         $row = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->first();
 
         $this->assertEqualsWithDelta(0.00, (float) $row->tax, 0.01);
-        $this->assertEqualsWithDelta(612.50, (float) $row->deductions, 0.01);
-        $this->assertEqualsWithDelta(6887.50, (float) $row->net_pay, 0.01);
+        $this->assertEqualsWithDelta(662.50, (float) $row->deductions, 0.01);
+        $this->assertEqualsWithDelta(6837.50, (float) $row->net_pay, 0.01);
     }
 
     public function test_lateness_comes_off_the_payslip(): void
@@ -195,6 +211,28 @@ class PayrollRunTest extends TestCase
             'the third arrival was inside the grace period');
 
         DB::table('hr_attendance')->where('employee_id', $id)->delete();
+    }
+
+    public function test_a_dated_shift_overrides_the_employee_shift_for_payroll_deductions(): void
+    {
+        $id = $this->employee(22000);
+        DB::table('employees')->where('employee_id', $id)->update(['shift_start' => '08:00:00']);
+        DB::table('shift_assignments')->insert([
+            'employee_id' => $id,
+            'work_date' => '2019-03-18',
+            'starts_at' => '10:00:00',
+            'ends_at' => '19:00:00',
+            'label' => 'Late shift',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('hr_attendance')->where('employee_id', $id)->where('date', '2019-03-18')
+            ->update(['time_in' => '2019-03-18 09:30:00', 'time_out' => '2019-03-18 19:00:00']);
+
+        $this->screen()->call('generatePeriod');
+        $row = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->first();
+
+        $this->assertEqualsWithDelta(0.0, (float) $row->time_deduction, 0.01);
     }
 
     public function test_the_screen_warns_about_missing_attendance_before_generating(): void

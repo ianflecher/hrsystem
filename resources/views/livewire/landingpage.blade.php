@@ -20,7 +20,7 @@ new #[Layout('components.layouts.landing')] class extends Component
         [
             'name'  => 'Careers',
             'desc'  => 'Browse openings and track your application.',
-            'route' => 'applicant.login',
+            'route' => 'careers',
             'icon'  => 'fas fa-briefcase',
         ],
     ];
@@ -229,7 +229,7 @@ new #[Layout('components.layouts.landing')] class extends Component
                     <span class="hero__icon"><i class="{{ $portal['icon'] }}"></i></span>
                     <h2 class="hero__name">{{ $portal['name'] }}</h2>
                     <p class="hero__desc">{{ $portal['desc'] }}</p>
-                    <span class="hero__cta">Sign in <i class="fas fa-arrow-right"></i></span>
+                    <span class="hero__cta">{{ $portal['route'] === 'careers' ? 'See openings' : 'Sign in' }} <i class="fas fa-arrow-right"></i></span>
                 </a>
             @endforeach
         </div>

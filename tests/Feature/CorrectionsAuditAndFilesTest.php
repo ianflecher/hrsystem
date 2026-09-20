@@ -157,6 +157,22 @@ class CorrectionsAuditAndFilesTest extends TestCase
     {
         DB::table('hr_payroll')->where('payroll_id', $this->payrollId)->update(['status' => 'calculated']);
 
+        // Approval now goes through the payroll control centre, which refuses
+        // while the period has exceptions - and a fortnight with nobody
+        // clocked in is one of them. Both people in this fixture turn up every
+        // day so the period is clean and the approval can actually happen.
+        foreach ([$this->staff, $this->other] as $person) {
+            $employeeId = (int) DB::table('employees')->where('user_id', $person->user_id)->value('employee_id');
+            for ($day = \Carbon\Carbon::parse('2022-03-01'); $day->lte(\Carbon\Carbon::parse('2022-03-15')); $day->addDay()) {
+                DB::table('hr_attendance')->insert([
+                    'employee_id' => $employeeId, 'date' => $day->toDateString(),
+                    'time_in' => $day->toDateString().' 08:00:00',
+                    'time_out' => $day->toDateString().' 17:00:00',
+                    'status' => 'present', 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+        }
+
         Volt::actingAs($this->hr)->test('hr.payroll')
             ->set('payPeriod', '2022-03-01')
             ->call('approvePeriod');

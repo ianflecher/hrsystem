@@ -186,15 +186,32 @@ class EmployeeAccountsTest extends TestCase
         $hr = $this->hr();
         $employeeId = DB::table('employees')->where('user_id', $hr->user_id)->value('employee_id');
 
+        // The seeded HR account is a sign-in, not a person on the payroll, so
+        // it has no employee record until somebody makes one through the app.
+        // This test is about what happens when it does, so it makes one - and
+        // takes it away again rather than leaving a salaryless employee behind
+        // for the payroll control centre to complain about.
+        $temporary = false;
         if (! $employeeId) {
-            $this->markTestSkipped('The seeded HR account has no employee record.');
+            $employeeId = DB::table('employees')->insertGetId([
+                'user_id' => $hr->user_id, 'job_title' => 'HR Supervisor',
+                'hire_date' => now()->toDateString(), 'salary' => 30000,
+                'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $temporary = true;
         }
 
-        Volt::actingAs($hr)->test('hr.employees')
-            ->call('confirmRemove', $employeeId)
-            ->assertSet('removing', null);
+        try {
+            Volt::actingAs($hr)->test('hr.employees')
+                ->call('confirmRemove', $employeeId)
+                ->assertSet('removing', null);
 
-        $this->assertDatabaseHas('users', ['user_id' => $hr->user_id]);
+            $this->assertDatabaseHas('users', ['user_id' => $hr->user_id]);
+        } finally {
+            if ($temporary) {
+                DB::table('employees')->where('employee_id', $employeeId)->delete();
+            }
+        }
     }
 
     public function test_the_employees_screen_is_closed_to_guests(): void

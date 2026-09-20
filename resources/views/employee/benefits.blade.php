@@ -1,0 +1,14 @@
+<x-layouts.app.employeeland :title="__('Benefits')">
+<div class="benefits-page">
+<style>
+.benefits-page{max-width:1180px;margin:auto;padding:56px 28px 90px;color:#111}.benefits-kicker{font-size:12px;font-weight:700;letter-spacing:.16em;color:#e31b23}.benefits-page h1{font-size:clamp(44px,6vw,76px);line-height:.95;letter-spacing:-.06em;margin:18px 0 14px}.benefits-lead{font-size:18px;color:#666;max-width:650px;line-height:1.6}.benefit-hero{margin-top:44px;background:#111;color:#fff;display:grid;grid-template-columns:1.2fr .8fr;min-height:360px}.benefit-hero-copy{padding:52px}.benefit-hero h2{font-size:clamp(42px,5vw,68px);line-height:.92;letter-spacing:-.06em;margin:0 0 20px}.benefit-hero p{color:#ccc;line-height:1.6;max-width:560px}.benefit-rate{border-left:1px solid #444;display:flex;align-items:center;justify-content:center;font-size:clamp(100px,15vw,180px);font-weight:700;letter-spacing:-.1em}.benefit-grid2{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#111;margin-top:1px;border:1px solid #111}.benefit-box{background:#fff;padding:30px;min-height:170px}.benefit-box h3{font-size:20px;margin:0 0 10px}.benefit-box p{color:#666;line-height:1.55;margin:0}.benefit-note{margin-top:36px;border-top:1px solid #ddd;padding-top:24px;color:#666;font-size:14px;line-height:1.6}
+@media(max-width:800px){.benefit-hero,.benefit-grid2{grid-template-columns:1fr}.benefit-rate{border-left:0;border-top:1px solid #444;min-height:220px}.benefit-hero-copy{padding:36px 28px}}
+</style>
+<span class="benefits-kicker">EMPLOYEE BENEFITS</span>
+<h1>More than a job.</h1>
+<p class="benefits-lead">Your benefits are part of the employee experience at Imprint Customs. This page gives you a clear place to see the product discount available to eligible employees.</p>
+<section class="benefit-hero"><div class="benefit-hero-copy"><h2>50% employee discount.</h2><p>Eligible Imprint Customs employees receive a 50% discount on eligible Imprint Customs products, subject to company policy and any stated product exclusions.</p></div><div class="benefit-rate">50%</div></section>
+<div class="benefit-grid2"><article class="benefit-box"><h3>Who is eligible?</h3><p>Active employees who meet the company's employee-benefit eligibility rules.</p></article><article class="benefit-box"><h3>What is covered?</h3><p>Eligible Imprint Customs products, as designated by the company.</p></article><article class="benefit-box"><h3>Need help?</h3><p>Contact HR for current policy details, exclusions, purchase procedures or questions about eligibility.</p></article></div>
+<p class="benefit-note">Benefit terms may be updated by Imprint Customs. The current company policy and HR instructions control if there is any difference between this summary and the official policy.</p>
+</div>
+</x-layouts.app.employeeland>

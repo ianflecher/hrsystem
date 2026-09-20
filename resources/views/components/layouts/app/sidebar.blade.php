@@ -614,6 +614,22 @@
                         ['name' => 'Attendance', 'route' => 'hr.attendance', 'icon' => '🕒'],
                         ['name' => 'Leave', 'route' => 'hr.leave', 'icon' => '🏖️'],
                         ['name' => 'Payroll', 'route' => 'hr.payroll', 'icon' => '💰'],
+                        ['name' => 'Payroll Control', 'route' => 'hr.operations.payroll-control', 'icon' => '🛡️'],
+                        ['name' => 'HR Inbox', 'route' => 'hr.operations.inbox', 'icon' => '📥'],
+                        ['name' => 'Payroll Approval', 'route' => 'hr.operations.payroll-approval', 'icon' => '✅'],
+                        ['name' => 'Attendance Exceptions', 'route' => 'hr.operations.attendance-exceptions', 'icon' => '⚠️'],
+                        ['name' => 'HR Analytics', 'route' => 'hr.operations.analytics', 'icon' => '📈'],
+                        ['name' => 'Admin Center', 'route' => 'hr.operations.admin-center', 'icon' => '⚙️'],
+                    ],
+                    'supervisor' => [
+                        ['name' => 'Team Dashboard', 'route' => 'hr.operations.manager', 'icon' => '👥'],
+                        ['name' => 'HR Inbox', 'route' => 'hr.operations.inbox', 'icon' => '📥'],
+                        ['name' => 'Attendance Exceptions', 'route' => 'hr.operations.attendance-exceptions', 'icon' => '⚠️'],
+                    ],
+                    'leader' => [
+                        ['name' => 'Team Dashboard', 'route' => 'hr.operations.manager', 'icon' => '👥'],
+                        ['name' => 'HR Inbox', 'route' => 'hr.operations.inbox', 'icon' => '📥'],
+                        ['name' => 'Attendance Exceptions', 'route' => 'hr.operations.attendance-exceptions', 'icon' => '⚠️'],
                     ],
                     'hr' => [
                         ['name' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => '📊'],
@@ -623,6 +639,12 @@
                         ['name' => 'Attendance', 'route' => 'hr.attendance', 'icon' => '🕒'],
                         ['name' => 'Leave', 'route' => 'hr.leave', 'icon' => '🏖️'],
                         ['name' => 'Payroll', 'route' => 'hr.payroll', 'icon' => '💰'],
+                        ['name' => 'Payroll Control', 'route' => 'hr.operations.payroll-control', 'icon' => '🛡️'],
+                        ['name' => 'HR Inbox', 'route' => 'hr.operations.inbox', 'icon' => '📥'],
+                        ['name' => 'Payroll Approval', 'route' => 'hr.operations.payroll-approval', 'icon' => '✅'],
+                        ['name' => 'Attendance Exceptions', 'route' => 'hr.operations.attendance-exceptions', 'icon' => '⚠️'],
+                        ['name' => 'HR Analytics', 'route' => 'hr.operations.analytics', 'icon' => '📈'],
+                        ['name' => 'Admin Center', 'route' => 'hr.operations.admin-center', 'icon' => '⚙️'],
                     ],
                 ];
                 

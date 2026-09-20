@@ -3,6 +3,7 @@
 namespace App\Services\Attendance;
 
 use App\Support\Tardiness;
+use App\Support\ShiftSchedule;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -33,7 +34,8 @@ class PunchImporter
         // Everyone the device could be talking about, by enrolment number.
         $employees = DB::table('employees')
             ->whereNotNull('biometric_id')
-            ->pluck('shift_start', 'biometric_id');
+            ->get(['employee_id', 'biometric_id', 'shift_start', 'shift_end', 'rest_days'])
+            ->keyBy('biometric_id');
 
         $ids = DB::table('employees')
             ->whereNotNull('biometric_id')
@@ -74,7 +76,7 @@ class PunchImporter
                 $byEmployeeDay[$key] = [
                     'employee_id' => $ids[$bio],
                     'date'        => $moment->toDateString(),
-                    'shift'       => $employees[$bio] ?? null,
+                    'employee'    => $employees[$bio] ?? null,
                     'first'       => $moment,
                     'last'        => $moment,
                 ];
@@ -121,7 +123,13 @@ class PunchImporter
                 // arrived.
                 $timeOut = $day['last']->equalTo($day['first']) ? null : $day['last']->toDateTimeString();
 
-                $status = Tardiness::isLate($day['first'], $day['shift']) ? 'late' : 'present';
+                $shift = $day['employee']
+                    ? ShiftSchedule::forEmployeeDate($day['employee'], $day['date'])
+                    : ['rest' => false, 'start' => null, 'end' => null];
+
+                $status = (! $shift['rest'] && Tardiness::isLate($day['first'], $shift['start']))
+                    ? 'late'
+                    : 'present';
 
                 $row = [
                     'time_in'    => $day['first']->toDateTimeString(),

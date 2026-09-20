@@ -16,3 +16,8 @@ Artisan::command('inspire', function () {
  * copy the dumps somewhere off this machine either way.
  */
 Schedule::command('db:backup --keep=14')->dailyAt('01:30')->withoutOverlapping();
+
+Artisan::command('hris:health', function () {
+    $exit = app(\App\Console\Commands\SystemHealth::class)->handle();
+    if ($exit !== 0) $this->fail('HRIS health check failed.');
+})->purpose('Check the HRIS database and required tables.');

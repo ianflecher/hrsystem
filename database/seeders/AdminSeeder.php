@@ -52,17 +52,15 @@ class AdminSeeder extends Seeder
                 'updated_at' => now(),
             ]);
 
-            // Salary is left at the column default rather than invented, and
-            // the department is set once real departments exist.
-            DB::table('employees')->insert([
-                'user_id'       => $userId,
-                'department_id' => null,
-                'job_title'     => $account['job_title'],
-                'hire_date'     => now()->toDateString(),
-                'status'        => 'active',
-                'created_at'    => now(),
-                'updated_at'    => now(),
-            ]);
+            // No employee record. These two are sign-ins, not staff on the
+            // payroll, and an employees row with no salary is not a harmless
+            // placeholder: the payroll control centre counts active employees
+            // without pay details as a high-severity exception, and approval
+            // refuses while any exception stands. Two seeded rows were quietly
+            // blocking every payroll approval on a fresh install.
+            //
+            // HR creates the real person through the app, which is the same
+            // rule the rest of this seeder follows.
 
             $this->command->info("Created {$account['username']}.");
         }

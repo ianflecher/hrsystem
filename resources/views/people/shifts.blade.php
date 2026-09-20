@@ -1,16 +1,33 @@
 @use('App\Support\WorkWeek')
 @if($hr)
-    {{-- The only thing entered here. Shifts and rest days belong to the
-         employee and are set on the Employees screen; holidays belong to the
-         company, so they are the input and the calendar follows from them. --}}
-    <details class="card" @if($errors->any()) open @endif><summary>Add a holiday</summary>
+    <details class="card" @if($errors->any()) open @endif><summary>Assign a shift</summary>
         <form method="POST" action="{{ $base }}" class="grid divider">@csrf
+            <label class="people-field"><span>Employee</span>
+                <select name="employee_id" required>
+                    @foreach($employees as $person)<option value="{{ $person->employee_id }}">{{ $person->full_name }}</option>@endforeach
+                </select>
+            </label>
+            <x-people.field name="from" label="From" type="date" />
+            <x-people.field name="to" label="To" type="date" />
+            <x-people.field name="starts_at" label="Starts" type="time" :required="false" />
+            <x-people.field name="ends_at" label="Ends" type="time" :required="false" />
+            <x-people.field name="label" label="Label" maxlength="80" :required="false" placeholder="Morning shift" />
+            <label class="people-field"><span>Rest day</span><label class="row"><input type="checkbox" name="rest_day" value="1"> Mark as rest day</label></label>
+            <p class="muted wide">Assignments override the employee's default shift for attendance and payroll on those dates.</p>
+            <div><button>Save assignment</button></div>
+        </form>
+    </details>
+
+    <details class="card"><summary>Add a holiday</summary>
+        <form method="POST" action="{{ $base }}" class="grid divider">@csrf
+            <input type="hidden" name="kind" value="holiday">
             <x-people.field name="date" label="Date" type="date" />
             <x-people.field name="name" label="Holiday" maxlength="120" placeholder="Independence Day" />
             <label class="people-field"><span>Type</span>
                 <select name="type">
                     <option value="regular">Regular holiday</option>
-                    <option value="special">Special non-working day</option>
+                    <option value="special_non_working">Special non-working day</option>
+                    <option value="special_working">Special working day</option>
                 </select>
             </label>
             <p class="muted wide">Entering a date again replaces the holiday already on it.</p>
@@ -32,6 +49,7 @@
         @php($day = $month->copy()->day($d))
         @php($date = $day->toDateString())
         @php($holiday = $extra['holidays']->get($date))
+        @php($assigned = $extra['assignments']->get($date, collect()))
         @php($working = $extra['staff']->reject(fn ($person) => WorkWeek::restsOn($person->rest_days, $day)))
 
         <div class="day">
@@ -40,15 +58,32 @@
             @if($holiday)
                 <div class="shift rest">
                     <strong>{{ $holiday->name }}</strong><br>
-                    {{ $holiday->type === 'regular' ? 'Regular holiday' : 'Special non-working day' }}
+                    {{ \App\Services\HolidayPay::describe($holiday->classification ?? $holiday->type) }}
                     @if($hr)
                         <form method="POST" action="{{ $base }}/{{ $holiday->id }}">@csrf
-                            <button class="secondary" name="action" value="delete" aria-label="Remove {{ $holiday->name }} on {{ $date }}">Remove</button>
+                            <button class="secondary" name="action" value="delete-holiday" aria-label="Remove {{ $holiday->name }} on {{ $date }}">Remove</button>
                         </form>
                     @endif
                 </div>
+            @elseif($assigned->isNotEmpty())
+                @foreach($assigned as $shift)
+                    <div class="shift {{ $shift->rest_day ? 'rest' : '' }}">
+                        <strong>{{ $shift->full_name }}</strong><br>
+                        @if($shift->rest_day)
+                            Rest day
+                        @else
+                            {{ substr($shift->starts_at, 0, 5) }}–{{ substr($shift->ends_at, 0, 5) }}
+                        @endif
+                        @if($shift->label)<br>{{ $shift->label }}@endif
+                        @if($hr)
+                            <form method="POST" action="{{ $base }}/{{ $shift->id }}">@csrf
+                                <button class="secondary" name="action" value="delete" aria-label="Remove assigned shift on {{ $date }}">Remove</button>
+                            </form>
+                        @endif
+                    </div>
+                @endforeach
             @elseif($hr)
-                <div class="shift">{{ $working->count() }} working · {{ $extra['staff']->count() - $working->count() }} resting</div>
+                <div class="shift">{{ $working->count() }} default working · {{ $extra['staff']->count() - $working->count() }} resting</div>
             @elseif($working->isEmpty())
                 <div class="shift rest">Rest day</div>
             @else

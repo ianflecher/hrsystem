@@ -1,73 +1,60 @@
 <?php
 
-/*
-|--------------------------------------------------------------------------
-| Statutory contributions
-|--------------------------------------------------------------------------
-|
-| SSS, PhilHealth and Pag-IBIG, in one place, so they can be corrected without
-| touching payroll code.
-|
-| CONFIRM THESE AGAINST THE CURRENT CIRCULARS BEFORE ANYONE IS PAID FROM THEM.
-| The rates below are the published figures as understood at the time of
-| writing; they change by circular, usually in January, and this file is not
-| the authority on them - your accountant is. Every number here is meant to be
-| edited.
-|
-| The figures they replaced were worse than out of date: PhilHealth was fixed
-| at 4% when the premium is 5%, SSS was a set of round brackets nobody had
-| checked, and Pag-IBIG was a flat 100 with no rate behind it at all.
-|
-*/
-
 return [
-
-    /*
-    | When the monthly contributions come off.
-    |
-    | 'second_cutoff' takes the whole month on the 16th-to-end payslip, which
-    | makes the two payslips different sizes. 'split' halves each contribution
-    | across both cutoffs, which most staff find easier to read. Neither is
-    | more correct - it is a company decision about timing, not about amount.
-    */
+    'version' => env('PH_PAYROLL_RULE_VERSION', 'PH-STAT-2026-09'),
     'timing' => env('PAYROLL_CONTRIBUTION_TIMING', 'split'),
+    'sources' => [
+        'SSS' => 'https://www.sss.gov.ph/pay-contribution/',
+        'PhilHealth' => 'https://www.philhealth.gov.ph/',
+        'Pag-IBIG' => 'https://www.pagibigfund.gov.ph/',
+        'BIR' => 'https://www.bir.gov.ph/',
+        'DOLE' => 'https://dole.gov.ph/',
+    ],
 
-    /*
-    | SSS - employee share.
-    |
-    | The contribution is a percentage of the Monthly Salary Credit, which
-    | moves in steps rather than following the salary exactly, and is held
-    | between a floor and a ceiling. Set 'step' to 0 to use the salary itself.
-    */
+    // Philippine statutory defaults. Keep changes versioned and verify against
+    // the latest agency issuances before production use.
     'sss' => [
         'employee_rate' => 0.05,
-        'msc_floor'     => 5000,
-        'msc_ceiling'   => 35000,
-        'step'          => 500,
+        'employer_rate' => 0.10,
+        'msc_floor' => 5000,
+        'msc_ceiling' => 35000,
+        'step' => 500,
+        'ec_below_15000' => 10,
+        'ec_15000_and_above' => 30,
     ],
-
-    /*
-    | PhilHealth - employee share.
-    |
-    | The premium is a percentage of the monthly basic salary, shared equally
-    | between employer and employee, and bounded by a floor and a ceiling.
-    */
     'philhealth' => [
-        'premium_rate'   => 0.05,
+        'premium_rate' => 0.05,
         'employee_share' => 0.5,
-        'salary_floor'   => 10000,
+        'employer_share' => 0.5,
+        'salary_floor' => 10000,
         'salary_ceiling' => 100000,
     ],
-
-    /*
-    | Pag-IBIG - employee share.
-    |
-    | A percentage of monthly compensation, capped. The cap is what makes the
-    | familiar flat 100 appear for anybody earning above it.
-    */
     'pagibig' => [
+        'employee_rate_low' => 0.01,
         'employee_rate' => 0.02,
-        'salary_cap'    => 5000,
+        'employer_rate' => 0.02,
+        'rate_threshold' => 1500,
+        'salary_cap' => 10000,
     ],
-
+    'nsd' => ['rate' => 0.10, 'start' => '22:00', 'end' => '06:00'],
+    'bir' => [
+        'frequency' => 'semi_monthly',
+        'tax_free_to' => 10417.00,
+        'brackets' => [
+            ['to' => 16666.00, 'fixed' => 0, 'rate' => 0.15, 'over' => 10417.00],
+            ['to' => 33332.00, 'fixed' => 937.50, 'rate' => 0.20, 'over' => 16667.00],
+            ['to' => 83332.00, 'fixed' => 4270.70, 'rate' => 0.25, 'over' => 33333.00],
+            ['to' => 333332.00, 'fixed' => 16770.70, 'rate' => 0.30, 'over' => 83333.00],
+            ['to' => 999999999.00, 'fixed' => 91770.70, 'rate' => 0.35, 'over' => 333333.00],
+        ],
+    ],
+    'holiday' => [
+        'regular' => 2.00,
+        'regular_rest' => 2.60,
+        'special_non_working' => 1.30,
+        'special_non_working_rest' => 1.50,
+        'special_working' => 1.00,
+            'special_non_working_no_work_no_pay' => true,
+    ],
+    'overtime' => ['ordinary' => 1.25, 'rest_or_special' => 1.30, 'regular_holiday' => 1.30],
 ];

@@ -12,7 +12,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
 <style>
     :root {
@@ -23,7 +23,7 @@
         --border-strong: #D3DAE4;
         --ink:           #17202E;
         --ink-2:         #566172;
-        --ink-3:         #94A0AE;
+        --ink-3:         #687588;
 
         --brand:        #E31B23;
         --brand-hover:  #B5141A;
@@ -49,7 +49,7 @@
         --shadow-md: 0 4px 12px rgba(19, 30, 51, .06), 0 12px 28px rgba(19, 30, 51, .08);
 
         --font-body: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-        --font-head: "Space Grotesk", "Inter", system-ui, sans-serif;
+        --font-head: var(--font-body);
     }
 
     body {
@@ -58,6 +58,14 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
     }
+
+    .hr-shell :is(a, button, input, select, textarea, summary):focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+    }
+
+    .hr-shell :is(button, input, select, textarea) { font-family: inherit; }
+    .hr-shell button:disabled { cursor: not-allowed; opacity: .6; }
 
     h1, h2, h3, .card-stat {
         font-family: var(--font-head);
@@ -83,9 +91,9 @@
     .dashboard-card:hover,
     .stat-card:hover,
     .content-card:hover {
-        transform: translateY(-1px);
+        transform: none;
         border-color: var(--border-strong);
-        box-shadow: var(--shadow-md);
+        box-shadow: var(--shadow);
     }
 
     .card-header {
@@ -179,7 +187,7 @@
 
     .btn-primary:focus-visible,
     .btn-secondary:focus-visible {
-        outline: 2px solid var(--brand);
+        outline: 2px solid var(--accent);
         outline-offset: 2px;
     }
 
@@ -272,6 +280,41 @@
     .status-inactive   { background: var(--surface-2);   color: var(--ink-2);  border-color: var(--border-strong); }
     .status-terminated { background: var(--bad-soft);    color: var(--bad);    border-color: var(--bad-border); }
 
+    .portal-feedback {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 14px 16px;
+        margin-bottom: 20px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: .875rem;
+        line-height: 1.5;
+    }
+    .portal-feedback--success { background: var(--ok-soft); border-color: var(--ok-border); color: var(--ok); }
+    .portal-feedback--error { background: var(--bad-soft); border-color: var(--bad-border); color: var(--bad); }
+    .portal-feedback--warning { background: var(--warn-soft); border-color: var(--warn-border); color: var(--warn); }
+    .portal-feedback--info { background: var(--accent-soft); border-color: #bfdbfe; color: #1d4ed8; }
+    .portal-feedback > i { flex: none; margin-top: 3px; }
+    .portal-feedback__message { flex: 1; min-width: 0; }
+    .portal-feedback [data-feedback-dismiss] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        margin: -5px -6px -5px auto;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+    }
+    .portal-feedback [data-feedback-dismiss]:hover { background: rgba(0, 0, 0, .06); }
+    .portal-feedback[hidden] { display: none; }
+
     /* ------------------------------------------------------------------
        The application shell: a fixed navy sidebar and the page beside it.
 
@@ -304,8 +347,9 @@
         align-items: center;
         gap: 10px;
         padding: 18px 18px 16px;
-        border-bottom: 1px solid rgba(255, 255, 255, .08);
         text-decoration: none;
+        flex: 1;
+        min-width: 0;
     }
 
     .hr-sidebar__brand img {
@@ -327,21 +371,22 @@
     }
 
     .hr-sidebar__brand-sub {
-        color: #7E8CA0;
+        color: #A3B0C2;
         font-size: .6875rem;
         letter-spacing: .02em;
     }
 
     .hr-sidebar__label {
-        padding: 18px 18px 8px;
-        color: #64748B;
+        padding: 19px 12px 7px;
+        color: #A3B0C2;
         font-size: .6875rem;
         font-weight: 600;
         letter-spacing: .07em;
         text-transform: uppercase;
     }
 
-    .hr-sidebar nav { flex: 1; overflow-y: auto; padding: 0 10px 16px; }
+    .hr-sidebar__header { display: flex; align-items: center; flex: none; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+    .hr-sidebar nav { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 10px 16px; scrollbar-width: thin; scrollbar-color: #40516a transparent; }
 
     .hr-sidebar .nav-link {
         display: flex;
@@ -350,7 +395,7 @@
         padding: 9px 12px;
         margin-bottom: 2px;
         border-radius: 8px;
-        color: #93A0B4;
+        color: #B7C2D2;
         font-size: .875rem;
         font-weight: 500;
         text-decoration: none;
@@ -358,7 +403,8 @@
     }
 
     .hr-sidebar .nav-link i { width: 18px; text-align: center; font-size: .9375rem; }
-    .hr-sidebar .nav-link:hover { background: rgba(255, 255, 255, .06); color: #E6EBF2; }
+    .hr-sidebar .nav-link:hover { background: rgba(255, 255, 255, .06); color: #E6EBF2; transform: none; }
+    .hr-sidebar :is(a, button):focus-visible { outline-color: #93c5fd; }
 
     /* The current page, marked by a fill and a rule down its edge rather than
        colour alone. */
@@ -373,6 +419,7 @@
     .hr-sidebar__foot {
         padding: 12px;
         border-top: 1px solid rgba(255, 255, 255, .08);
+        flex: none;
     }
 
     .hr-sidebar__user {
@@ -446,7 +493,15 @@
         font-size: 1.25rem;
         cursor: pointer;
         line-height: 1;
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
     }
+
+    .hr-sidebar__close { display: none; flex: none; margin-right: 8px; width: 40px; height: 40px; border: 0; border-radius: 8px; background: transparent; color: #fff; cursor: pointer; }
+    .hr-sidebar__close:hover, .hr-topbar__toggle:hover { background: rgba(255, 255, 255, .08); }
+    .hr-skip-link { position: fixed; top: 10px; left: 10px; z-index: 80; padding: 12px 16px; border-radius: 8px; background: white; color: var(--ink); transform: translateY(-150%); }
+    .hr-skip-link:focus { transform: translateY(0); }
 
     .hr-content { padding: 0; }
 
@@ -461,10 +516,124 @@
     .hr-backdrop.show { display: block; }
 
     @media (max-width: 1024px) {
-        .hr-sidebar { transform: translateX(-100%); }
-        .hr-sidebar.open { transform: translateX(0); }
+        .hr-sidebar { width: min(288px, calc(100vw - 48px)); transform: translateX(-100%); visibility: hidden; }
+        .hr-sidebar.open { transform: translateX(0); visibility: visible; }
+        .hr-sidebar .nav-link { min-height: 44px; }
+        .hr-sidebar__close { display: inline-flex; align-items: center; justify-content: center; }
         .hr-main { margin-left: 0; }
         .hr-topbar { display: flex; }
     }
 
+    @media (prefers-reduced-motion: reduce) {
+        .hr-shell *, .hr-shell *::before, .hr-shell *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+    }
+
 </style>
+
+<script>
+    (() => {
+        if (window.hrPortalShellReady) return;
+        window.hrPortalShellReady = true;
+        let cleanUp = () => {};
+
+        function initializePortalShell() {
+            cleanUp();
+            const shell = document.querySelector('[data-portal-shell]');
+            if (!shell) return;
+
+            const sidebar = shell.querySelector('.hr-sidebar');
+            const main = shell.querySelector('.hr-main');
+            const backdrop = shell.querySelector('.hr-backdrop');
+            const toggle = shell.querySelector('[data-sidebar-toggle]');
+            const close = shell.querySelector('[data-sidebar-close]');
+            const viewport = window.matchMedia('(max-width: 1024px)');
+            const controller = new AbortController();
+            const options = { signal: controller.signal };
+            let previousFocus = null;
+            let previousOverflow = null;
+
+            function setOpen(open, returnFocus = true) {
+                open = open && viewport.matches;
+                const wasOpen = sidebar.classList.contains('open');
+                if (open && !wasOpen) {
+                    previousFocus = document.activeElement;
+                    previousOverflow = document.body.style.overflow;
+                    document.body.style.overflow = 'hidden';
+                }
+
+                sidebar.classList.toggle('open', open);
+                backdrop.classList.toggle('show', open);
+                toggle.setAttribute('aria-expanded', String(open));
+                toggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+                sidebar.inert = viewport.matches && !open;
+                main.inert = open;
+
+                if (open) {
+                    sidebar.setAttribute('role', 'dialog');
+                    sidebar.setAttribute('aria-modal', 'true');
+                    close.focus();
+                } else {
+                    sidebar.removeAttribute('role');
+                    sidebar.removeAttribute('aria-modal');
+                    if (previousOverflow !== null) {
+                        document.body.style.overflow = previousOverflow;
+                        previousOverflow = null;
+                    }
+                    if (wasOpen && returnFocus && viewport.matches) {
+                        (previousFocus?.isConnected ? previousFocus : toggle).focus();
+                    }
+                }
+            }
+
+            toggle.addEventListener('click', () => setOpen(!sidebar.classList.contains('open')), options);
+            close.addEventListener('click', () => setOpen(false), options);
+            backdrop.addEventListener('click', () => setOpen(false), options);
+            sidebar.addEventListener('click', event => {
+                if (event.target.closest('a[href]') && viewport.matches) setOpen(false, false);
+            }, options);
+            document.addEventListener('keydown', event => {
+                if (!sidebar.classList.contains('open')) return;
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    setOpen(false);
+                }
+                if (event.key === 'Tab') {
+                    const focusable = [...sidebar.querySelectorAll('a[href], button:not([disabled]), [tabindex="0"]')]
+                        .filter(element => element.getClientRects().length);
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+                    if (event.shiftKey && document.activeElement === first) {
+                        event.preventDefault();
+                        last.focus();
+                    } else if (!event.shiftKey && document.activeElement === last) {
+                        event.preventDefault();
+                        first.focus();
+                    }
+                }
+            }, options);
+            viewport.addEventListener('change', () => {
+                const focusWasInSidebar = sidebar.contains(document.activeElement);
+                setOpen(false, false);
+                if (viewport.matches && focusWasInSidebar) toggle.focus();
+                if (!viewport.matches && document.activeElement === close) sidebar.querySelector('a').focus();
+            }, options);
+            setOpen(false, false);
+            cleanUp = () => {
+                setOpen(false, false);
+                controller.abort();
+            };
+        }
+
+        document.addEventListener('click', event => {
+            const button = event.target.closest('[data-feedback-dismiss]');
+            if (!button) return;
+            const message = button.closest('.portal-feedback');
+            if (!message) return;
+            message.hidden = true;
+        });
+        document.addEventListener('livewire:navigating', () => cleanUp());
+        document.addEventListener('livewire:navigated', initializePortalShell);
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializePortalShell);
+        else initializePortalShell();
+    })();
+</script>

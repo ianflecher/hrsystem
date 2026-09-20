@@ -4,7 +4,8 @@ namespace App\Services;
 
 use App\Support\Tardiness;
 use App\Support\Undertime;
-use App\Support\WorkWeek;
+use App\Support\ShiftSchedule;
+use App\Support\Statutory;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\DB;
  * early on the days worked.
  *
  * Everything is judged a day at a time, and only on days the person was
- * actually due in - not their rest days, not holidays, nothing before they were
+ * actually due in - not their rest days or regular holidays, nothing before they were
  * hired, and nothing in the future, so a payslip generated mid-cutoff does not
  * charge anybody for days that have not happened yet.
  *
@@ -29,6 +30,9 @@ use Illuminate\Support\Facades\DB;
 class TimeDeductions
 {
     /**
+     * Regular holidays are already covered by the monthly salary; special
+     * non-working days follow the configured no-work/no-pay policy.
+     *
      * Leave types that are not paid. Everything else in the leaves table -
      * vacation, sick, maternity and the rest - is paid leave, so it is a day
      * off rather than a day missing.
@@ -47,8 +51,8 @@ class TimeDeductions
         $salary = (float) $employee->salary;
         $dailyRate = round(Tardiness::dailyRate($salary), 2);
 
-        $holidays = DB::table('holidays')->whereBetween('date', [$periodStart, $periodEnd])->pluck('date')
-            ->map(fn ($date) => substr((string) $date, 0, 10))->all();
+        $holidays = DB::table('holidays')->whereBetween('date', [$periodStart, $periodEnd])->get()
+            ->keyBy(fn ($row) => substr((string) $row->date, 0, 10));
 
         $attendance = DB::table('hr_attendance')->where('employee_id', $employee->employee_id)
             ->whereBetween('date', [$periodStart, $periodEnd])->get()
@@ -72,7 +76,19 @@ class TimeDeductions
         for ($day = Carbon::parse($periodStart); $day->lte($last); $day->addDay()) {
             $date = $day->toDateString();
 
-            if (in_array($date, $holidays, true) || WorkWeek::restsOn($employee->rest_days ?? null, $day)) {
+            $shift = ShiftSchedule::forEmployeeDate($employee, $date);
+
+            $holiday = $holidays->get($date);
+            $holidayType = $holiday ? (string) ($holiday->classification ?? ($holiday->type === 'special' ? 'special_non_working' : $holiday->type)) : null;
+
+            // A regular holiday is already paid for monthly-paid staff. A
+            // special working day is an ordinary workday. A special
+            // non-working day follows the no-work/no-pay rule unless the
+            // company has explicitly configured otherwise.
+            if (($holidayType === 'regular') || ($holidayType === 'special_non_working' && ! Statutory::tableForDate('holiday', $periodStart)['special_non_working_no_work_no_pay'])) {
+                continue;
+            }
+            if ($shift['rest']) {
                 continue;
             }
 
@@ -83,7 +99,7 @@ class TimeDeductions
             $row = $attendance->get($date);
 
             if ($row && $row->time_in) {
-                $this->chargeWorkedDay($totals, $row, $employee, $salary);
+                $this->chargeWorkedDay($totals, $row, $shift, $salary);
 
                 continue;
             }
@@ -112,14 +128,15 @@ class TimeDeductions
         return $totals;
     }
 
-    private function chargeWorkedDay(array &$totals, object $row, object $employee, float $salary): void
+    /** @param array{rest: bool, start: ?string, end: ?string} $shift */
+    private function chargeWorkedDay(array &$totals, object $row, array $shift, float $salary): void
     {
-        $lateCost = $employee->shift_start
-            ? Tardiness::deduction(Tardiness::minutesLate(Carbon::parse($row->time_in), $employee->shift_start), $salary)
+        $lateCost = $shift['start']
+            ? Tardiness::deduction(Tardiness::minutesLate(Carbon::parse($row->time_in), $shift['start']), $salary)
             : 0.0;
 
-        $shortCost = ($employee->shift_end ?? null) && $row->time_out
-            ? Undertime::deduction(Undertime::minutesShort(Carbon::parse($row->time_out), $employee->shift_end), $salary)
+        $shortCost = $shift['end'] && $row->time_out
+            ? Undertime::deduction(Undertime::minutesShort(Carbon::parse($row->time_out), $shift['end']), $salary)
             : 0.0;
 
         if ($lateCost > 0) {

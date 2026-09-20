@@ -104,14 +104,14 @@ class PayrollCalculationTest extends TestCase
     {
         // 22,000 a month: SSS is 5% of the 22,000 salary credit = 1,100;
         // PhilHealth is 5% halved with the employer = 550; Pag-IBIG is 2% of
-        // compensation capped at 5,000 = 100. Half of each lands per cutoff.
+        // compensation capped at 10,000 = 200. Half of each lands per cutoff.
         $first = PayrollCalculator::forCutoff(22000, 0, false);
         $second = PayrollCalculator::forCutoff(22000, 0, true);
 
         foreach ([$first, $second] as $cutoff) {
             $this->assertSame(550.0, $cutoff['sss']);
             $this->assertSame(275.0, $cutoff['philhealth']);
-            $this->assertSame(50.0, $cutoff['pagibig']);
+            $this->assertSame(100.0, $cutoff['pagibig']);
         }
     }
 
@@ -128,7 +128,7 @@ class PayrollCalculationTest extends TestCase
             $second = PayrollCalculator::forCutoff(22000, 0, true);
             $this->assertSame(1100.0, $second['sss']);
             $this->assertSame(550.0, $second['philhealth']);
-            $this->assertSame(100.0, $second['pagibig']);
+            $this->assertSame(200.0, $second['pagibig']);
         });
     }
 
@@ -160,9 +160,11 @@ class PayrollCalculationTest extends TestCase
 
     public function test_pagibig_is_a_rate_on_capped_compensation(): void
     {
-        // 2% of compensation, capped - which is where the familiar flat 100
-        // comes from for anybody earning above the cap.
-        $this->assertSame(100.0, PayrollCalculator::pagIbig(32000));
+        // 2% of compensation, capped at the 10,000 maximum fund salary, so
+        // anybody earning above it pays a flat 200 a month. The cap was 5,000
+        // until February 2024, when Pag-IBIG doubled it; these figures were
+        // still the old ones.
+        $this->assertSame(200.0, PayrollCalculator::pagIbig(32000));
         $this->assertSame(60.0, PayrollCalculator::pagIbig(3000));
     }
 

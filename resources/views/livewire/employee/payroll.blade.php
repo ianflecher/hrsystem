@@ -71,6 +71,14 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                 'net_pay',
                 'status',
                 'notes',
+                'overtime_pay',
+                'holiday_pay',
+                'time_deduction',
+                'loan_deduction',
+                'sss',
+                'philhealth',
+                'pagibig',
+                'tax',
                 'created_at'
             )
             ->get();
@@ -100,58 +108,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
     {
         if (!$this->currentPayroll) return;
         
-        // Parse notes to get breakdown
-        $notes = $this->currentPayroll->notes ?? '';
-        $breakdown = [
-            'earnings' => [],
-            'deductions' => []
-        ];
-        
-        // If notes contain breakdown information
-        if (strpos($notes, 'SSS:') !== false || strpos($notes, 'PhilHealth:') !== false) {
-            // Parse the notes string
-            $parts = explode(' | ', $notes);
-            foreach ($parts as $part) {
-                if (strpos($part, 'SSS:') !== false) {
-                    $amount = floatval(preg_replace('/[^0-9.]/', '', $part));
-                    $breakdown['deductions'][] = [
-                        'name' => 'SSS Contribution',
-                        'amount' => $amount,
-                        'type' => 'government'
-                    ];
-                } elseif (strpos($part, 'PhilHealth:') !== false) {
-                    $amount = floatval(preg_replace('/[^0-9.]/', '', $part));
-                    $breakdown['deductions'][] = [
-                        'name' => 'PhilHealth Contribution',
-                        'amount' => $amount,
-                        'type' => 'government'
-                    ];
-                } elseif (strpos($part, 'Pag-IBIG:') !== false) {
-                    $amount = floatval(preg_replace('/[^0-9.]/', '', $part));
-                    $breakdown['deductions'][] = [
-                        'name' => 'Pag-IBIG Contribution',
-                        'amount' => $amount,
-                        'type' => 'government'
-                    ];
-                } elseif (strpos($part, 'Tax:') !== false) {
-                    $amount = floatval(preg_replace('/[^0-9.]/', '', $part));
-                    $breakdown['deductions'][] = [
-                        'name' => 'Tax Withheld',
-                        'amount' => $amount,
-                        'type' => 'tax'
-                    ];
-                }
-            }
-        }
-        
-        // Add basic salary as earnings
-        $breakdown['earnings'][] = [
-            'name' => 'Basic Salary',
-            'amount' => floatval($this->currentPayroll->gross_pay),
-            'type' => 'salary'
-        ];
-        
-        $this->payrollBreakdown = $breakdown;
+        $this->payrollBreakdown = \App\Support\PayslipBreakdown::fromPayroll($this->currentPayroll);
     }
     
     /*
