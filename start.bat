@@ -190,8 +190,9 @@ echo.
 echo   On this computer :  http://127.0.0.1:%PORT%
 if not "%LANIP%"=="" echo   On the network   :  http://%LANIP%:%PORT%
 echo.
+echo   Careers page     :  http://127.0.0.1:%PORT%/
+echo   Staff sign-in    :  http://127.0.0.1:%PORT%/portals
 echo   HR back office   :  http://127.0.0.1:%PORT%/admin/login
-echo   Staff sign-in    :  http://127.0.0.1:%PORT%/login
 echo.
 echo   Sign in with:  hr
 echo   Password    :  imprint123
@@ -204,6 +205,8 @@ echo   windows open - closing them stops the system.
 echo ==========================================================
 echo.
 
-start "" "http://127.0.0.1:%PORT%/admin/login"
+rem The careers page is the front door now, so that is what opens. The HR
+rem back office is a step away, at /admin/login, for the people who need it.
+start "" "http://127.0.0.1:%PORT%/"
 pause
 exit /b 0

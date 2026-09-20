@@ -29,10 +29,22 @@ class PortalSmokeTest extends TestCase
     public static function publicPages(): array
     {
         return [
-            'landing'         => ['/'],
-            'admin login'     => ['/admin/login'],
-            'employee login'  => ['/employee/login'],
-            'applicant login' => ['/applicant/login'],
+            // "/" is the careers page, and /careers the same page by its own
+            // name. Both are listed because a directory left in public/ with a
+            // route's name is served by the web server instead of Laravel, and
+            // that turned /careers into a 404 once already.
+            'landing'            => ['/'],
+            'careers'            => ['/careers'],
+            'careers who we are' => ['/careers/who-we-are'],
+            'careers who we hire'=> ['/careers/who-we-hire'],
+            'careers jobs'       => ['/careers/jobs'],
+            'careers our people' => ['/careers/our-people'],
+            'careers inside'     => ['/careers/inside'],
+            'careers front'      => ['/careers/front'],
+            'portal chooser'     => ['/portals'],
+            'admin login'        => ['/admin/login'],
+            'employee login'     => ['/employee/login'],
+            'applicant login'    => ['/applicant/login'],
         ];
     }
 
@@ -68,7 +80,18 @@ class PortalSmokeTest extends TestCase
         // /login served a customer portal inherited from the e-commerce code.
         // The name stays defined - Laravel redirects guests to it - but each
         // portal has its own sign-in now, so it hands over to the chooser.
-        $this->get('/login')->assertRedirect('/');
+        //
+        // The chooser moved to /portals when the careers page took over "/",
+        // and this has to follow it: somebody whose session expired needs a way
+        // back in, which a careers page is not.
+        $this->get('/login')->assertRedirect('/portals');
+    }
+
+    public function test_the_old_benefits_address_lands_on_the_home_page(): void
+    {
+        // Benefits live in a section of the home page. Anybody holding the old
+        // link is sent to that section rather than to a 404.
+        $this->get('/careers/benefits')->assertRedirect('/#benefits');
     }
 
     #[DataProvider('hrPages')]
