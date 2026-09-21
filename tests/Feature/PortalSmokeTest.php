@@ -39,7 +39,7 @@ class PortalSmokeTest extends TestCase
             'careers who we hire'=> ['/careers/who-we-hire'],
             'careers jobs'       => ['/careers/jobs'],
             'careers our people' => ['/careers/our-people'],
-            'careers inside'     => ['/careers/into-imprint'],
+            'careers inside'     => ['/careers/inside'],
             'careers front'      => ['/careers/front'],
             'portal chooser'     => ['/portals'],
             'admin login'        => ['/admin/login'],
@@ -109,13 +109,6 @@ class PortalSmokeTest extends TestCase
         // Benefits live in a section of the home page. Anybody holding the old
         // link is sent to that section rather than to a 404.
         $this->get('/careers/benefits')->assertRedirect('/#benefits');
-    }
-
-    public function test_the_old_inside_address_lands_on_into_imprint(): void
-    {
-        // The page answered to /careers/inside until it was renamed. A pasted
-        // link or a search result pointing there still arrives.
-        $this->get('/careers/inside')->assertRedirect('/careers/into-imprint');
     }
 
     #[DataProvider('hrPages')]
