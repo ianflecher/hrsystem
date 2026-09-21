@@ -33,7 +33,7 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
             ['route' => 'careers.jobs', 'eyebrow' => 'Pay and benefits',
              'title' => 'What comes with the job', 'pic' => 'gallery-5',
              'body'  => 'Competitive pay, half price on our own apparel, and every peso named on your payslip.'],
-            ['route' => 'careers.inside', 'eyebrow' => 'Inside',
+            ['route' => 'careers.into', 'eyebrow' => 'Into Imprint',
              'title' => 'Where the work happens', 'pic' => 'gallery-2',
              'body'  => 'Printing, embroidery, cutting, sewing and the store out front - all under one roof.'],
         ];
@@ -69,7 +69,7 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
             @include('partials.careers-clip')
 
             <p style="margin: 20px 0 0">
-                <a href="{{ route('careers.inside') }}" class="path__go">
+                <a href="{{ route('careers.into') }}" class="path__go">
                     See every workstation <i class="fas fa-arrow-right"></i>
                 </a>
             </p>

@@ -15,7 +15,7 @@
         // then who it takes on. The tours of the building come after the
         // answer to "is this place even for me?".
         ['route' => 'careers.who',       'label' => 'Who we hire'],
-        ['route' => 'careers.inside',    'label' => 'Inside'],
+        ['route' => 'careers.into',      'label' => 'Into Imprint'],
         // The store and the cafe, the customer-facing half of the business.
         ['route' => 'careers.front',     'label' => 'Front'],
         // Benefits has no tab: the home page carries them in full, and a second

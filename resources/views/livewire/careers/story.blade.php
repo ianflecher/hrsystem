@@ -172,7 +172,7 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
             @endif
 
             <p style="margin: 26px 0 0">
-                <a href="{{ route('careers.inside') }}" class="path__go">
+                <a href="{{ route('careers.into') }}" class="path__go">
                     See every workstation <i class="fas fa-arrow-right"></i>
                 </a>
             </p>
@@ -200,7 +200,7 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
 
             <div class="explore">
                 @foreach ([
-                    ['route' => 'careers.inside', 'pic' => 'station-12', 'icon' => 'fas fa-industry',
+                    ['route' => 'careers.into', 'pic' => 'station-12', 'icon' => 'fas fa-industry',
                      'eyebrow' => 'The floor', 'title' => 'Every workstation',
                      'body' => 'Printing, embroidery, cutting, sewing, press and the store - each place the work passes through.',
                      'link' => 'Look inside'],

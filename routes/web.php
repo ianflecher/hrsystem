@@ -37,7 +37,10 @@ Volt::route('/careers/jobs', 'careers.jobs')->name('careers.jobs');
 // The address stays alive and lands on that section rather than 404ing.
 Route::redirect('/careers/benefits', '/#benefits')->name('careers.benefits');
 Volt::route('/careers/our-people', 'careers.people')->name('careers.people');
-Volt::route('/careers/inside', 'careers.inside')->name('careers.inside');
+Volt::route('/careers/into-imprint', 'careers.into-imprint')->name('careers.into');
+// The page answered to /careers/inside until 2026-09-21. Anything already
+// pointing there - a pasted link, a search result - still arrives.
+Route::redirect('/careers/inside', '/careers/into-imprint');
 Volt::route('/careers/front', 'careers.front')->name('careers.front');
 
 Volt::route('/portals', 'landingpage')->name('portals');

@@ -20,7 +20,7 @@ class CareersMetaTest extends TestCase
             'home'        => ['/'],
             'who we are'  => ['/careers/who-we-are'],
             'who we hire' => ['/careers/who-we-hire'],
-            'inside'      => ['/careers/inside'],
+            'inside'      => ['/careers/into-imprint'],
             'front'       => ['/careers/front'],
             'jobs'        => ['/careers/jobs'],
             'our people'  => ['/careers/our-people'],

@@ -45,7 +45,7 @@ class CareersMeta
             'description' => 'No degree required and no experience assumed. Students, working students, OJT trainees and fresh graduates all have a way in - and we teach the craft.',
             'share'       => 'share-who',
         ],
-        'careers.inside' => [
+        'careers.into' => [
             'title'       => 'Inside the production floor',
             'description' => 'Screen printing, embroidery, cutting, sewing, press and finishing - every station an order passes through, and the people at them.',
             'share'       => 'share-inside',
