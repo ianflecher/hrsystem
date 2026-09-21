@@ -30,15 +30,30 @@ class CareersMedia
         return null;
     }
 
-    /** The one video slot, or null. */
-    public static function clip(): ?string
+    /**
+     * A video slot, or null.
+     *
+     * Two of them, because the home page and the Inside page each show a clip
+     * and showing the same one twice made the site look like it had one minute
+     * of footage. Slot 1 is inside.mp4, slot 2 inside-2.mp4, and a slot with no
+     * file shows the "on its way" panel rather than borrowing the other's.
+     */
+    public static function clip(int $slot = 1): ?string
     {
+        $name = $slot === 1 ? 'inside' : 'inside-'.$slot;
+
         foreach (['mp4', 'webm'] as $ext) {
-            if (file_exists(public_path("img/careers/inside.{$ext}"))) {
-                return asset("img/careers/inside.{$ext}");
+            if (file_exists(public_path("img/careers/{$name}.{$ext}"))) {
+                return asset("img/careers/{$name}.{$ext}");
             }
         }
 
         return null;
+    }
+
+    /** The still shown before a slot plays. */
+    public static function poster(int $slot = 1): ?string
+    {
+        return self::pic($slot === 1 ? 'video-poster' : 'video-poster-'.$slot);
     }
 }

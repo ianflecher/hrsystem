@@ -1,6 +1,10 @@
 {{-- The player on its own. The home page and the Inside page both show it,
      each under its own heading, so only the player is shared. --}}
-@php $clip = \App\Support\CareersMedia::clip(); @endphp
+@php
+    $slot = $clipSlot ?? 1;
+    $clip = \App\Support\CareersMedia::clip($slot);
+    $poster = \App\Support\CareersMedia::poster($slot);
+@endphp
             <div class="clip" @if ($stationsAbove ?? false) style="margin-top: 34px" @endif>
                 @if ($clip)
                     {{-- Muted and inline, so a phone plays it where it sits
@@ -12,7 +16,7 @@
                            loop
                            playsinline
                            preload="metadata"
-                           @if (\App\Support\CareersMedia::pic('video-poster')) poster="{{ \App\Support\CareersMedia::pic('video-poster') }}" @endif>
+                           @if ($poster) poster="{{ $poster }}" @endif>
                         <source src="{{ $clip }}" type="video/mp4">
                         Your browser cannot play this video.
                     </video>

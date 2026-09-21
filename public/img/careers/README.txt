@@ -22,8 +22,34 @@ showing this page to the public.
 
 Video (optional):
 
-  inside.mp4        a short clip of the floor; .webm also works
-  video-poster.jpg  the still shown before it plays
+  inside.mp4          shown on the home page
+  video-poster.jpg    the still shown before it plays
+  inside-2.mp4        shown on the Inside page
+  video-poster-2.jpg  its still
+
+Two slots, because both pages carry a player and one file in both made the
+site look like it owned a single minute of footage. A slot with no file shows
+the "on its way" panel; it does not borrow the other one.
+
+Both are cut from IMPRINT CUSTOMS MILESTONE VIDEO (1920x1440).mp4 in
+IMPRINT CUSTOMS - EVENTS\EVENTS HIGHLIGHTS FINAL OUTPUT, which runs 6:32.
+
+  inside.mp4    2:40-3:40   apparel, the storefront, the convoy
+  inside-2.mp4  5:25-6:25   the product being shown at a car show, detail
+                            work, the team, closing on the brand card
+
+The minute straight after the first one (3:40-4:40) was cut and thrown away:
+it is a school outreach and a blood drive, including close-ups of identifiable
+children, which is neither what this section is about nor something to publish
+without asking the families.
+
+The player is muted and loops, so minutes made of talking heads are no good in
+it however interesting they are - and much of this source is interviews with
+burned-in subtitles. That ruled out 4:40-5:40 as well.
+
+Note this source is an events reel. There is no footage of the production
+floor anywhere in it, so neither clip really shows the floor. Real floor
+footage would be better than both.
 
 Keep it short and quiet - it plays muted with controls, not autoplaying, so
 nobody on mobile data gets ambushed. Under about 5 MB is polite.

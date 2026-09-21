@@ -75,7 +75,7 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
                 </p>
             </div>
 
-            @include('partials.careers-clip')
+            @include('partials.careers-clip', ['clipSlot' => 2])
         </div>
     </section>
 
