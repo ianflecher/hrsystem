@@ -96,6 +96,16 @@ caption there. The order of the captions matches station-1 .. station-20.
 
 Removing a station-N.jpg drops that tile; the rest shift up.
 
+station-3, station-7 and station-10 were removed 2026-09-21. They were the
+second frame of a moment already shown: 3 was the same man at the same printer
+as 2, 7 the same man at the same tables as 6, 10 the same roll feed as 9. The
+captions stay bound to their own file by index, so nothing else was relabelled.
+
+There is nothing left in the production shoot to put in their place - every
+frame in it is already used by some slot. The grid repeats people because the
+shoot photographed a handful of them, mostly from behind in the same jersey.
+Only new photographs fix that.
+
 -----------------------------------------------------------------------
 Who we are page
 
