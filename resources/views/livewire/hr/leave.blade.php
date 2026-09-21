@@ -42,8 +42,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
     public function mount()
     {
+        // The window filters on start_date, and leave is applied for before it
+        // is taken - so a window ending today hid every pending request, which
+        // is the only kind HR opens this page to act on. It reaches forward.
         $this->filters['date_from'] = date('Y-m-d', strtotime('-30 days'));
-        $this->filters['date_to'] = date('Y-m-d');
+        $this->filters['date_to'] = date('Y-m-d', strtotime('+90 days'));
         $this->loadEmployees();
         $this->loadDepartments();
         $this->loadStats();
