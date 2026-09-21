@@ -96,6 +96,13 @@ caption there. The order of the captions matches station-1 .. station-20.
 
 Removing a station-N.jpg drops that tile; the rest shift up.
 
+station-1 was removed too, and for a second reason. It and station-2 are the
+same masked man at the same large-format printer, standing in one and seated in
+the other, and neither of them shows a screen printing press - the caption
+"Screen printing press" was one of the guesses this file warns about, and it
+guessed wrong. The trade is still on the site: it has its own card on Who we
+are and Who we hire, with a photograph that really is screen printing.
+
 station-3, station-7 and station-10 were removed 2026-09-21. They were the
 second frame of a moment already shown: 3 was the same man at the same printer
 as 2, 7 the same man at the same tables as 6, 10 the same roll feed as 9. The
