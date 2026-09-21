@@ -4,11 +4,25 @@ use Livewire\Volt\Component;
 use Livewire\Attributes\Layout;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Livewire\WithFileUploads;
 
 new #[Layout('components.layouts.humanresource')] class extends Component
 {
+    use WithFileUploads;
+
     public $positions = [];
     public $departments = [];
+
+    /** A new photograph waiting to be saved, and the one already on the role. */
+    public $image = null;
+    public ?string $existingImage = null;
+
+    /** Departments had no screen at all, so every dropdown of them was empty. */
+    public string $newDepartment = '';
+    public ?int $renamingDepartment = null;
+    public string $renameTo = '';
 
     public bool $showModal = false;
     public ?int $editingId = null;
@@ -88,6 +102,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->employment_type = $position->employment_type;
         $this->description     = $position->description ?? '';
         $this->is_open         = (bool) $position->is_open;
+        $this->existingImage   = $position->image_path;
+        $this->image           = null;
         $this->showModal       = true;
     }
 
@@ -98,13 +114,27 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'department_id'   => ['nullable'],
             'employment_type' => ['required', 'in:full_time,part_time,contract,internship'],
             'description'     => ['nullable', 'string', 'max:2000'],
+            // 4 MB, and only formats a browser will draw. The careers page
+            // renders this about 600px wide, so anything larger is weight an
+            // applicant pays for and never sees.
+            'image'           => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ]);
+
+        // Stored only once the rest of the form has passed, so a rejected
+        // save does not leave an orphan file behind.
+        $imagePath = $this->existingImage;
+
+        if ($this->image) {
+            $imagePath = $this->image->store('job-photos', 'public');
+            $this->forget($this->existingImage);
+        }
 
         $row = [
             'title'           => $data['title'],
             'department_id'   => $data['department_id'] !== '' ? (int) $data['department_id'] : null,
             'employment_type' => $data['employment_type'],
             'description'     => $data['description'] !== '' ? $data['description'] : null,
+            'image_path'      => $imagePath,
             'is_open'         => $this->is_open,
             'updated_at'      => now(),
         ];
@@ -122,6 +152,96 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->showModal = false;
         $this->resetForm();
         $this->loadPositions();
+    }
+
+    /** Takes the photograph off a role without saving the rest of the form. */
+    public function removeImage(): void
+    {
+        $this->forget($this->existingImage);
+        $this->existingImage = null;
+        $this->image = null;
+
+        if ($this->editingId) {
+            DB::table('job_positions')->where('position_id', $this->editingId)
+                ->update(['image_path' => null, 'updated_at' => now()]);
+            $this->loadPositions();
+        }
+    }
+
+    /** Deletes a stored file, if there is one and it is still on disk. */
+    private function forget(?string $path): void
+    {
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+    }
+
+    public function addDepartment(): void
+    {
+        $data = $this->validate(
+            ['newDepartment' => ['required', 'string', 'max:100', 'unique:departments,department_name']],
+            ['newDepartment.unique' => 'There is already a department by that name.']
+        );
+
+        DB::table('departments')->insert([
+            'department_name' => $data['newDepartment'],
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->newDepartment = '';
+        $this->loadDepartments();
+        session()->flash('success', 'Department added.');
+    }
+
+    public function startRename(int $id, string $name): void
+    {
+        $this->renamingDepartment = $id;
+        $this->renameTo = $name;
+    }
+
+    public function cancelRename(): void
+    {
+        $this->renamingDepartment = null;
+        $this->renameTo = '';
+    }
+
+    public function saveRename(): void
+    {
+        $this->validate(['renameTo' => ['required', 'string', 'max:100']]);
+
+        DB::table('departments')->where('department_id', $this->renamingDepartment)
+            ->update(['department_name' => $this->renameTo, 'updated_at' => now()]);
+
+        $this->cancelRename();
+        $this->loadDepartments();
+        $this->loadPositions();
+        session()->flash('success', 'Department renamed.');
+    }
+
+    /**
+     * Refused while anybody or any opening still points at it.
+     *
+     * Deleting anyway would quietly empty the department on every employee who
+     * was in it, and nothing on the screen would say it had happened.
+     */
+    public function deleteDepartment(int $id): void
+    {
+        $employees = DB::table('employees')->where('department_id', $id)->count();
+        $openings  = DB::table('job_positions')->where('department_id', $id)->count();
+
+        if ($employees || $openings) {
+            $parts = [];
+            if ($employees) { $parts[] = $employees.' '.Str::plural('employee', $employees); }
+            if ($openings)  { $parts[] = $openings.' '.Str::plural('opening', $openings); }
+
+            session()->flash('error', 'That department still has '.implode(' and ', $parts).'. Move them first.');
+
+            return;
+        }
+
+        DB::table('departments')->where('department_id', $id)->delete();
+        $this->loadDepartments();
+        session()->flash('success', 'Department removed.');
     }
 
     public function toggleOpen(int $id): void
@@ -148,6 +268,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
      */
     public function delete(int $id): void
     {
+        $this->forget(DB::table('job_positions')->where('position_id', $id)->value('image_path'));
         DB::table('job_positions')->where('position_id', $id)->delete();
         session()->flash('success', 'Opening deleted.');
         $this->loadPositions();
@@ -167,6 +288,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->employment_type = 'full_time';
         $this->description     = '';
         $this->is_open         = true;
+        $this->image           = null;
+        $this->existingImage   = null;
         $this->resetErrorBag();
     }
 }; ?>
@@ -231,12 +354,20 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         @foreach ($positions as $position)
                             <tr wire:key="pos-{{ $position->position_id }}">
                                 <td>
-                                    <div class="font-medium text-gray-900">{{ $position->title }}</div>
-                                    @if ($position->description)
-                                        <div class="text-sm text-gray-600 mt-0.5">
-                                            {{ \Illuminate\Support\Str::limit($position->description, 80) }}
+                                    <div class="flex items-start gap-3">
+                                        @if ($position->image_path)
+                                            <img src="{{ Storage::disk('public')->url($position->image_path) }}"
+                                                 alt="" class="h-12 w-16 flex-none rounded object-cover border border-gray-200">
+                                        @endif
+                                        <div>
+                                            <div class="font-medium text-gray-900">{{ $position->title }}</div>
+                                            @if ($position->description)
+                                                <div class="text-sm text-gray-600 mt-0.5">
+                                                    {{ \Illuminate\Support\Str::limit($position->description, 80) }}
+                                                </div>
+                                            @endif
                                         </div>
-                                    @endif
+                                    </div>
                                 </td>
                                 <td class="text-gray-600">{{ $position->department_name ?? '—' }}</td>
                                 <td class="text-gray-600">
@@ -327,6 +458,33 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             @error('description') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
 
+                        <div>
+                            <label class="form-label" for="image">Photograph</label>
+
+                            @php
+                                $preview = $image
+                                    ? $image->temporaryUrl()
+                                    : ($existingImage ? Storage::disk('public')->url($existingImage) : null);
+                            @endphp
+
+                            @if ($preview)
+                                <div class="mb-2 flex items-center gap-3">
+                                    <img src="{{ $preview }}" alt=""
+                                         class="h-20 w-32 rounded-lg object-cover border border-gray-200">
+                                    <button type="button" wire:click="removeImage"
+                                            class="text-sm text-red-600 hover:underline">Remove</button>
+                                </div>
+                            @endif
+
+                            <input id="image" type="file" wire:model="image" accept="image/*" class="form-input">
+                            <p class="mt-1 text-xs text-gray-500">
+                                Shown beside this role on the careers page. JPG, PNG or WebP, up to 4&nbsp;MB.
+                                A photograph of the room the work is done in beats a stock picture.
+                            </p>
+                            <p wire:loading wire:target="image" class="mt-1 text-xs text-gray-500">Uploading&hellip;</p>
+                            @error('image') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                        </div>
+
                         <label class="flex items-center gap-2 text-sm text-gray-700">
                             <input type="checkbox" wire:model="is_open" class="rounded border-gray-300 text-red-600">
                             Show on the careers page
@@ -343,4 +501,54 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             </div>
         </div>
     @endif
+
+    {{-- Departments had no screen anywhere in the back office. The only way one
+         was ever created was as a side effect of hiring an applicant, so every
+         department dropdown was empty and every employee read "No Department".
+         It lives here because this is where roles are defined. --}}
+    <div class="mt-8 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="font-semibold text-gray-900">Departments</h2>
+            <p class="text-sm text-gray-600 mt-0.5">
+                Used to group openings and employees, and to build the pathway cards on the careers page.
+            </p>
+        </div>
+
+        <div class="px-6 py-4">
+            @if (count($departments))
+                <ul class="divide-y divide-gray-100 mb-4">
+                    @foreach ($departments as $department)
+                        <li class="py-2.5 flex items-center gap-3" wire:key="dept-{{ $department->department_id }}">
+                            @if ($renamingDepartment === $department->department_id)
+                                <input type="text" wire:model="renameTo" wire:keydown.enter="saveRename"
+                                       class="form-input flex-1" autofocus>
+                                <button wire:click="saveRename" class="btn-primary text-sm">Save</button>
+                                <button wire:click="cancelRename" class="btn-secondary text-sm">Cancel</button>
+                            @else
+                                <span class="flex-1 text-gray-900">{{ $department->department_name }}</span>
+                                <button wire:click="startRename({{ $department->department_id }}, '{{ addslashes($department->department_name) }}')"
+                                        class="text-sm text-gray-600 hover:text-gray-900">Rename</button>
+                                <button wire:click="deleteDepartment({{ $department->department_id }})"
+                                        class="text-sm text-red-600 hover:text-red-700">Remove</button>
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
+            @else
+                <p class="text-sm text-gray-600 mb-4">
+                    None yet. Until there is at least one, openings and employees cannot be grouped
+                    and the careers page has no pathways to offer.
+                </p>
+            @endif
+
+            <div class="flex items-start gap-2">
+                <div class="flex-1">
+                    <input type="text" wire:model="newDepartment" wire:keydown.enter="addDepartment"
+                           class="form-input" placeholder="e.g. Production, Store, Administration">
+                    @error('newDepartment') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <button wire:click="addDepartment" class="btn-secondary">Add</button>
+            </div>
+        </div>
+    </div>
 </div>

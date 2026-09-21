@@ -616,6 +616,23 @@
 
         .job:hover { background: var(--wash); padding-left: 16px; }
 
+        /* Optional photograph on an opening. Sized to the row rather than the
+           other way round, so a list of roles with and without pictures still
+           reads as one list. */
+        .job__photo {
+            flex: none;
+            width: 132px;
+            aspect-ratio: 3 / 2;
+            border-radius: 12px;
+            background-color: var(--wash);
+            background-size: cover;
+            background-position: center;
+        }
+
+        @media (max-width: 720px) {
+            .job__photo { width: 84px; border-radius: 10px; }
+        }
+
         .job__body { flex: 1; min-width: 0; }
 
         .job__title {

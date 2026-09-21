@@ -45,7 +45,7 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
             })
             ->when($this->employmentType !== '', fn ($q) => $q->where('p.employment_type', $this->employmentType))
             ->when($this->department !== '', fn ($q) => $q->where('d.department_name', $this->department))
-            ->select('p.position_id', 'p.title', 'p.employment_type', 'p.description', 'p.created_at', 'd.department_name')
+            ->select('p.position_id', 'p.title', 'p.employment_type', 'p.description', 'p.image_path', 'p.created_at', 'd.department_name')
             ->orderByDesc('p.created_at')
             ->get();
     }
@@ -226,6 +226,14 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
 
             @forelse ($jobs as $job)
                 <div class="job">
+                    {{-- Optional. A role posted without one is a plain row, the
+                         way the whole list used to be. --}}
+                    @if ($job->image_path)
+                        <div class="job__photo"
+                             style="background-image: url('{{ \Illuminate\Support\Facades\Storage::disk('public')->url($job->image_path) }}')"
+                             role="img" aria-label="{{ $job->title }}"></div>
+                    @endif
+
                     <div class="job__body">
                         <h3 class="job__title">{{ $job->title }}</h3>
                         <div class="job__meta">
