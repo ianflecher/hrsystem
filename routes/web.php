@@ -79,13 +79,20 @@ Route::middleware('auth')->group(function () {
     // Every signed-in person, whichever portal they belong to.
     Volt::route('/account', 'account')->name('account.edit');
 
-    Volt::route('/admin/hr', 'hr.home')->name('hr.home');
-    Volt::route('/hr/employees', 'hr.employees')->name('hr.employees');
-    Volt::route('/hr/positions', 'hr.positions')->name('hr.positions');
-    Volt::route('/hr/applications', 'hr.applications')->name('hr.applications');
-    Volt::route('/hr/attendance', 'hr.attendance')->name('hr.attendance');
-    Volt::route('/hr/leave', 'hr.leave')->name('hr.leave');
-    Volt::route('/hr/payroll', 'hr.payroll')->name('hr.payroll');
+    // Volt screens carry no gate of their own - every controller below opens
+    // with PeopleAccess::hr(), but these had only 'auth', so any signed-in
+    // employee could read the roster, everyone's attendance and leave, and
+    // every job application. The middleware goes on the group because Livewire
+    // re-applies route middleware to the update requests these components make.
+    Route::middleware(\App\Http\Middleware\EnsureHr::class)->group(function () {
+        Volt::route('/admin/hr', 'hr.home')->name('hr.home');
+        Volt::route('/hr/employees', 'hr.employees')->name('hr.employees');
+        Volt::route('/hr/positions', 'hr.positions')->name('hr.positions');
+        Volt::route('/hr/applications', 'hr.applications')->name('hr.applications');
+        Volt::route('/hr/attendance', 'hr.attendance')->name('hr.attendance');
+        Volt::route('/hr/leave', 'hr.leave')->name('hr.leave');
+        Volt::route('/hr/payroll', 'hr.payroll')->name('hr.payroll');
+    });
     Route::get('/hr/operations/payroll-control', [\App\Http\Controllers\HrOperationsController::class, 'payrollControl'])->name('hr.operations.payroll-control');
     Route::get('/hr/operations/payroll-approval', [\App\Http\Controllers\HrOperationsController::class, 'payrollApproval'])->name('hr.operations.payroll-approval');
     Route::post('/hr/operations/payroll/approve', [\App\Http\Controllers\HrOperationsController::class, 'approvePayroll'])->name('hr.operations.payroll.approve');

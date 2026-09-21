@@ -134,10 +134,32 @@ class PortalSmokeTest extends TestCase
         $this->actingAs($this->userWithUsername('hr'))->get($uri)->assertOk();
     }
 
+    /**
+     * The back office is for HR and admin.
+     *
+     * Six of these are Volt screens, and Volt routes carry no gate of their
+     * own. They sat behind 'auth' alone while every controller under /hr
+     * opened with PeopleAccess::hr(), so an ordinary employee who typed the
+     * address could read the whole roster, everyone's attendance and leave,
+     * and every job application.
+     */
+    #[DataProvider('hrPages')]
+    public function test_hr_pages_refuse_an_ordinary_employee(string $uri): void
+    {
+        $this->actingAs($this->temporaryEmployee())->get($uri)->assertForbidden();
+    }
+
     #[DataProvider('employeePages')]
     public function test_employee_pages_render_for_employee(string $uri): void
     {
         $this->actingAs($this->temporaryEmployee())->get($uri)->assertOk();
+    }
+
+    /** An account with no employee record has no employee portal to see. */
+    #[DataProvider('employeePages')]
+    public function test_employee_pages_refuse_an_account_with_no_employee_record(string $uri): void
+    {
+        $this->actingAs($this->userWithUsername('hr'))->get($uri)->assertForbidden();
     }
 
     public function test_applicant_page_renders_for_signed_in_user(): void
