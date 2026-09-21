@@ -9,9 +9,16 @@
             --brand:  #E31B23;
             --wash:   #F6F8FB;
 
+            /* Headings and body are the same face. Uniqlo's careers site runs
+               one grotesque throughout and separates the two by weight and
+               tracking instead, which is why it reads as calm rather than as
+               two typefaces having a conversation. */
+            --font-head: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
             background: #fff;
             color: var(--ink);
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-weight: 300;
         }
 
         .careers a { text-decoration: none; }
@@ -26,10 +33,10 @@
         /* Uniqlo's device: an enormous headline that breaks across two lines,
            with everything else deliberately quiet around it. */
         .careers__display {
-            font-family: var(--font-head, 'Space Grotesk', system-ui, sans-serif);
-            font-weight: 700;
+            font-family: var(--font-head, system-ui, sans-serif);
+            font-weight: 500;
             line-height: 1.02;
-            letter-spacing: -0.035em;
+            letter-spacing: -0.01em;
             margin: 0;
         }
 
@@ -287,10 +294,10 @@
             .cnav__menu-title {
                 display: block;
                 margin-top: 10px;
-                font-family: var(--font-head, 'Space Grotesk', system-ui, sans-serif);
+                font-family: var(--font-head, system-ui, sans-serif);
                 font-size: 1.25rem;
-                font-weight: 700;
-                letter-spacing: -0.02em;
+                font-weight: 500;
+                letter-spacing: -0.005em;
                 color: var(--ink);
             }
 
@@ -493,10 +500,10 @@
 
         .section__head h2 {
             font-size: clamp(2rem, 4.2vw, 3.25rem);
-            font-family: var(--font-head, 'Space Grotesk', system-ui, sans-serif);
-            font-weight: 700;
+            font-family: var(--font-head, system-ui, sans-serif);
+            font-weight: 500;
             line-height: 1.05;
-            letter-spacing: -0.03em;
+            letter-spacing: .025em;
             margin: 0;
         }
 
@@ -738,9 +745,9 @@
 
         .bento__red h3 {
             margin: auto 0 0;
-            font-family: var(--font-head, 'Space Grotesk', system-ui, sans-serif);
+            font-family: var(--font-head, system-ui, sans-serif);
             font-size: clamp(1.75rem, 3.1vw, 2.5rem);
-            font-weight: 700;
+            font-weight: 500;
             line-height: 1.12;
             letter-spacing: -0.025em;
         }
@@ -1492,9 +1499,9 @@
         /* The one line to take away, set large. */
         .founder__headline {
             margin: 0 0 20px;
-            font-family: var(--font-head, 'Space Grotesk', system-ui, sans-serif);
+            font-family: var(--font-head, system-ui, sans-serif);
             font-size: clamp(1.375rem, 2.4vw, 1.875rem);
-            font-weight: 700;
+            font-weight: 500;
             line-height: 1.24;
             letter-spacing: -0.025em;
         }
@@ -1591,10 +1598,10 @@
 
         .mosaic__text b {
             display: block;
-            font-family: var(--font-head, 'Space Grotesk', system-ui, sans-serif);
+            font-family: var(--font-head, system-ui, sans-serif);
             font-size: 1.375rem;
-            font-weight: 700;
-            letter-spacing: -0.02em;
+            font-weight: 500;
+            letter-spacing: -0.005em;
         }
 
         .mosaic__count { display: block; margin-top: 6px; color: rgba(255, 255, 255, .82); font-size: .875rem; font-weight: 600; }
@@ -1649,10 +1656,10 @@
 
         .event__head h3 {
             margin: 0;
-            font-family: var(--font-head, 'Space Grotesk', system-ui, sans-serif);
+            font-family: var(--font-head, system-ui, sans-serif);
             font-size: clamp(1.5rem, 3vw, 2.125rem);
-            font-weight: 700;
-            letter-spacing: -0.025em;
+            font-weight: 500;
+            letter-spacing: -0.01em;
         }
 
         .event__head p { margin: 0; max-width: 42rem; color: var(--muted); font-size: .9375rem; line-height: 1.65; }
@@ -1710,11 +1717,40 @@
         }
 
         @media (max-width: 860px) { .faces { grid-template-columns: 1fr; } }
+    
+
+        /* --------------------------------------------------- type, continued
+           The rest of the system measured off careers-us.uniqlo.com: light
+           body copy, medium card headings, labels tracked out. Their typeface
+           is UniqloPro and is not ours to use - but their own stack falls back
+           to Helvetica Neue, so the letterforms were never what carried it. */
+        .careers .hero__lede,
+        .careers .explore__note,
+        .careers .path p,
+        .careers .section p {
+            font-weight: 300;
+        }
+
+        .careers .path h3,
+        .careers .explore__tile h3,
+        .careers .welcome__row h3,
+        .careers .floor__body h3 {
+            font-weight: 500;
+            letter-spacing: -0.005em;
+        }
+
+        .careers .cnav__link,
+        .careers .path__go,
+        .careers .explore__link {
+            font-weight: 600;
+            letter-spacing: .04em;
+        }
+
+        .careers .careers__eyebrow { font-weight: 600; }
+
+        /* Light text needs a little more room between lines to hold up at the
+           sizes the cards use. */
+        .careers .path p,
+        .careers .explore__note { line-height: 1.62; }
+
     </style>
-
-
-
-
-
-
-
