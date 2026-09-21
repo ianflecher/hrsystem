@@ -66,7 +66,7 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
                 <p>Presses running, screens burning, orders going out the door.</p>
             </div>
 
-            @include('partials.careers-clip')
+            @include('partials.careers-clip', ['clipSlot' => 2])
 
             <p style="margin: 20px 0 0">
                 <a href="{{ route('careers.inside') }}" class="path__go">

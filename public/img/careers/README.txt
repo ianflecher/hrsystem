@@ -22,9 +22,9 @@ showing this page to the public.
 
 Video (optional):
 
-  inside.mp4          shown on the home page
+  inside.mp4          shown on the Inside page
   video-poster.jpg    the still shown before it plays
-  inside-2.mp4        shown on the Inside page
+  inside-2.mp4        shown on the home page
   video-poster-2.jpg  its still
 
 Two slots, because both pages carry a player and one file in both made the
@@ -34,9 +34,15 @@ the "on its way" panel; it does not borrow the other one.
 Both are cut from IMPRINT CUSTOMS MILESTONE VIDEO (1920x1440).mp4 in
 IMPRINT CUSTOMS - EVENTS\EVENTS HIGHLIGHTS FINAL OUTPUT, which runs 6:32.
 
-  inside.mp4    2:40-3:40   apparel, the storefront, the convoy
+  inside.mp4    2:40-3:40   apparel, the storefront, the convoy - on the
+                            Inside page, where the storefront belongs
   inside-2.mp4  5:25-6:25   the product being shown at a car show, detail
-                            work, the team, closing on the brand card
+                            work, the team, closing on the brand card -
+                            on the home page, as the livelier opener
+
+The two were the other way round at first. The slot numbers did not move,
+only which page asks for which, so inside-2.mp4 is the one on the home
+page despite the name.
 
 The minute straight after the first one (3:40-4:40) was cut and thrown away:
 it is a school outreach and a blood drive, including close-ups of identifiable
