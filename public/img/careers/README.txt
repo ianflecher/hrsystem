@@ -326,7 +326,11 @@ the picture, a sentence, and one button into the openings.
   /careers/who-we-hire  who-hero.jpg     DSC02745  three of the shop staff
   /careers/inside       inside-hero.jpg
   /careers/front        front-hero.jpg
-  /careers/jobs         jobs-hero.jpg    DSC02731  the shopfront
+  /careers/jobs         jobs-hero.jpg    DSC02269  the transfer line
+                                       (was DSC02731, which is the frame
+                                       next to front-hero's DSC02730 -
+                                       the same shopfront twice, one
+                                       slightly tighter, on two heroes.)
   /careers/our-people   people-hero.jpg  DSC02362  the office desks
 
 Jobs and Who we hire were borrowing - Jobs showed the home page's hero and
