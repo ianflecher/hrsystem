@@ -17,7 +17,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
     public $departments = [];
     /** Creating a department from the form that wanted one. */
-    public bool $addingDepartment = false;
+    public bool $showDepartmentDialog = false;
     public string $inlineDepartment = '';
 
 
@@ -181,9 +181,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->showModal     = true;
     }
 
-    public function toggleAddDepartment(): void
+    public function openDepartmentDialog(): void
     {
-        $this->addingDepartment = ! $this->addingDepartment;
+        $this->inlineDepartment = '';
+        $this->resetValidation('inlineDepartment');
+        $this->showDepartmentDialog = true;
+    }
+
+    public function closeDepartmentDialog(): void
+    {
+        $this->showDepartmentDialog = false;
         $this->inlineDepartment = '';
         $this->resetValidation('inlineDepartment');
     }
@@ -209,8 +216,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         $this->loadDepartments();
         $this->department_id = $id;
-        $this->addingDepartment = false;
-        $this->inlineDepartment = '';
+        $this->closeDepartmentDialog();
     }
 
     public function save(): void
@@ -643,7 +649,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {{-- Asked before anything happens, and specific about what will: the two
          outcomes are very different, and only one of them is reversible. --}}
     @if ($removing)
-        <div class="fixed inset-0 z-50 overflow-y-auto">
+        <div class="fixed inset-0 z-[70] overflow-y-auto">
             <div class="flex min-h-screen items-center justify-center p-4">
                 <div class="fixed inset-0 bg-gray-900/50" wire:click="cancelRemove"></div>
 
@@ -688,11 +694,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     @endif
 
     @if ($showModal)
-        <div class="fixed inset-0 z-50 overflow-y-auto">
+        <div class="fixed inset-0 z-[70] overflow-y-auto">
             <div class="flex min-h-screen items-center justify-center p-4">
                 <div class="fixed inset-0 bg-gray-900/50" wire:click="closeModal"></div>
 
-                <div class="relative w-full max-w-2xl bg-white rounded-xl shadow-xl">
+                <div class="relative w-full max-w-4xl bg-white rounded-xl shadow-xl">
                     <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                         <h2 class="text-lg font-semibold text-gray-900">
                             {{ $editingId ? 'Edit employee' : 'Add employee' }}
@@ -710,7 +716,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             </p>
                         @endunless
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
                             <div>
                                 <label class="form-label" for="full_name">Full name</label>
                                 <input id="full_name" type="text" wire:model="full_name" class="form-input">
@@ -735,7 +741,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <label class="form-label" for="shift_start">Shift starts</label>
                                 <input id="shift_start" type="time" wire:model="shift_start" class="form-input">
                                 <p class="mt-1 text-xs text-gray-500">
-                                    Lateness is measured from this. Leave blank and they are never marked late.
+                                    Lateness is measured from this. Blank means never late.
                                 </p>
                                 @error('shift_start') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
@@ -744,7 +750,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <input id="shift_end" type="time" wire:model="shift_end" class="form-input">
                                 @error('shift_end') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
-                            <div class="md:col-span-2">
+                            <div class="sm:col-span-2 lg:col-span-3">
                                 <span class="form-label">Rest days</span>
                                 <div class="flex flex-wrap gap-3 mt-1">
                                     @foreach (WorkWeek::DAYS as $number => $name)
@@ -755,17 +761,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     @endforeach
                                 </div>
                                 <p class="mt-1 text-xs text-gray-500">
-                                    The shift calendar is drawn from these, so nothing is entered per date.
+                                    The shift calendar is drawn from these.
                                 </p>
                                 @error('rest_days') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
-                            <div class="md:col-span-2">
+                            <div class="sm:col-span-2">
                                 <label class="form-label" for="immersion_until">Work immersion until</label>
                                 <input id="immersion_until" type="date" wire:model="immersion_until" class="form-input">
                                 <p class="mt-1 text-xs text-gray-500">
-                                    Leave blank for a regular employee. While this date is in the future they are
-                                    paid in full - no SSS, PhilHealth, Pag-IBIG or tax - and payroll goes back to
-                                    normal on the first cutoff that starts after it, without anybody changing this.
+                                    Blank for a regular employee. Until this date they are paid in full - no SSS,
+                                    PhilHealth, Pag-IBIG or tax - and payroll returns to normal by itself after.
                                 </p>
                                 @error('immersion_until') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
@@ -775,8 +780,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <input id="biometric_id" type="text" wire:model="biometric_id" class="form-input"
                                        placeholder="e.g. 14">
                                 <p class="mt-1 text-xs text-gray-500">
-                                    The number they are enrolled under on the fingerprint scanner.
-                                    Without it their scans cannot be matched to them.
+                                    Their enrolment number on the scanner. Without it, their scans match nobody.
                                 </p>
                                 @error('biometric_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
@@ -784,31 +788,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             <div>
                                 <div class="flex items-center justify-between">
                                     <label class="form-label mb-0" for="department_id">Department</label>
-                                    <button type="button" wire:click="toggleAddDepartment"
-                                            class="text-sm text-red-600 hover:text-red-700 font-medium">
-                                        {{ $addingDepartment ? 'Cancel' : '+ New department' }}
-                                    </button>
+                                    <button type="button" wire:click="openDepartmentDialog"
+                                            class="text-sm text-red-600 hover:text-red-700 font-medium">+ New department</button>
                                 </div>
-
-                                @if ($addingDepartment)
-                                    <div class="mt-1 flex items-start gap-2">
-                                        <div class="flex-1">
-                                            <input type="text" wire:model="inlineDepartment" wire:keydown.enter="createDepartment"
-                                                   class="form-input" placeholder="Name of the new department" autofocus>
-                                            @error('inlineDepartment')
-                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                            @enderror
-                                        </div>
-                                        <button type="button" wire:click="createDepartment" class="btn-secondary">Create</button>
-                                    </div>
-                                @else
                                 <select id="department_id" wire:model="department_id" class="form-input">
                                     <option value="">Not specified</option>
                                     @foreach ($departments as $department)
                                         <option value="{{ $department->department_id }}">{{ $department->department_name }}</option>
                                     @endforeach
                                 </select>
-                                @endif
                             </div>
                             <div>
                                 <label class="form-label" for="role">Role</label>
@@ -847,6 +835,44 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         <button wire:click="save" class="btn-primary">
                             {{ $editingId ? 'Save changes' : 'Create employee' }}
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    {{-- Layered above the employee/opening dialog that opened it, so the form
+         underneath keeps everything already typed into it. --}}
+    @if ($showDepartmentDialog)
+        <div class="fixed inset-0 z-[80] overflow-y-auto">
+            <div class="flex min-h-screen items-center justify-center p-4">
+                <div class="fixed inset-0 bg-gray-900/50" wire:click="closeDepartmentDialog"></div>
+
+                <div class="relative w-full max-w-md bg-white rounded-xl shadow-xl">
+                    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-gray-900">New department</h2>
+                        <button type="button" wire:click="closeDepartmentDialog"
+                                class="text-gray-400 hover:text-gray-600" aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div class="px-6 py-5">
+                        <label class="form-label" for="inlineDepartment">Name</label>
+                        <input id="inlineDepartment" type="text" wire:model="inlineDepartment"
+                               wire:keydown.enter="createDepartment" class="form-input"
+                               placeholder="e.g. Production, Store, Administration" autofocus>
+                        @error('inlineDepartment')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                        <p class="mt-2 text-sm text-gray-600">
+                            It is selected here as soon as it is created. Nothing already filled in is lost.
+                        </p>
+                    </div>
+
+                    <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+                        <button type="button" wire:click="closeDepartmentDialog" class="btn-secondary">Cancel</button>
+                        <button type="button" wire:click="createDepartment" class="btn-primary">Create department</button>
                     </div>
                 </div>
             </div>

@@ -166,7 +166,7 @@ class JobPositionPhotoTest extends TestCase
         $component = Volt::actingAs($this->hr())
             ->test('hr.positions')
             ->set('title', 'Half Typed Role')
-            ->call('toggleAddDepartment')
+            ->call('openDepartmentDialog')
             ->set('inlineDepartment', 'Invented Mid Form')
             ->call('createDepartment')
             ->assertHasNoErrors();
@@ -177,7 +177,7 @@ class JobPositionPhotoTest extends TestCase
 
         // Selected, the panel closed, and nothing already typed was lost.
         $component->assertSet('department_id', $id)
-            ->assertSet('addingDepartment', false)
+            ->assertSet('showDepartmentDialog', false)
             ->assertSet('title', 'Half Typed Role');
     }
 
@@ -186,7 +186,7 @@ class JobPositionPhotoTest extends TestCase
         $component = Volt::actingAs($this->hr())
             ->test('hr.employees')
             ->set('full_name', 'Half Typed Person')
-            ->call('toggleAddDepartment')
+            ->call('openDepartmentDialog')
             ->set('inlineDepartment', 'Invented From Employees')
             ->call('createDepartment')
             ->assertHasNoErrors();
@@ -208,7 +208,7 @@ class JobPositionPhotoTest extends TestCase
 
         Volt::actingAs($this->hr())
             ->test('hr.positions')
-            ->call('toggleAddDepartment')
+            ->call('openDepartmentDialog')
             ->set('inlineDepartment', 'Already Taken Dept')
             ->call('createDepartment')
             ->assertHasErrors('inlineDepartment');

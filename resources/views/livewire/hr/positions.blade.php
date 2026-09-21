@@ -24,7 +24,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public ?int $renamingDepartment = null;
     public string $renameTo = '';
     /** Creating a department from the form that wanted one. */
-    public bool $addingDepartment = false;
+    public bool $showDepartmentDialog = false;
     public string $inlineDepartment = '';
 
 
@@ -111,9 +111,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->showModal       = true;
     }
 
-    public function toggleAddDepartment(): void
+    public function openDepartmentDialog(): void
     {
-        $this->addingDepartment = ! $this->addingDepartment;
+        $this->inlineDepartment = '';
+        $this->resetValidation('inlineDepartment');
+        $this->showDepartmentDialog = true;
+    }
+
+    public function closeDepartmentDialog(): void
+    {
+        $this->showDepartmentDialog = false;
         $this->inlineDepartment = '';
         $this->resetValidation('inlineDepartment');
     }
@@ -139,8 +146,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         $this->loadDepartments();
         $this->department_id = $id;
-        $this->addingDepartment = false;
-        $this->inlineDepartment = '';
+        $this->closeDepartmentDialog();
     }
 
     public function save(): void
@@ -441,7 +447,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     </div>
 
     @if ($showModal)
-        <div class="fixed inset-0 z-50 overflow-y-auto">
+        <div class="fixed inset-0 z-[70] overflow-y-auto">
             <div class="flex min-h-screen items-center justify-center p-4">
                 <div class="fixed inset-0 bg-gray-900/50" wire:click="closeModal"></div>
 
@@ -467,24 +473,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             <div>
                                 <div class="flex items-center justify-between">
                                     <label class="form-label mb-0" for="department_id">Department</label>
-                                    <button type="button" wire:click="toggleAddDepartment"
-                                            class="text-sm text-red-600 hover:text-red-700 font-medium">
-                                        {{ $addingDepartment ? 'Cancel' : '+ New department' }}
-                                    </button>
+                                    <button type="button" wire:click="openDepartmentDialog"
+                                            class="text-sm text-red-600 hover:text-red-700 font-medium">+ New department</button>
                                 </div>
-
-                                @if ($addingDepartment)
-                                    <div class="mt-1 flex items-start gap-2">
-                                        <div class="flex-1">
-                                            <input type="text" wire:model="inlineDepartment" wire:keydown.enter="createDepartment"
-                                                   class="form-input" placeholder="Name of the new department" autofocus>
-                                            @error('inlineDepartment')
-                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                            @enderror
-                                        </div>
-                                        <button type="button" wire:click="createDepartment" class="btn-secondary">Create</button>
-                                    </div>
-                                @else
                                 <select id="department_id" wire:model="department_id" class="form-input">
                                     <option value="">Not specified</option>
                                     @foreach ($departments as $department)
@@ -493,7 +484,6 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         </option>
                                     @endforeach
                                 </select>
-                                @endif
                             </div>
 
                             <div>
@@ -607,4 +597,42 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             </div>
         </div>
     </div>
+
+    {{-- Layered above the employee/opening dialog that opened it, so the form
+         underneath keeps everything already typed into it. --}}
+    @if ($showDepartmentDialog)
+        <div class="fixed inset-0 z-[80] overflow-y-auto">
+            <div class="flex min-h-screen items-center justify-center p-4">
+                <div class="fixed inset-0 bg-gray-900/50" wire:click="closeDepartmentDialog"></div>
+
+                <div class="relative w-full max-w-md bg-white rounded-xl shadow-xl">
+                    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-gray-900">New department</h2>
+                        <button type="button" wire:click="closeDepartmentDialog"
+                                class="text-gray-400 hover:text-gray-600" aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div class="px-6 py-5">
+                        <label class="form-label" for="inlineDepartment">Name</label>
+                        <input id="inlineDepartment" type="text" wire:model="inlineDepartment"
+                               wire:keydown.enter="createDepartment" class="form-input"
+                               placeholder="e.g. Production, Store, Administration" autofocus>
+                        @error('inlineDepartment')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                        <p class="mt-2 text-sm text-gray-600">
+                            It is selected here as soon as it is created. Nothing already filled in is lost.
+                        </p>
+                    </div>
+
+                    <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+                        <button type="button" wire:click="closeDepartmentDialog" class="btn-secondary">Cancel</button>
+                        <button type="button" wire:click="createDepartment" class="btn-primary">Create department</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>

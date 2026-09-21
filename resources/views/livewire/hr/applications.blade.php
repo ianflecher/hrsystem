@@ -1079,7 +1079,7 @@ public function updateApplicationStatus($applicationId, $status)
 
     <!-- Salary Management Modal -->
     @if($showSalaryModal && $selectedEmployeeForSalary)
-    <div class="fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 z-[70] overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
             <!-- Overlay -->
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
@@ -1174,7 +1174,7 @@ public function updateApplicationStatus($applicationId, $status)
 
     <!-- New Department Modal -->
     @if($showNewDepartmentModal)
-    <div class="fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 z-[70] overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
             <!-- Overlay -->
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
@@ -1239,7 +1239,7 @@ public function updateApplicationStatus($applicationId, $status)
 
     <!-- Application Details Modal -->
     @if($showApplicationModal && $selectedApplication)
-    <div class="fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 z-[70] overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
             <!-- Overlay -->
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
@@ -1376,7 +1376,7 @@ public function updateApplicationStatus($applicationId, $status)
 
     <!-- Documents Modal -->
     @if($showDocumentsModal && $selectedApplication)
-    <div class="fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 z-[70] overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
             <!-- Overlay -->
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
@@ -1463,7 +1463,7 @@ public function updateApplicationStatus($applicationId, $status)
 
     <!-- Interview Scheduling Modal -->
     @if($showInterviewModal && $selectedApplication)
-    <div class="fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 z-[70] overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
             <!-- Overlay -->
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
@@ -1561,7 +1561,7 @@ public function updateApplicationStatus($applicationId, $status)
 
     <!-- Interview Result Modal -->
     @if($showInterviewResultModal && $selectedApplication)
-    <div class="fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 z-[70] overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
             <!-- Overlay -->
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
@@ -1646,7 +1646,7 @@ public function updateApplicationStatus($applicationId, $status)
 
     <!-- Department Change Modal -->
     @if($showDepartmentModal && $selectedEmployee)
-    <div class="fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 z-[70] overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
             <!-- Overlay -->
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
@@ -1711,7 +1711,7 @@ public function updateApplicationStatus($applicationId, $status)
 
     <!-- Role Change Modal -->
     @if($showRoleChangeModal && $selectedUserForRoleChange)
-    <div class="fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 z-[70] overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
             <!-- Overlay -->
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
