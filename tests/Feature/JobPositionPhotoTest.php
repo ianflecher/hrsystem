@@ -157,6 +157,63 @@ class JobPositionPhotoTest extends TestCase
         $this->assertDatabaseHas('departments', ['department_id' => $departmentId]);
     }
 
+    /**
+     * The point of the button: a department that does not exist yet used to
+     * mean abandoning a half-filled form to go and make one.
+     */
+    public function test_a_department_can_be_created_from_the_opening_form(): void
+    {
+        $component = Volt::actingAs($this->hr())
+            ->test('hr.positions')
+            ->set('title', 'Half Typed Role')
+            ->call('toggleAddDepartment')
+            ->set('inlineDepartment', 'Invented Mid Form')
+            ->call('createDepartment')
+            ->assertHasNoErrors();
+
+        $id = DB::table('departments')->where('department_name', 'Invented Mid Form')->value('department_id');
+        $this->assertNotNull($id, 'the department was not created');
+        $this->temporaryDepartmentIds[] = $id;
+
+        // Selected, the panel closed, and nothing already typed was lost.
+        $component->assertSet('department_id', $id)
+            ->assertSet('addingDepartment', false)
+            ->assertSet('title', 'Half Typed Role');
+    }
+
+    public function test_a_department_can_be_created_from_the_employee_form(): void
+    {
+        $component = Volt::actingAs($this->hr())
+            ->test('hr.employees')
+            ->set('full_name', 'Half Typed Person')
+            ->call('toggleAddDepartment')
+            ->set('inlineDepartment', 'Invented From Employees')
+            ->call('createDepartment')
+            ->assertHasNoErrors();
+
+        $id = DB::table('departments')->where('department_name', 'Invented From Employees')->value('department_id');
+        $this->assertNotNull($id, 'the department was not created');
+        $this->temporaryDepartmentIds[] = $id;
+
+        $component->assertSet('department_id', $id)
+            ->assertSet('full_name', 'Half Typed Person');
+    }
+
+    public function test_the_inline_form_refuses_a_name_already_taken(): void
+    {
+        $id = DB::table('departments')->insertGetId([
+            'department_name' => 'Already Taken Dept', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->temporaryDepartmentIds[] = $id;
+
+        Volt::actingAs($this->hr())
+            ->test('hr.positions')
+            ->call('toggleAddDepartment')
+            ->set('inlineDepartment', 'Already Taken Dept')
+            ->call('createDepartment')
+            ->assertHasErrors('inlineDepartment');
+    }
+
     private function hr(): User
     {
         return User::where('username', 'hr')->firstOrFail();

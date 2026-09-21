@@ -16,6 +16,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     use WithPagination;
 
     public $departments = [];
+    /** Creating a department from the form that wanted one. */
+    public bool $addingDepartment = false;
+    public string $inlineDepartment = '';
+
 
     public string $search = '';
     public string $statusFilter = 'all';
@@ -175,6 +179,38 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->status        = $row->status;
         $this->role          = $row->role;
         $this->showModal     = true;
+    }
+
+    public function toggleAddDepartment(): void
+    {
+        $this->addingDepartment = ! $this->addingDepartment;
+        $this->inlineDepartment = '';
+        $this->resetValidation('inlineDepartment');
+    }
+
+    /**
+     * Creates it and selects it, without disturbing anything else on the form.
+     *
+     * Abandoning a half-filled employee form to go and make a department was
+     * the alternative, and it lost everything typed so far.
+     */
+    public function createDepartment(): void
+    {
+        $data = $this->validate(
+            ['inlineDepartment' => ['required', 'string', 'max:100', 'unique:departments,department_name']],
+            ['inlineDepartment.required' => 'Give the department a name.',
+             'inlineDepartment.unique'   => 'There is already a department by that name.']
+        );
+
+        $id = DB::table('departments')->insertGetId([
+            'department_name' => $data['inlineDepartment'],
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->loadDepartments();
+        $this->department_id = $id;
+        $this->addingDepartment = false;
+        $this->inlineDepartment = '';
     }
 
     public function save(): void
@@ -746,13 +782,33 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             </div>
 
                             <div>
-                                <label class="form-label" for="department_id">Department</label>
+                                <div class="flex items-center justify-between">
+                                    <label class="form-label mb-0" for="department_id">Department</label>
+                                    <button type="button" wire:click="toggleAddDepartment"
+                                            class="text-sm text-red-600 hover:text-red-700 font-medium">
+                                        {{ $addingDepartment ? 'Cancel' : '+ New department' }}
+                                    </button>
+                                </div>
+
+                                @if ($addingDepartment)
+                                    <div class="mt-1 flex items-start gap-2">
+                                        <div class="flex-1">
+                                            <input type="text" wire:model="inlineDepartment" wire:keydown.enter="createDepartment"
+                                                   class="form-input" placeholder="Name of the new department" autofocus>
+                                            @error('inlineDepartment')
+                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                            @enderror
+                                        </div>
+                                        <button type="button" wire:click="createDepartment" class="btn-secondary">Create</button>
+                                    </div>
+                                @else
                                 <select id="department_id" wire:model="department_id" class="form-input">
                                     <option value="">Not specified</option>
                                     @foreach ($departments as $department)
                                         <option value="{{ $department->department_id }}">{{ $department->department_name }}</option>
                                     @endforeach
                                 </select>
+                                @endif
                             </div>
                             <div>
                                 <label class="form-label" for="role">Role</label>
