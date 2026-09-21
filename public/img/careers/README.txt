@@ -60,7 +60,7 @@ The studio portraits (shot 18 Sep)
   voice-3.jpg  <- DSC02405.jpg   testimonial 3
   team-1..4    <- DSC02398/02400/02402/02405
   team-5, 6    <- DSC02413/02414  (on the floor, not the studio)
-  team-group-1 <- DSC02407.jpg   the three of them together
+  team-group-1 <- DSC02411.jpg   the three of them together
   team-group-2 <- DSC02443.jpg   the group of five
 
   welcome-part-time.jpg  <- DSC02407.jpg  the group photo
@@ -295,7 +295,13 @@ Re-cut from frames that were not being used at all:
   voice-2            DSC02403  Ysa
   voice-3            DSC02406  Joey
   team-2             DSC02401
-  welcome-part-time  DSC02408  (02407 was already team-group-1)
+  welcome-part-time  DSC02407  the three of them, eyes open
+                               (was DSC02408, which is the same three
+                               mid-laugh with all three sets of eyes
+                               shut. 02407 is the only frame of this
+                               group where everyone is looking at the
+                               camera, so the card takes it and the
+                               team strip moved to DSC02411.)
   welcome-ojt        DSC02425  the trainee cohort - fills a card that was an
                                icon before
   welcome-no-degree  DSC02734  the guard at his desk - same
