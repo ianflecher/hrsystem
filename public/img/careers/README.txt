@@ -117,6 +117,19 @@ one page. Across pages a photograph may reappear - the Inside page carries
 all 23 workstations, so anything using one would otherwise be off limits.
 
 -----------------------------------------------------------------------
+founder.jpg (Who we are)
+
+  Gian Karlo Lasam, supplied by the client 2026-09-21. Resized to 900x1125,
+  not cropped - the frame was already 4:5 to within half a pixel.
+
+  The slot is 4:5 and draws at 352x440, so this is about 2.5x supply, which
+  is right for a retina screen. It stacks to 16:10 landscape below 860px.
+
+  The section shows the photograph only if this file exists; without it the
+  message runs beside a brand panel instead. The message itself is still the
+  draft in app/Support/CareersFounder.php and now carries his name and face.
+
+-----------------------------------------------------------------------
 Faces of the floor (Inside page) - WAITING FOR YOU
 
   face-1.jpg   face-2.jpg   face-3.jpg

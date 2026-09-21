@@ -1477,7 +1477,12 @@
         @media (max-width: 900px) { .voices { grid-template-columns: 1fr; } }
 
         /* ---------------------------------------------------------- founder */
-        .founder { display: grid; grid-template-columns: 26rem 1fr; gap: 40px; align-items: start; }
+        /* A standing portrait is much taller than a few paragraphs: at 26rem the
+           photograph ran 186px past the end of the text and left a hole beside
+           its lower half. Narrower, and centred against the text rather than
+           hung from the top, so whichever of the two is shorter sits level with
+           the other instead of stranded at the ceiling. */
+        .founder { display: grid; grid-template-columns: 22rem 1fr; gap: 44px; align-items: center; }
 
         .founder__pic {
             aspect-ratio: 4 / 5;
