@@ -21,18 +21,52 @@ class HrReportController extends Controller
 
         $report = $data['report'];
         $from = $data['from'] ?? '1900-01-01';
-        $to = $data['to'] ?? now()->toDateString();
+        // Leave is filed before it is taken, so a window ending today hides
+        // every upcoming request - which is most of what a leave report is
+        // for. The other reports are records of what has already happened.
+        $to = $data['to'] ?? ($report === 'leave'
+            ? now()->addYear()->toDateString()
+            : now()->toDateString());
 
         return response()->streamDownload(function () use ($report, $from, $to, $data) {
             $out = fopen('php://output', 'w');
             $write = fn (array $row) => fputcsv($out, array_map(fn ($v) => is_string($v) && preg_match('/^[=+\-@]/', $v) ? "'".$v : $v, $row));
 
-            foreach ($this->rows($report, $from, $to, $data['department_id'] ?? null) as $i => $row) {
-                if ($i === 0) $write(array_keys((array) $row));
+            // Written before the query runs, so a report with nothing in it
+            // still downloads as a readable file. It used to come out zero
+            // bytes, which is indistinguishable from a failed download.
+            $write($this->columns($report));
+
+            foreach ($this->rows($report, $from, $to, $data['department_id'] ?? null) as $row) {
                 $write((array) $row);
             }
             fclose($out);
         }, 'hr-'.$report.'-'.$from.'-'.$to.'.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * The header row, in the order the matching select in rows() returns it.
+     *
+     * Kept here rather than read off the first row, so that a report with no
+     * rows still has headers. ReportDownloadTest walks every report and checks
+     * these against the real column names, so the two cannot drift apart.
+     *
+     * @return array<int, string>
+     */
+    private function columns(string $report): array
+    {
+        return match ($report) {
+            'attendance' => ['date', 'full_name', 'department_name', 'time_in', 'time_out', 'status'],
+            'leave' => ['start_date', 'end_date', 'full_name', 'department_name', 'leave_type', 'status'],
+            'payroll' => ['period_start', 'period_end', 'full_name', 'department_name', 'gross_pay',
+                          'overtime_pay', 'loan_deduction', 'sss', 'philhealth', 'pagibig', 'tax',
+                          'deductions', 'net_pay', 'status'],
+            'sss', 'philhealth', 'pagibig', 'bir' => ['period_start', 'period_end', 'full_name',
+                          'department_name', 'gross_pay', 'sss', 'employer_sss', 'employer_ec',
+                          'philhealth', 'employer_philhealth', 'pagibig', 'employer_pagibig',
+                          'tax', 'net_pay'],
+            default => ['full_name', 'department_name', 'job_title', 'status', 'hire_date', 'salary'],
+        };
     }
 
     private function rows(string $report, string $from, string $to, ?int $departmentId)
