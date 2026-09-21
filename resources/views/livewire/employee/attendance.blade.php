@@ -33,7 +33,9 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             )
             ->where('users.user_id', $user->user_id)
             ->first();
-        
+
+        abort_unless($this->employee, 403, 'An employee record is required.');
+
         $this->currentMonth = now()->format('F Y');
         $this->loadData();
     }

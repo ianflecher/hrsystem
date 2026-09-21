@@ -32,7 +32,13 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                 'departments.department_name'
             )
             ->first();
-        
+
+        // An account with no employee record - HR and admin have none - used to
+        // fall straight through to the queries below and read employee_id off
+        // null. The portal is not theirs, so it is refused the same way
+        // /employee/self-service already refuses it.
+        abort_unless($this->employee, 403, 'An employee record is required.');
+
         $this->loadDashboardData();
     }
     

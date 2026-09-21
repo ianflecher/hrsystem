@@ -19,9 +19,15 @@ new #[Layout('components.layouts.employeeland')] class extends Component
      */
     public function employeeId()
     {
-        return DB::table('employees')
+        $id = DB::table('employees')
             ->where('user_id', Auth::id())
             ->value('employee_id');
+
+        // Null here meant filing leave against nobody, and reading properties
+        // off the rows it failed to find. HR and admin have no employee record.
+        abort_unless($id, 403, 'An employee record is required.');
+
+        return $id;
     }
 
     /**

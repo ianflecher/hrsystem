@@ -31,7 +31,9 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                 'departments.department_name'
             )
             ->first();
-        
+
+        abort_unless($this->employee, 403, 'An employee record is required.');
+
         $this->year = date('Y');
         $this->loadYears();
         $this->loadPayrollRecords();
