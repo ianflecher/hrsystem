@@ -6,9 +6,12 @@
 /storage/*.key
 /storage/pail
 /vendor
+# Every .env variant, not just the three names Laravel ships with: a
+# backup called .env.bak or .env.old carries the same APP_KEY and
+# database password as .env, and this repository is public.
 .env
-.env.backup
-.env.production
+.env.*
+!.env.example
 .phpactor.json
 .phpunit.result.cache
 Homestead.json
