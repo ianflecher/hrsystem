@@ -75,7 +75,7 @@ class ApplicantProfileTest extends TestCase
             ->set('p.surname', 'Dela Cruz')
             ->set('p.first_name', 'Juan')
             ->set('p.middle_name', 'N/A')
-            ->set('p.present_address', '12 Rizal St')
+            ->set('p.present_street', '12 Rizal St')
             ->set('p.civil_status', 'married')
             ->set('p.spouse_surname', 'Dela Cruz')
             ->set('p.sss_number', '34-1234567-8')
@@ -215,6 +215,28 @@ class ApplicantProfileTest extends TestCase
             ->assertSet('step', 5)
             ->call('goToStep', -3)
             ->assertSet('step', 1);
+    }
+
+    public function test_present_and_permanent_address_are_three_fields_each(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Reyes')
+            ->set('p.first_name', 'Liza')
+            ->set('p.present_street', '12 Rizal St')
+            ->set('p.present_city', 'Naga City')
+            ->set('p.present_province', 'Camarines Sur')
+            ->set('p.permanent_same_as_present', true)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $profile = DB::table('applicant_profiles')->where('user_id', $user->user_id)->first();
+        $this->assertSame('Naga City', $profile->present_city);
+        // Same as above copies each of the three parts, not one combined string.
+        $this->assertSame('12 Rizal St', $profile->permanent_street);
+        $this->assertSame('Camarines Sur', $profile->permanent_province);
     }
 
     public function test_government_numbers_are_their_own_step(): void

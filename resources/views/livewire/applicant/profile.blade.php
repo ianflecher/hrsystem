@@ -101,10 +101,13 @@ new #[Layout('components.layouts.applicant')] class extends Component
     private function blankProfile(): array
     {
         return array_fill_keys([
-            'surname', 'first_name', 'middle_name', 'present_address', 'permanent_address',
+            'surname', 'first_name', 'middle_name',
+            'present_street', 'present_city', 'present_province',
+            'permanent_street', 'permanent_city', 'permanent_province',
             'cellphone', 'email_address', 'bank_account_number', 'date_of_birth',
             'birthplace', 'civil_status', 'spouse_surname', 'spouse_first_name', 'spouse_middle_name',
-            'fathers_name', 'mothers_maiden_name', 'siblings', 'sss_number', 'pagibig_number',
+            'fathers_name', 'mothers_maiden_name',
+            'sibling_1_name', 'sibling_2_name', 'sibling_3_name', 'sss_number', 'pagibig_number',
             'philhealth_number', 'tin', 'emergency_name', 'emergency_contact_no',
             'emergency_relationship', 'emergency_address', 'certified_name',
         ], '') + ['permanent_same_as_present' => false];
@@ -189,7 +192,9 @@ new #[Layout('components.layouts.applicant')] class extends Component
     public function updatedP($value, $key): void
     {
         if ($key === 'permanent_same_as_present' && $value) {
-            $this->p['permanent_address'] = $this->p['present_address'] ?? '';
+            $this->p['permanent_street']   = $this->p['present_street'] ?? '';
+            $this->p['permanent_city']     = $this->p['present_city'] ?? '';
+            $this->p['permanent_province'] = $this->p['present_province'] ?? '';
         }
     }
 

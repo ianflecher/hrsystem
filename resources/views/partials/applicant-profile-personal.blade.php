@@ -24,21 +24,31 @@
         </div>
 
         <div>
-            <label class="form-label" for="present_address">Present address</label>
-            <textarea id="present_address" wire:model="p.present_address" rows="2" class="form-input"></textarea>
+            <span class="form-label">Present address</span>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-1">
+                <input id="present_street" type="text" wire:model="p.present_street" class="form-input" placeholder="House/unit no., street, barangay">
+                <input type="text" wire:model="p.present_city" class="form-input" placeholder="City/municipality">
+                <input type="text" wire:model="p.present_province" class="form-input" placeholder="Province">
+            </div>
         </div>
 
         <div>
             <div class="flex items-center justify-between">
-                <label class="form-label mb-0" for="permanent_address">Permanent address</label>
+                <span class="form-label mb-0">Permanent address</span>
                 <label class="flex items-center gap-2 text-sm text-gray-700">
                     <input type="checkbox" wire:model.live="p.permanent_same_as_present"
                            class="rounded border-gray-300 text-red-600">
                     Same as above
                 </label>
             </div>
-            <textarea id="permanent_address" wire:model="p.permanent_address" rows="2" class="form-input"
-                      @if ($p['permanent_same_as_present'] ?? false) readonly @endif></textarea>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-1">
+                <input id="permanent_street" type="text" wire:model="p.permanent_street" class="form-input" placeholder="House/unit no., street, barangay"
+                       @if ($p['permanent_same_as_present'] ?? false) readonly @endif>
+                <input type="text" wire:model="p.permanent_city" class="form-input" placeholder="City/municipality"
+                       @if ($p['permanent_same_as_present'] ?? false) readonly @endif>
+                <input type="text" wire:model="p.permanent_province" class="form-input" placeholder="Province"
+                       @if ($p['permanent_same_as_present'] ?? false) readonly @endif>
+            </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -103,9 +113,12 @@
         </div>
 
         <div>
-            <label class="form-label" for="siblings">Siblings</label>
-            <textarea id="siblings" wire:model="p.siblings" rows="2" class="form-input"
-                      placeholder="Names, one per line. N/A if none."></textarea>
+            <span class="form-label">Siblings</span>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-1">
+                <input id="sibling_1_name" type="text" wire:model="p.sibling_1_name" class="form-input" placeholder="Sibling 1 (N/A if none)">
+                <input type="text" wire:model="p.sibling_2_name" class="form-input" placeholder="Sibling 2">
+                <input type="text" wire:model="p.sibling_3_name" class="form-input" placeholder="Sibling 3">
+            </div>
         </div>
     </div>
 </section>
