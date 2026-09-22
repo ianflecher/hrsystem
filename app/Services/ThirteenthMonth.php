@@ -9,9 +9,14 @@ use App\Support\Statutory;
  * 13th month pay: one twelfth of the basic salary earned in a calendar year.
  *
  * "Basic salary earned" is the phrase that does the work. It is not the annual
- * rate, and not what was paid out: overtime, the holiday premium and days not
- * worked all come out of it, so somebody who was absent for a month earns a
- * smaller 13th month, which is the point of the rule.
+ * rate, and not what was paid out: overtime, the holiday premium, the night
+ * differential, allowances and days not worked all come out of it, so somebody
+ * who was absent for a month earns a smaller 13th month, which is the point of
+ * the rule.
+ *
+ * The allowance has to be taken out by name. It is part of gross_pay, because
+ * it is money the person receives, but it is not basic salary - leaving it in
+ * paid a twelfth of it out again every December.
  *
  * Contributions and tax are not subtracted - those come out of pay, they are
  * not a reduction in what was earned.
@@ -44,7 +49,8 @@ class ThirteenthMonth
             ->where('kind', 'regular')
             ->where('status', '!=', 'cancelled')
             ->whereBetween('period_start', [$year.'-01-01', $year.'-12-31'])
-            ->selectRaw('COUNT(*) as payslips, COALESCE(SUM(gross_pay - overtime_pay - holiday_pay - nsd_pay - time_deduction - COALESCE(other_taxable_compensation, 0)), 0) as basic')
+            ->selectRaw('COUNT(*) as payslips, COALESCE(SUM(gross_pay - overtime_pay - holiday_pay - nsd_pay'
+                .' - time_deduction - COALESCE(allowance, 0) - COALESCE(other_taxable_compensation, 0)), 0) as basic')
             ->first();
 
         $basic = round(max(0, (float) ($row->basic ?? 0)), 2);
