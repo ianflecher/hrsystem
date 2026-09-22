@@ -92,6 +92,11 @@ Route::middleware('auth')->group(function () {
         Volt::route('/hr/attendance', 'hr.attendance')->name('hr.attendance');
         Volt::route('/hr/leave', 'hr.leave')->name('hr.leave');
         Volt::route('/hr/payroll', 'hr.payroll')->name('hr.payroll');
+
+        // The 201 file as three printed pages. Inside this group rather than
+        // beside it, because it carries health and criminal history.
+        Route::get('/hr/applications/{id}/201', \App\Http\Controllers\ApplicantProfilePrintController::class)
+            ->whereNumber('id')->name('hr.applications.print');
     });
     Route::get('/hr/operations/payroll-control', [\App\Http\Controllers\HrOperationsController::class, 'payrollControl'])->name('hr.operations.payroll-control');
     Route::get('/hr/operations/payroll-approval', [\App\Http\Controllers\HrOperationsController::class, 'payrollApproval'])->name('hr.operations.payroll-approval');

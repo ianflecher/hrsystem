@@ -8,13 +8,12 @@
      Read-only throughout: HR reviews it, the applicant owns it. --}}
 
 @php
-    // Blank and "N/A" both mean the same thing here, and neither should print
-    // as an empty gap that reads like a rendering fault.
-    $val = function ($value, string $fallback = 'Not given') {
-        $value = trim((string) $value);
+    use App\Support\Na;
 
-        return $value === '' ? $fallback : $value;
-    };
+    // N/A stands on its own as an answer, but must not turn up inside a line
+    // that is assembled from several columns - "Lasam, Gian N/A", or a spouse
+    // named "N/A N/A N/A".
+    $val = fn ($value, string $fallback = 'Not given') => Na::show($value, $fallback);
 
     $yesNo = function ($value) {
         if ($value === null || $value === '') {
@@ -29,12 +28,24 @@
     <div class="flex items-center justify-between mb-3">
         <h4 class="text-sm font-medium text-gray-700">Application details (201 file)</h4>
 
-        @if ($profile && $profile->certified_at)
-            <span class="text-xs text-green-700">
-                <i class="fas fa-check-circle mr-1"></i>Certified
-                {{ \Illuminate\Support\Carbon::parse($profile->certified_at)->format('j M Y') }}
-            </span>
-        @endif
+        <div class="flex items-center gap-3">
+            @if ($profile && $profile->certified_at)
+                <span class="text-xs text-green-700">
+                    <i class="fas fa-check-circle mr-1"></i>Certified
+                    {{ \Illuminate\Support\Carbon::parse($profile->certified_at)->format('j M Y') }}
+                </span>
+            @endif
+
+            @if ($profile)
+                {{-- A new tab: printing should not take HR out of the list they
+                     were working through. --}}
+                <a href="{{ route('hr.applications.print', $selectedApplication->application_id) }}"
+                   target="_blank" rel="noopener"
+                   class="text-xs text-red-600 hover:text-red-700 font-medium">
+                    <i class="fas fa-print mr-1"></i>Print 201 file
+                </a>
+            @endif
+        </div>
     </div>
 
     @if (! $profile)
@@ -54,7 +65,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
                     <div>
                         <span class="text-xs text-gray-500">Name</span>
-                        <p>{{ $val(trim($profile->surname.', '.$profile->first_name.' '.$profile->middle_name)) }}</p>
+                        <p>{{ Na::name($profile->surname, $profile->first_name, $profile->middle_name, 'Not given') }}</p>
                     </div>
                     <div>
                         <span class="text-xs text-gray-500">Date of birth</span>
@@ -78,17 +89,18 @@
                     </div>
                     <div class="sm:col-span-2 lg:col-span-3">
                         <span class="text-xs text-gray-500">Present address</span>
-                        <p>{{ $val(collect([$profile->present_street, $profile->present_city, $profile->present_province])->filter()->implode(', ')) }}</p>
+                        <p>{{ Na::join([$profile->present_street, $profile->present_city, $profile->present_province], ', ', 'Not given') }}</p>
                     </div>
                     <div class="sm:col-span-2 lg:col-span-3">
                         <span class="text-xs text-gray-500">Permanent address</span>
-                        <p>{{ $val(collect([$profile->permanent_street, $profile->permanent_city, $profile->permanent_province])->filter()->implode(', ')) }}</p>
+                        <p>{{ Na::join([$profile->permanent_street, $profile->permanent_city, $profile->permanent_province], ', ', 'Not given') }}</p>
                     </div>
 
-                    @if ($profile->spouse_surname || $profile->spouse_first_name)
+                    @php $spouse = Na::name($profile->spouse_surname, $profile->spouse_first_name, $profile->spouse_middle_name); @endphp
+                    @if ($spouse !== '')
                         <div class="sm:col-span-2">
                             <span class="text-xs text-gray-500">Spouse</span>
-                            <p>{{ $val(trim($profile->spouse_first_name.' '.$profile->spouse_middle_name.' '.$profile->spouse_surname)) }}</p>
+                            <p>{{ $spouse }}</p>
                         </div>
                     @endif
 
@@ -103,10 +115,13 @@
                     <div>
                         <span class="text-xs text-gray-500">Siblings</span>
                         <p>
-                            @if (count($siblings) === 0)
-                                {{ $profile->sibling_count === 0 ? 'None' : 'Not given' }}
+                            @php $sibNames = Na::join(collect($siblings)->pluck('name')->all(), ', '); @endphp
+                            @if ($sibNames !== '')
+                                {{ $sibNames }}
+                            @elseif ($profile->sibling_count !== null && (int) $profile->sibling_count === 0)
+                                None
                             @else
-                                {{ collect($siblings)->pluck('name')->filter()->implode(', ') }}
+                                Not given
                             @endif
                         </p>
                     </div>
@@ -175,7 +190,7 @@
                                         <td class="py-2 pr-4">{{ $val($row->school_name) }}</td>
                                         <td class="py-2 pr-4 text-gray-600">{{ $val($row->course, '&mdash;') }}</td>
                                         <td class="py-2 text-gray-600">
-                                            {{ $val(collect([$row->year_from, $row->year_to])->filter()->implode(' - '), '&mdash;') }}
+                                            {{ Na::join([$row->year_from, $row->year_to], ' - ', '—') }}
                                         </td>
                                     </tr>
                                 @endforeach
@@ -194,7 +209,7 @@
                         <div class="flex flex-wrap items-baseline justify-between gap-2">
                             <p class="font-medium text-gray-900">{{ $val($job->company_name) }}</p>
                             <p class="text-xs text-gray-500">
-                                {{ $val(collect([$job->date_from, $job->date_to])->filter()->implode(' - '), 'Dates not given') }}
+                                {{ Na::join([$job->date_from, $job->date_to], ' - ', 'Dates not given') }}
                             </p>
                         </div>
                         <p class="text-gray-600">{{ $val($job->position, 'Position not given') }}</p>
