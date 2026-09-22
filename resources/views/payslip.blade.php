@@ -2,13 +2,24 @@
     use App\Services\ThirteenthMonth;
 
     $isThirteenth = $p->kind === ThirteenthMonth::KIND;
-    $basic = round((float) $p->gross_pay - (float) $p->overtime_pay - (float) $p->holiday_pay, 2);
 
     $earnings = array_filter([
-        ($isThirteenth ? '13th month pay' : 'Basic pay for the period') => $basic,
+        ($isThirteenth ? '13th month pay' : 'Basic pay for the period') => (float) $p->basic_pay,
+        'Allowance'        => (float) ($p->allowance ?? 0),
         'Overtime'         => (float) $p->overtime_pay,
         'Holiday premium'  => (float) $p->holiday_pay,
+        'Night shift differential' => (float) ($p->nsd_pay ?? 0),
     ], fn ($amount) => $amount != 0);
+
+    // Each part of the pay is named rather than folded into the basic, and
+    // whatever the named lines do not cover is shown rather than hidden, so
+    // the earnings always add up to the gross printed beneath them.
+    $earningsAccounted = round(array_sum($earnings), 2);
+    $unearned = round((float) $p->gross_pay - $earningsAccounted, 2);
+
+    if ($unearned != 0) {
+        $earnings['Other earnings'] = $unearned;
+    }
 
     $deductions = array_filter([
         'SSS'                        => (float) $p->sss,

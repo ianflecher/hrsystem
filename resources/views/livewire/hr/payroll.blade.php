@@ -1468,10 +1468,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             <div class="mb-4">
                                 <h5 class="text-xs font-medium text-red-600 mb-2">EARNINGS</h5>
                                 <div class="space-y-1">
+                                    {{-- What was earned this cutoff, not the monthly rate: the
+                                         rate is already shown above, and printing it here made the
+                                         earnings lines add up to more than the gross beneath them. --}}
                                     <div class="flex justify-between">
-                                        <span class="text-sm">Basic Salary:</span>
-                                        <span class="text-sm">₱{{ number_format($selectedEmployee->salary, 2) }}</span>
+                                        <span class="text-sm">Basic pay:</span>
+                                        <span class="text-sm">₱{{ number_format($selectedEmployee->basic_pay ?? 0, 2) }}</span>
                                     </div>
+                                    @if(($selectedEmployee->allowance ?? 0) > 0)
+                                    <div class="flex justify-between"><span class="text-sm">Allowance:</span><span class="text-sm">₱{{ number_format($selectedEmployee->allowance, 2) }}</span></div>
+                                    @endif
                                     @if(($selectedEmployee->overtime_pay ?? 0) > 0)
                                     <div class="flex justify-between"><span class="text-sm">Overtime:</span><span class="text-sm">₱{{ number_format($selectedEmployee->overtime_pay, 2) }}</span></div>
                                     @endif
