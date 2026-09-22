@@ -133,16 +133,16 @@ class StatutoryContributionTest extends TestCase
      */
     public function test_the_two_cutoffs_come_to_the_monthly_schedule(): void
     {
-        // 15,000 basic plus a 5,000 allowance: brackets are read against the
-        // whole 20,000 monthly compensation, then halved per cutoff.
+        // 15,000 basic plus a 5,000 allowance. SSS and PhilHealth read the
+        // basic; Pag-IBIG reads the 20,000 but caps its base at 10,000.
         $basic = 15000.0;
-        $base = 20000.0;
+        $compensation = 20000.0;
         $allowance = 2500.0;   // half the monthly 5,000
 
-        $first  = P::forCutoff($basic, isSecondCutoff: false, allowance: $allowance, monthlyStatutoryBase: $base);
-        $second = P::forCutoff($basic, isSecondCutoff: true,  allowance: $allowance, monthlyStatutoryBase: $base);
+        $first  = P::forCutoff($basic, isSecondCutoff: false, allowance: $allowance, monthlyCompensation: $compensation);
+        $second = P::forCutoff($basic, isSecondCutoff: true,  allowance: $allowance, monthlyCompensation: $compensation);
 
-        foreach (['sss' => 1000.00, 'philhealth' => 500.00, 'pagibig' => 200.00] as $k => $monthly) {
+        foreach (['sss' => 750.00, 'philhealth' => 375.00, 'pagibig' => 200.00] as $k => $monthly) {
             $this->assertEquals($monthly, round($first[$k] + $second[$k], 2),
                 "{$k} over the month does not match the monthly schedule");
 
@@ -159,23 +159,26 @@ class StatutoryContributionTest extends TestCase
     }
 
     /**
-     * The brackets are read against the monthly compensation, never against
-     * one cutoff's gross. Reading a 10,000 cutoff instead of a 20,000 month
-     * would put somebody two MSC bands too low and under-remit their SSS.
+     * The brackets are read against the monthly salary, never against one
+     * cutoff's pay. Reading 7,500 instead of 15,000 would put somebody at the
+     * floor of the SSS table and under-remit half their contribution.
      */
     public function test_the_brackets_are_read_monthly_not_per_cutoff(): void
     {
-        $perMonth = P::forCutoff(15000, isSecondCutoff: true, allowance: 2500, monthlyStatutoryBase: 20000);
+        $c = P::forCutoff(15000, isSecondCutoff: true, allowance: 2500, monthlyCompensation: 20000);
 
-        // Half of a 20,000 credit, not 5% of a 10,000 cutoff gross - which
-        // would also be 500, so the PhilHealth figure is what separates them.
-        $this->assertEquals(500.00, $perMonth['sss']);
-        $this->assertEquals(250.00, $perMonth['philhealth'], 'PhilHealth was read off one cutoff');
+        // Half of the 750 a month that a 15,000 credit earns.
+        $this->assertEquals(375.00, $c['sss']);
 
-        // Read per cutoff, a 10,000 base would give half of 10,000 x 2.5%.
-        $ifReadPerCutoff = round(P::philHealth(10000) / 2, 2);
-        $this->assertNotEquals($ifReadPerCutoff, $perMonth['philhealth'],
-            'the monthly base is being ignored');
+        // Read off the 7,500 cutoff instead, the credit would be 7,500 and the
+        // half-cutoff figure 187.50 - which is what this must not be.
+        $this->assertNotEquals(round(P::sss(7500) / 2, 2), $c['sss'],
+            'the bracket was read off one cutoff rather than the month');
+
+        // PhilHealth has a 10,000 floor, so reading 7,500 would hit it and
+        // give the floor premium rather than the one actually due.
+        $this->assertEquals(187.50, $c['philhealth']);
+        $this->assertNotEquals(round(P::philHealth(7500) / 2, 2), $c['philhealth']);
     }
 
     // ------------------------------------------------------ all together
@@ -187,29 +190,28 @@ class StatutoryContributionTest extends TestCase
      */
     public function test_a_whole_cutoff_hangs_together(): void
     {
-        // 20,000 basic plus a 4,000 monthly allowance: 2,000 this cutoff, and
-        // 24,000 is what the contributions are worked out on.
+        // 20,000 basic plus a 4,000 monthly allowance: 2,000 this cutoff.
+        // SSS and PhilHealth read the 20,000; Pag-IBIG reads 24,000 and caps.
         $c = P::forCutoff(monthlySalary: 20000, isSecondCutoff: true,
-            allowance: 2000, monthlyStatutoryBase: 24000);
+            allowance: 2000, monthlyCompensation: 24000);
 
         // Half the month's contributions, because the company splits them.
-        $this->assertEquals(600.00, $c['sss'], 'half of 1,200 on a 24,000 credit');
-        $this->assertEquals(300.00, $c['philhealth'], 'half of 600');
+        $this->assertEquals(500.00, $c['sss'], 'half of 1,000 on a 20,000 credit');
+        $this->assertEquals(250.00, $c['philhealth'], 'half of 500');
         $this->assertEquals(100.00, $c['pagibig'], 'half of 200, capped at a 10,000 base');
 
         $this->assertEquals(10000.00, $c['basic']);
         $this->assertEquals(12000.00, $c['gross'], 'the allowance belongs in gross');
 
-        // Taxable is the whole gross less contributions.
-        $this->assertEquals(12000 - 1000, $c['taxable'],
+        // Taxable is the whole gross less contributions: the allowance is
+        // taxed even though SSS and PhilHealth never saw it.
+        $this->assertEquals(12000 - 850, $c['taxable'],
             'the allowance was left untaxed, or contributions were not deducted first');
 
-        // And because the allowance is in the taxable figure, this cutoff now
-        // clears the 10,417 exemption and tax is withheld on the excess. On
-        // basic alone it would not have been.
-        $this->assertEquals(round((11000 - 10417) * 0.15, 2), $c['tax']);
+        // 11,150 clears the 10,417 exemption, so tax is due on the excess.
+        $this->assertEquals(round((11150 - 10417) * 0.15, 2), $c['tax']);
 
-        $this->assertEquals(round(1000 + $c['tax'], 2), $c['deductions']);
+        $this->assertEquals(round(850 + $c['tax'], 2), $c['deductions']);
         $this->assertEquals(round(12000 - $c['deductions'], 2), $c['net']);
     }
 }

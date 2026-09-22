@@ -57,15 +57,14 @@ class PayrollRun
             $monthlyAllowance = $onImmersion ? 0.0 : (float) ($employee->allowance ?? 0);
             $allowance = round($monthlyAllowance / 2, 2);
 
-            // The allowance counts towards SSS, PhilHealth and Pag-IBIG as well
-            // as tax, so they are worked out from the whole monthly
-            // compensation. It goes in as its own figure rather than being
-            // folded into the salary, which would pay it twice: once as half
-            // the basic and again as the allowance line.
-            $contributionBase = round($statutoryBase + $monthlyAllowance, 2);
+            // Total monthly compensation, which only Pag-IBIG reads - and it
+            // caps the base at 10,000, so in practice the allowance changes
+            // nothing there either. SSS and PhilHealth read the basic salary,
+            // and tax picks the allowance up through gross.
+            $monthlyCompensation = round($statutoryBase + $monthlyAllowance, 2);
             $c = $payBasis === 'monthly'
-                ? PayrollCalculator::forCutoff($statutoryBase, $time['total'], $period->isSecondCutoff, $overtimeAmount, $holiday['amount'], ! $onImmersion, $nsd['amount'], $period->start, (bool) ($employee->minimum_wage_earner ?? false), 0.0, $allowance, $contributionBase)
-                : PayrollCalculator::forNonMonthlyCutoff((float) ($time['basic_override'] ?? 0), $contributionBase, 0, $period->isSecondCutoff, $overtimeAmount, $holiday['amount'], ! $onImmersion, $nsd['amount'], $period->start, (bool) ($employee->minimum_wage_earner ?? false), 0.0, $allowance);
+                ? PayrollCalculator::forCutoff($statutoryBase, $time['total'], $period->isSecondCutoff, $overtimeAmount, $holiday['amount'], ! $onImmersion, $nsd['amount'], $period->start, (bool) ($employee->minimum_wage_earner ?? false), 0.0, $allowance, $monthlyCompensation)
+                : PayrollCalculator::forNonMonthlyCutoff((float) ($time['basic_override'] ?? 0), $statutoryBase, 0, $period->isSecondCutoff, $overtimeAmount, $holiday['amount'], ! $onImmersion, $nsd['amount'], $period->start, (bool) ($employee->minimum_wage_earner ?? false), 0.0, $allowance, $monthlyCompensation);
             $remainingCents = max(0, (int) round($c['net'] * 100));
             $loans = DB::table('employee_loans')->where('employee_id', $employeeId)->where('status', 'active')->where('starts_on', '<=', $period->start)->orderBy('id')->lockForUpdate()->get();
             $installments = [];
@@ -88,7 +87,7 @@ class PayrollRun
                 // separator only appears when there is something after it.
                 $notes = $notes === '' ? $immersion : $immersion.' | '.$notes;
             }
-            if (($c['allowance'] ?? 0) > 0) $notes .= ' | Allowance: PHP '.number_format($c['allowance'], 2).' (part of the taxable and contributory total)';
+            if (($c['allowance'] ?? 0) > 0) $notes .= ' | Allowance: PHP '.number_format($c['allowance'], 2).' (taxable; SSS and PhilHealth are on the basic salary)';
             if ($c['overtime'] > 0) $notes .= ' | Overtime: PHP '.number_format($c['overtime'], 2);
             if ($c['nsd'] > 0) $notes .= ' | NSD: '.number_format($c['nsd'], 2). ' ('.number_format($nsd['hours'], 2).' hours)';
             if ($deduction > 0) $notes .= ' | Loan repayment: PHP '.number_format($deduction, 2);

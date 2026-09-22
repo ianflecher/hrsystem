@@ -25,7 +25,7 @@ class AllowanceOnPayslipTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_the_allowance_reaches_the_payslip_and_is_charged_on(): void
+    public function test_the_allowance_reaches_the_payslip_taxed_but_not_contributory(): void
     {
         $n = random_int(100000, 999999);
         $u = User::create(['full_name' => 'Allowance Person', 'username' => "allw{$n}",
@@ -60,20 +60,22 @@ class AllowanceOnPayslipTest extends TestCase
         $this->assertEquals(10000, $slip->basic_pay);
         $this->assertEquals(11000, $slip->gross_pay, 'gross should carry the allowance');
 
-        // Contributions follow the whole monthly compensation, so a 20,000
-        // salary with a 2,000 allowance is charged as 22,000, not as 20,000.
+        // SSS and PhilHealth read the basic salary, so a 2,000 allowance does
+        // not move them: they match a plain 20,000 salary.
         $basicOnly = \App\Support\PayrollCalculator::forCutoff(20000);
-        $whole = \App\Support\PayrollCalculator::forCutoff(
-            20000, allowance: 1000, monthlyStatutoryBase: 22000);
 
-        $this->assertEquals($whole['sss'], $slip->sss, 'the allowance was left out of the SSS base');
-        $this->assertGreaterThan((float) $basicOnly['sss'], (float) $slip->sss,
-            'the allowance is not being charged on');
+        $this->assertEquals($basicOnly['sss'], $slip->sss, 'the allowance moved the SSS contribution');
+        $this->assertEquals($basicOnly['philhealth'], $slip->philhealth,
+            'the allowance moved the PhilHealth premium');
+
+        // Tax is the one that does see it.
+        $this->assertGreaterThan((float) $basicOnly['taxable'], (float) $slip->taxable_compensation,
+            'the allowance was left out of taxable pay');
 
         // And it is visible on the payslip rather than buried in gross.
         $this->assertStringContainsString('Allowance', (string) $slip->notes);
 
-        fwrite(STDERR, sprintf("\n  sss on basic alone %s -> on the whole %s\n\n",
-            number_format($basicOnly['sss'], 2), number_format((float) $slip->sss, 2)));
+        fwrite(STDERR, sprintf("\n  sss %s unchanged by the allowance; taxable %s carries it\n\n",
+            number_format((float) $slip->sss, 2), number_format((float) $slip->taxable_compensation, 2)));
     }
 }

@@ -16,33 +16,34 @@ class PayrollCalculator
         bool $minimumWageEarner = false,
         float $otherTaxableCompensation = 0.0,
         float $allowance = 0.0,
-        ?float $monthlyStatutoryBase = null,
+        ?float $monthlyCompensation = null,
     ): array {
         $basic = round($monthlySalary / 2, 2);
 
-        // The contribution base is not always the basic salary. The allowance
-        // counts towards SSS, PhilHealth and Pag-IBIG, and those are monthly
-        // figures while this is one cutoff, so the caller passes the whole
-        // monthly compensation rather than us doubling the half we hold.
-        $monthlyStatutoryBase ??= $monthlySalary;
+        // Each of the three reads a different base, so they are not
+        // interchangeable and none of them is simply "the salary":
+        //
+        //   SSS and PhilHealth  basic salary alone, allowances excluded
+        //   Pag-IBIG            total monthly compensation, capped at 10,000
+        //   withholding tax     basic plus any allowance over the de minimis
+        //                       limits, which is handled through gross below
+        //
+        // $monthlyCompensation is basic plus regular allowances. It is monthly
+        // because the schedules are monthly, while everything else here is one
+        // cutoff's half.
+        $monthlyCompensation ??= $monthlySalary;
         $otherTaxableCompensation = round(max(0, $otherTaxableCompensation), 2);
 
-        // The allowance is ordinary compensation here: it counts towards
-        // gross, it is taxed, and it is part of the SSS, PhilHealth and
-        // Pag-IBIG base - the caller adds it to $monthlySalary before passing
-        // it in, because those are worked out monthly and this is one cutoff.
-        //
-        // It is still reported on its own line, so a payslip says how much of
-        // the pay is allowance even though nothing treats it differently.
+        // Taxable, so it stays in gross and is not taken back out before tax.
         $allowance = round(max(0, $allowance), 2);
 
         $gross = round($basic + $overtimePay + $holidayPay + $nsdPay + $otherTaxableCompensation + $allowance, 2);
         $share = $statutory ? self::monthlyShare($isSecondCutoff, $ruleDate) : 0.0;
 
-        $sss = round(self::sss($monthlyStatutoryBase, $ruleDate) * $share, 2);
-        $philhealth = round(self::philHealth($monthlyStatutoryBase, $ruleDate) * $share, 2);
-        $pagibig = round(self::pagIbig($monthlyStatutoryBase, $ruleDate) * $share, 2);
-        $employer = $statutory ? self::employerContributions($monthlyStatutoryBase, $ruleDate, $share) : ['sss' => 0, 'ec' => 0, 'philhealth' => 0, 'pagibig' => 0];
+        $sss = round(self::sss($monthlySalary, $ruleDate) * $share, 2);
+        $philhealth = round(self::philHealth($monthlySalary, $ruleDate) * $share, 2);
+        $pagibig = round(self::pagIbig($monthlyCompensation, $ruleDate) * $share, 2);
+        $employer = $statutory ? self::employerContributions($monthlySalary, $ruleDate, $share, $monthlyCompensation) : ['sss' => 0, 'ec' => 0, 'philhealth' => 0, 'pagibig' => 0];
 
         $preTax = max(0, $gross - ($sss + $philhealth + $pagibig) - $lateDeduction);
         $mweExempt = $minimumWageEarner ? round($basic + $overtimePay + $holidayPay + $nsdPay, 2) : 0.0;
@@ -81,15 +82,17 @@ class PayrollCalculator
         bool $minimumWageEarner = false,
         float $otherTaxableCompensation = 0.0,
         float $allowance = 0.0,
+        ?float $monthlyCompensation = null,
     ): array {
         $basicPay=round(max(0,$basicPay),2); $monthlyStatutoryBase=round(max(0,$monthlyStatutoryBase),2);
+        $monthlyCompensation = round(max(0, $monthlyCompensation ?? $monthlyStatutoryBase), 2);
         $allowance = round(max(0, $allowance), 2);
         $gross=round($basicPay+$overtimePay+$holidayPay+$nsdPay+$otherTaxableCompensation+$allowance,2);
         $share=$statutory ? self::monthlyShare($isSecondCutoff,$ruleDate) : 0.0;
         $sss=round(self::sss($monthlyStatutoryBase,$ruleDate)*$share,2);
         $philhealth=round(self::philHealth($monthlyStatutoryBase,$ruleDate)*$share,2);
-        $pagibig=round(self::pagIbig($monthlyStatutoryBase,$ruleDate)*$share,2);
-        $employer=$statutory?self::employerContributions($monthlyStatutoryBase,$ruleDate,$share):['sss'=>0,'ec'=>0,'philhealth'=>0,'pagibig'=>0];
+        $pagibig=round(self::pagIbig($monthlyCompensation,$ruleDate)*$share,2);
+        $employer=$statutory?self::employerContributions($monthlyStatutoryBase,$ruleDate,$share,$monthlyCompensation):['sss'=>0,'ec'=>0,'philhealth'=>0,'pagibig'=>0];
         $preTax=max(0,$gross-($sss+$philhealth+$pagibig)-$lateDeduction);
         $mweExempt=$minimumWageEarner?round($basicPay+$overtimePay+$holidayPay+$nsdPay,2):0.0;
         $taxable=$minimumWageEarner?max(0,$preTax-$mweExempt):$preTax;
@@ -159,8 +162,10 @@ class PayrollCalculator
         return round(min($monthlySalary, $c['salary_cap']) * $rate, 2);
     }
 
-    public static function employerContributions(float $monthlySalary, ?string $ruleDate = null, float $share = 1.0): array
+    public static function employerContributions(float $monthlySalary, ?string $ruleDate = null, float $share = 1.0, ?float $monthlyCompensation = null): array
     {
+        // Pag-IBIG alone reads total compensation; the rest read basic salary.
+        $monthlyCompensation ??= $monthlySalary;
         $sssTable = Statutory::tableForDate('sss', $ruleDate);
         $credit = self::msc($monthlySalary, $ruleDate);
         $share = min(1.0, max(0.0, $share));
@@ -174,7 +179,7 @@ class PayrollCalculator
         $phBase = min(max($monthlySalary, $phTable['salary_floor']), $phTable['salary_ceiling']);
         $ph = round($phBase * $phTable['premium_rate'] * $phTable['employer_share'] * $share, 2);
         $p = Statutory::tableForDate('pagibig', $ruleDate);
-        $pagibig = round(min($monthlySalary, $p['salary_cap']) * $p['employer_rate'] * $share, 2);
+        $pagibig = round(min($monthlyCompensation, $p['salary_cap']) * $p['employer_rate'] * $share, 2);
         return ['sss' => $sss, 'ec' => round((float) $ec, 2), 'philhealth' => $ph, 'pagibig' => $pagibig];
     }
 

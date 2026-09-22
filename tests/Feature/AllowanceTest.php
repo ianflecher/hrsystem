@@ -6,87 +6,108 @@ use App\Support\PayrollCalculator;
 use Tests\TestCase;
 
 /**
- * The allowance is ordinary compensation: it is taxed, it is contributory, and
- * it is part of the 13th month. It keeps its own line on the payslip so people
- * can see what their pay is made of, but nothing treats it differently.
+ * Where the allowance counts and where it does not.
  *
- * This is the company's choice rather than the only lawful one - a genuine de
- * minimis benefit may be excluded from all three. Including it withholds more
- * and pays more into SSS and PhilHealth, which is the safe direction: it buys
- * a larger pension and better benefits, and it cannot be an under-remittance.
+ * There is no single answer, which is the whole difficulty: each schedule
+ * names its own base, and one base for all of them is wrong in one direction
+ * or the other every time.
  *
- * The contribution base is monthly and is passed separately, because the
- * allowance argument here is only this cutoff's half of it.
+ *   SSS         basic salary alone
+ *   PhilHealth  basic salary alone
+ *   Pag-IBIG    total compensation - but capped at 10,000, so above that
+ *               salary the allowance cannot move it either
+ *   tax         basic plus any allowance over the de minimis limits
+ *   13th month  basic salary alone (see ThirteenthMonthTest)
+ *
+ * $monthlyCompensation is basic plus regular allowances and is passed monthly,
+ * because the schedules are monthly while everything else here is one cutoff.
  */
 class AllowanceTest extends TestCase
 {
-    public function test_an_allowance_is_taxed_and_contributory(): void
+    public function test_sss_and_philhealth_ignore_the_allowance(): void
     {
-        // 20,000 basic plus a 3,000 monthly allowance, arriving 1,500 per
-        // cutoff. The base charged on is the whole 23,000.
-        $without = PayrollCalculator::forCutoff(20000);
-        $with    = PayrollCalculator::forCutoff(20000, allowance: 1500, monthlyStatutoryBase: 23000);
+        // The same 15,000 basic, once alone and once with a 5,000 allowance.
+        $without = PayrollCalculator::forCutoff(15000);
+        $with    = PayrollCalculator::forCutoff(15000, allowance: 2500, monthlyCompensation: 20000);
 
-        // It is money received, so it belongs in gross.
-        $this->assertEquals(round($without['gross'] + 1500, 2), $with['gross']);
+        $this->assertEquals($without['sss'], $with['sss'],
+            'SSS moved because of an allowance');
+        $this->assertEquals($without['philhealth'], $with['philhealth'],
+            'PhilHealth moved because of an allowance');
 
-        // Taxable now, so the taxable figure rises with it.
-        $this->assertGreaterThan($without['taxable'], $with['taxable'],
-            'the allowance was left out of taxable income');
+        // The employer's shares follow the same bases.
+        $this->assertEquals($without['employer_sss'], $with['employer_sss']);
+        $this->assertEquals($without['employer_philhealth'], $with['employer_philhealth']);
 
-        // Contributory too: a higher base means higher contributions.
-        foreach (['sss', 'philhealth'] as $k) {
-            $this->assertGreaterThan($without[$k], $with[$k],
-                "{$k} ignored the allowance");
-        }
-
-        // Pag-IBIG caps its base at 10,000, so at this salary it cannot move
-        // either way. It follows the allowance below the cap.
-        $this->assertEquals($without['pagibig'], $with['pagibig']);
-        $small = PayrollCalculator::forCutoff(8000, allowance: 500);
-        $smallWithBase = PayrollCalculator::forCutoff(8000, allowance: 500, monthlyStatutoryBase: 9000);
-        $this->assertGreaterThan($small['pagibig'], $smallWithBase['pagibig'],
-            'Pag-IBIG ignored the allowance below its cap');
-
-        // And the employer pays more alongside them.
-        $this->assertGreaterThan($without['employer_sss'], $with['employer_sss']);
-
-        // Still reported separately, so a payslip can say what the pay is of.
-        $this->assertEquals(1500, $with['allowance']);
+        // 15,000 basic: 750 SSS and 375 PhilHealth a month, halved per cutoff.
+        $this->assertEquals(375.00, $with['sss']);
+        $this->assertEquals(187.50, $with['philhealth']);
     }
 
     /**
-     * Because contributions now follow the total, moving money between basic
-     * and allowance no longer changes what is withheld. That is the point:
-     * the split is presentational, not a way to lower anybody's deductions.
+     * Pag-IBIG legally reads total compensation, and practically never sees
+     * the allowance: the base is capped at 10,000, so anybody whose basic pay
+     * alone reaches that is already at the 200 maximum.
      */
-    public function test_the_split_between_basic_and_allowance_changes_nothing(): void
+    public function test_pagibig_reads_compensation_but_the_cap_usually_hides_it(): void
     {
-        // 24,000 all as basic, against 21,000 basic plus a 3,000 allowance.
-        $allBasic = PayrollCalculator::forCutoff(24000);
-        $split    = PayrollCalculator::forCutoff(21000, allowance: 1500, monthlyStatutoryBase: 24000);
+        $atTheCap = PayrollCalculator::forCutoff(15000, allowance: 2500, monthlyCompensation: 20000);
+        $this->assertEquals(100.00, $atTheCap['pagibig'], 'half of the 200 maximum');
 
-        foreach (['sss', 'philhealth', 'pagibig', 'employer_sss', 'employer_philhealth', 'employer_pagibig'] as $k) {
-            $this->assertEquals($allBasic[$k], $split[$k],
-                "{$k} still depends on how the pay is labelled");
-        }
+        // Below the cap it does follow the allowance: 8,000 basic is 160 a
+        // month on its own, and 9,000 of compensation is 180.
+        $basicOnly = PayrollCalculator::forCutoff(8000);
+        $withAllowance = PayrollCalculator::forCutoff(8000, allowance: 500, monthlyCompensation: 9000);
 
-        // Same money in, same tax on it, same money out.
+        $this->assertEquals(80.00, $basicOnly['pagibig']);
+        $this->assertEquals(90.00, $withAllowance['pagibig'],
+            'Pag-IBIG ignored the allowance below its cap');
+    }
+
+    /** Tax is the one that does see it: the allowance stays in taxable pay. */
+    public function test_the_allowance_is_taxable(): void
+    {
+        $without = PayrollCalculator::forCutoff(15000);
+        $with    = PayrollCalculator::forCutoff(15000, allowance: 2500, monthlyCompensation: 20000);
+
+        $this->assertEquals(round($without['gross'] + 2500, 2), $with['gross']);
+        $this->assertEquals(round($without['taxable'] + 2500, 2), $with['taxable'],
+            'the allowance was left out of taxable pay');
+
+        // Still its own line, so a payslip can say what the pay is made of.
+        $this->assertEquals(2500, $with['allowance']);
+    }
+
+    /**
+     * Because SSS and PhilHealth read basic pay alone, moving money out of
+     * basic and into an allowance lowers both. That is lawful for a genuine de
+     * minimis benefit and not for salary under another name, and it is why the
+     * split is a decision rather than a presentation choice.
+     */
+    public function test_moving_pay_into_an_allowance_lowers_sss_and_philhealth(): void
+    {
+        $allBasic = PayrollCalculator::forCutoff(20000);
+        $split    = PayrollCalculator::forCutoff(15000, allowance: 2500, monthlyCompensation: 20000);
+
+        $this->assertGreaterThan($split['sss'], $allBasic['sss']);
+        $this->assertGreaterThan($split['philhealth'], $allBasic['philhealth']);
+
+        // Same money either way, and taxed the same either way.
         $this->assertEquals($allBasic['gross'], $split['gross']);
-        $this->assertEquals($allBasic['taxable'], $split['taxable']);
-        $this->assertEquals($allBasic['tax'], $split['tax']);
-        $this->assertEquals($allBasic['net'], $split['net']);
+
+        // So the person takes home more, and buys less pension with it.
+        $this->assertGreaterThan($allBasic['net'], $split['net']);
     }
 
     public function test_it_holds_for_daily_paid_staff_too(): void
     {
         $without = PayrollCalculator::forNonMonthlyCutoff(7000, 14000);
-        $with    = PayrollCalculator::forNonMonthlyCutoff(7000, 15800, allowance: 900);   // base carries the allowance
+        $with    = PayrollCalculator::forNonMonthlyCutoff(7000, 14000, allowance: 900, monthlyCompensation: 15800);
 
         $this->assertEquals(round($without['gross'] + 900, 2), $with['gross']);
+        $this->assertEquals($without['sss'], $with['sss'], 'SSS moved because of an allowance');
+        $this->assertEquals($without['philhealth'], $with['philhealth']);
         $this->assertGreaterThan($without['taxable'], $with['taxable']);
-        $this->assertGreaterThan($without['sss'], $with['sss'],
-            'the allowance was left out of the contribution base');
     }
 
     public function test_a_negative_allowance_cannot_be_used_to_shave_pay(): void
