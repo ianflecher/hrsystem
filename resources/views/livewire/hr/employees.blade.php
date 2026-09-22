@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Services\DocumentVault;
+use App\Services\SalaryHistory;
 use App\Support\WorkWeek;
 use Illuminate\Validation\Rule;
 
@@ -40,6 +41,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public string $hire_date = '';
     public $salary = '';
     public $allowance = '';
+    /** Why the pay changed. Only asked for when it actually has. */
+    public string $payChangeReason = '';
+    /** What they were on when the form opened, to spot a change. */
+    public $payWas = null;
     public string $status = 'active';
     public string $role = 'employee';
 
@@ -177,6 +182,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->department_id = $row->department_id ?? '';
         $this->hire_date     = $row->hire_date;
         $this->salary        = $row->salary;
+        $this->payWas        = ['salary' => (float) $row->salary, 'allowance' => (float) ($row->allowance ?? 0)];
         $this->allowance     = $row->allowance;
         $this->status        = $row->status;
         $this->role          = $row->role;
@@ -262,8 +268,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         // would collide where two unenrolled people should not.
         $biometricId = ($data['biometric_id'] ?? '') !== '' ? $data['biometric_id'] : null;
         $salary = $data['salary'] === '' || $data['salary'] === null ? 0 : $data['salary'];
-        // Kept apart from basic: an allowance is paid whole, outside tax and
-        // outside the contribution base, so it must not be folded into salary.
+        // Kept apart from basic because the two are charged on differently:
+        // SSS, PhilHealth and the 13th month read the basic alone, while tax
+        // and Pag-IBIG read the two together. Folding one into the other would
+        // quietly change all five.
         $allowance = $data['allowance'] === '' || $data['allowance'] === null ? 0 : $data['allowance'];
 
         if ($this->editingId) {
@@ -281,17 +289,33 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     'shift_start'   => $shiftStart,
                     'shift_end'     => $shiftEnd,
                     'rest_days'     => $restDays,
-                'immersion_until' => $immersionUntil,
                     'immersion_until' => $immersionUntil,
                     'biometric_id'  => $biometricId,
                     'department_id' => $departmentId,
                     'hire_date'     => $data['hire_date'],
                     'salary'        => $salary,
-                'allowance'     => $allowance,
                     'allowance'     => $allowance,
                     'status'        => $data['status'],
                     'updated_at'    => now(),
                 ]);
+
+                // A raise is logged, not overwritten - but only a raise. An
+                // employee with no history yet has not had a pay change just
+                // because somebody edited their shift, and writing a baseline
+                // entry dated today would claim their pay moved when it did
+                // not. The figures the form opened with are what decides it.
+                $payMoved = $this->payWas === null
+                    || round((float) $salary, 2) !== round((float) $this->payWas['salary'], 2)
+                    || round((float) $allowance, 2) !== round((float) $this->payWas['allowance'], 2);
+
+                if ($payMoved) {
+                    SalaryHistory::record(
+                        employeeId: $this->editingId,
+                        salary: (float) $salary,
+                        allowance: (float) $allowance,
+                        reason: $this->payChangeReason !== '' ? $this->payChangeReason : null,
+                    );
+                }
             });
 
             session()->flash('success', $data['full_name'].' updated.');
@@ -329,10 +353,20 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'department_id' => $departmentId,
                 'hire_date'     => $data['hire_date'],
                 'salary'        => $salary,
+                'allowance'     => $allowance,
                 'status'        => $data['status'],
                 'created_at'    => now(),
                 'updated_at'    => now(),
             ]);
+
+            // The pay they start on is the first entry in the log.
+            SalaryHistory::record(
+                employeeId: $employeeId,
+                salary: (float) $salary,
+                allowance: (float) $allowance,
+                effectiveFrom: $data['hire_date'],
+                reason: 'Starting pay',
+            );
 
             // If this person applied to us, the files they sent with their
             // application are the files HR would ask for again. They start in
@@ -497,6 +531,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->department_id = '';
         $this->hire_date     = now()->toDateString();
         $this->salary        = '';
+        $this->payChangeReason = '';
+        $this->payWas        = null;
         $this->allowance     = '';
         $this->status        = 'active';
         $this->role          = 'employee';
@@ -841,6 +877,32 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     </p>
                                 @endif
                             </div>
+
+                            {{-- A pay change is logged, so it is worth a line
+                                 saying why. Only shown once the figures have
+                                 actually moved, so an ordinary edit is not
+                                 asked to justify itself. --}}
+                            @php
+                                $payMoved = $payWas !== null && (
+                                    round((float) $salary, 2) !== round((float) $payWas['salary'], 2)
+                                    || round((float) $allowance, 2) !== round((float) $payWas['allowance'], 2)
+                                );
+                            @endphp
+                            @if ($payMoved)
+                                <div class="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                    <p class="text-sm text-amber-900">
+                                        Pay is changing from
+                                        <strong>&#8369;{{ number_format((float) $payWas['salary'] + (float) $payWas['allowance'], 2) }}</strong>
+                                        to
+                                        <strong>&#8369;{{ number_format((float) $salary + (float) $allowance, 2) }}</strong>
+                                        a month. This is recorded against their record.
+                                    </p>
+                                    <label class="form-label mt-2" for="payChangeReason">Reason</label>
+                                    <input id="payChangeReason" type="text" wire:model.live="payChangeReason"
+                                           class="form-input" maxlength="255"
+                                           placeholder="Annual increase, promotion, correction...">
+                                </div>
+                            @endif
                             <div>
                                 <label class="form-label" for="status">Status</label>
                                 <select id="status" wire:model="status" class="form-input">

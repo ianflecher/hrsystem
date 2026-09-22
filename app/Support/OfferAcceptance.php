@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Services\SalaryHistory;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -66,6 +67,22 @@ class OfferAcceptance
                     'user_id'    => $application->user_id,
                     'created_at' => now(),
                 ]);
+            }
+
+            // The terms they accepted are the first entry in their pay log,
+            // dated from the day they agreed to start rather than today.
+            $employeeId = DB::table('employees')->where('user_id', $application->user_id)->value('employee_id');
+
+            if ($employeeId) {
+                SalaryHistory::record(
+                    employeeId: (int) $employeeId,
+                    salary: (float) $offer->basic_salary,
+                    allowance: (float) $offer->allowance,
+                    payBasis: (string) $offer->pay_basis,
+                    dailyRate: $offer->daily_rate === null ? null : (float) $offer->daily_rate,
+                    effectiveFrom: $fields['hire_date'],
+                    reason: 'Accepted job offer',
+                );
             }
 
             // job_applications.notes is shown to the candidate on their own
