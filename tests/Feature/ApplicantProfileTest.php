@@ -685,6 +685,48 @@ class ApplicantProfileTest extends TestCase
         $this->assertNotNull($d->declared_at);
     }
 
+    /**
+     * Finishing the form used to do nothing visible. It now says so, and the
+     * only way out of the dialog is the application the form was for.
+     */
+    public function test_finishing_says_so_and_leads_to_the_application(): void
+    {
+        $user = $this->applicant();
+
+        $c = Volt::actingAs($user)->test('applicant.profile')
+            ->assertSet('showDone', false)
+            ->set('p.surname', 'Santos')
+            ->set('p.first_name', 'Mia')
+            ->set('d.has_medical_condition', '0')
+            ->set('d.takes_maintenance_medication', '0')
+            ->set('d.has_relative_employed', '0')
+            ->set('d.ever_terminated', '0')
+            ->set('d.ever_convicted', '0')
+            ->set('d.employed_elsewhere', '0')
+            ->set('d.has_employment_bond', '0')
+            ->set('d.was_union_member', '0')
+            ->set('d.can_start_immediately', '1');
+
+        $c->call('declare')
+            ->assertHasNoErrors()
+            ->assertSet('showDone', true)
+            ->assertSee("That's everything.", false);
+
+        $c->call('finish')->assertRedirect(route('applicant.index'));
+    }
+
+    /** A declaration that was refused must not claim to be finished. */
+    public function test_a_refused_declaration_does_not_open_the_dialog(): void
+    {
+        Volt::actingAs($this->applicant())
+            ->test('applicant.profile')
+            ->set('p.surname', 'Santos')
+            ->set('p.first_name', 'Mia')
+            ->call('declare')
+            ->assertHasErrors()
+            ->assertSet('showDone', false);
+    }
+
     /** A typo in a number field must not ask the browser to draw thousands of boxes. */
     public function test_the_sibling_count_is_capped(): void
     {

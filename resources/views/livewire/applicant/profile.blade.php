@@ -28,6 +28,9 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
     /** 'k12' (junior and senior high) or 'high_school' (the old curriculum). */
     public string $secondary = '';
+
+    /** Shown once the declaration is in: the form is done, and says so. */
+    public bool $showDone = false;
     public array $d = [];          // the disclosures
 
     /** Nobody has more than this many, and a number field invites typos. */
@@ -361,6 +364,12 @@ new #[Layout('components.layouts.applicant')] class extends Component
     public function back(): void
     {
         $this->step = max($this->step - 1, 1);
+    }
+
+    /** From the dialog: back to the application this was all for. */
+    public function finish()
+    {
+        return redirect()->route('applicant.index');
     }
 
     public function goToStep(int $step): void
@@ -731,7 +740,10 @@ new #[Layout('components.layouts.applicant')] class extends Component
             ->update(['declared_name' => $this->d['declared_name'], 'declared_at' => now()]);
 
         $this->d['declared_at'] = now();
-        session()->flash('success', 'Declaration recorded.');
+
+        // The last thing the form asks for. Saying so plainly beats leaving
+        // somebody on the final step wondering whether that was it.
+        $this->showDone = true;
     }
 }; ?>
 
@@ -811,4 +823,41 @@ new #[Layout('components.layouts.applicant')] class extends Component
             @endif
         </div>
     </div>
+
+    {{-- The end of the form says so. Without it somebody finishes the last
+         step, nothing visibly happens, and they are left wondering whether
+         that was it. No way to dismiss it back onto the form: there is
+         nothing left to do here, and the application is where they were
+         headed. --}}
+    @if ($showDone)
+        <div class="fixed inset-0 z-[70] overflow-y-auto" role="dialog" aria-modal="true"
+             aria-labelledby="done-title">
+            <div class="flex min-h-full items-center justify-center p-4">
+                <div class="fixed inset-0 bg-gray-900/50"></div>
+
+                <div class="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl text-center">
+                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+                        <i class="fas fa-check text-xl text-green-700"></i>
+                    </div>
+
+                    <h2 id="done-title" class="mt-4 text-lg font-semibold text-gray-900">
+                        That's everything.
+                    </h2>
+
+                    <p class="mt-2 text-sm text-gray-600">
+                        Your details are complete and signed. HR can read them alongside your
+                        application now &mdash; you do not need to send them separately.
+                    </p>
+
+                    <p class="mt-2 text-sm text-gray-600">
+                        You can come back and change any of it from <strong>My details</strong>.
+                    </p>
+
+                    <button type="button" wire:click="finish" class="btn-primary mt-5 w-full">
+                        Go to my application<i class="fas fa-arrow-right ml-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>
