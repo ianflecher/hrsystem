@@ -143,6 +143,12 @@ Route::middleware('auth')->group(function () {
     // The company profile an applicant sees once they are in: what the place
     // is, rather than only what their application status is.
     Volt::route('/applicant/inside', 'applicant.inside')->name('applicant.inside');
+
+    // The application form - the whole 201 file. Keyed to the account
+    // rather than to an application, so it is filled once and carries
+    // over when somebody is hired. Reachable by employees too, for the
+    // same reason: it becomes their record.
+    Volt::route('/applicant/profile', 'applicant.profile')->name('applicant.profile');
 });
 
 /*

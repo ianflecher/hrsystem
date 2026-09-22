@@ -1,0 +1,167 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Livewire\Volt\Volt;
+use Tests\TestCase;
+
+/**
+ * The application form - the 201 file somebody fills in once.
+ *
+ * It keys on user_id rather than on an application, so the thing worth testing
+ * is that everything survives a round trip and that the repeatable sets do not
+ * accumulate duplicates when saved twice.
+ */
+class ApplicantProfileTest extends TestCase
+{
+    private ?int $userId = null;
+
+    protected function tearDown(): void
+    {
+        if ($this->userId) {
+            foreach (['applicant_disclosures', 'applicant_relatives', 'applicant_references',
+                      'applicant_employment', 'applicant_education', 'applicant_profiles'] as $t) {
+                DB::table($t)->where('user_id', $this->userId)->delete();
+            }
+            DB::table('users')->where('user_id', $this->userId)->delete();
+        }
+
+        parent::tearDown();
+    }
+
+    private function applicant(): User
+    {
+        $n = random_int(100000, 999999);
+        $user = User::create([
+            'full_name' => 'Profile Test Person',
+            'username'  => "proftest{$n}",
+            'email'     => "proftest{$n}@example.test",
+            'password'  => 'Password!2345',
+            'role'      => 'employee',
+        ]);
+        $this->userId = $user->user_id;
+
+        return $user;
+    }
+
+    public function test_the_form_renders(): void
+    {
+        $this->actingAs($this->applicant())->get('/applicant/profile')->assertOk();
+    }
+
+    public function test_a_guest_is_turned_away(): void
+    {
+        $this->get('/applicant/profile')->assertRedirect('/applicant/login');
+    }
+
+    public function test_the_surname_and_first_name_are_required(): void
+    {
+        Volt::actingAs($this->applicant())
+            ->test('applicant.profile')
+            ->set('p.surname', '')
+            ->set('p.first_name', '')
+            ->call('save')
+            ->assertHasErrors(['p.surname', 'p.first_name']);
+    }
+
+    public function test_everything_survives_a_round_trip(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Dela Cruz')
+            ->set('p.first_name', 'Juan')
+            ->set('p.middle_name', 'N/A')
+            ->set('p.present_address', '12 Rizal St')
+            ->set('p.civil_status', 'married')
+            ->set('p.spouse_surname', 'Dela Cruz')
+            ->set('p.sss_number', '34-1234567-8')
+            ->set('p.emergency_name', 'Maria Dela Cruz')
+            ->set('edu.elementary.school_name', 'Tampaloc Elementary')
+            ->set('edu.high_school.school_name', 'Naga High School')
+            ->set('jobs.0.company_name', 'Previous Shop')
+            ->set('jobs.0.daily_salary', '610')
+            ->set('jobs.0.reason_for_leaving', 'Contract ended')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $profile = DB::table('applicant_profiles')->where('user_id', $user->user_id)->first();
+        $this->assertSame('Dela Cruz', $profile->surname);
+        $this->assertSame('married', $profile->civil_status);
+        $this->assertSame('34-1234567-8', $profile->sss_number);
+
+        // Only the levels that were filled in are stored.
+        $levels = DB::table('applicant_education')->where('user_id', $user->user_id)->pluck('level')->all();
+        sort($levels);
+        $this->assertSame(['elementary', 'high_school'], $levels);
+
+        $job = DB::table('applicant_employment')->where('user_id', $user->user_id)->first();
+        $this->assertSame('Previous Shop', $job->company_name);
+        $this->assertEquals(610, $job->daily_salary);
+    }
+
+    /**
+     * Saving twice must not double the repeatable sets. They are rewritten
+     * rather than matched up, and this is what proves it.
+     */
+    public function test_saving_twice_does_not_duplicate_the_repeatable_sets(): void
+    {
+        $user = $this->applicant();
+
+        $component = Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Santos')
+            ->set('p.first_name', 'Ana')
+            ->set('jobs.0.company_name', 'One Shop')
+            ->call('save');
+
+        $component->call('save')->call('save');
+
+        $this->assertSame(1, DB::table('applicant_employment')->where('user_id', $user->user_id)->count());
+    }
+
+    public function test_the_disclosures_are_recorded_and_declared(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Reyes')
+            ->set('p.first_name', 'Pedro')
+            ->set('d.has_medical_condition', '1')
+            ->set('d.medical_condition_details', 'Asthma')
+            ->set('d.ever_convicted', '0')
+            ->set('d.can_start_immediately', '0')
+            ->set('d.days_to_render', '30')
+            ->set('d.declared_name', 'Pedro Reyes')
+            ->call('declare')
+            ->assertHasNoErrors();
+
+        $d = DB::table('applicant_disclosures')->where('user_id', $user->user_id)->first();
+        $this->assertEquals(1, $d->has_medical_condition);
+        $this->assertSame('Asthma', $d->medical_condition_details);
+        $this->assertEquals(0, $d->ever_convicted, 'answered no must not be stored as unanswered');
+        $this->assertEquals(30, $d->days_to_render);
+        $this->assertNotNull($d->declared_at, 'the declaration was not stamped');
+    }
+
+    public function test_certifying_stamps_the_time(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Lim')
+            ->set('p.first_name', 'Grace')
+            ->set('p.certified_name', 'Grace Lim')
+            ->call('certify')
+            ->assertHasNoErrors();
+
+        $profile = DB::table('applicant_profiles')->where('user_id', $user->user_id)->first();
+        $this->assertSame('Grace Lim', $profile->certified_name);
+        $this->assertNotNull($profile->certified_at);
+    }
+}
