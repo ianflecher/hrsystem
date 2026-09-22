@@ -62,6 +62,7 @@ class ApplicantProfileTest extends TestCase
             ->set('p.date_of_birth', '1998-04-12')
             ->set('p.birthplace', 'Naga City')
             ->set('p.civil_status', 'single')
+            ->set('p.fathers_name', 'Jose Cruz')
             ->set('p.mothers_maiden_name', 'Reyes');
     }
 
@@ -461,9 +462,15 @@ class ApplicantProfileTest extends TestCase
             ->call('next')
             ->assertSet('step', 3);
 
-        $c->call('next')->assertHasErrors('edu')->assertSet('step', 3);
+        // Which secondary schooling comes first: the rows shown depend on it.
+        $c->call('next')->assertHasErrors('secondary')->assertSet('step', 3);
 
-        // Which level is theirs to say; any one of the six will do.
+        $c->set('secondary', 'high_school')
+            ->call('next')
+            ->assertHasErrors('edu')
+            ->assertSet('step', 3);
+
+        // Which level is theirs to say; any one of them will do.
         $c->set('edu.high_school.school_name', 'Naga High School')
             ->call('next')
             ->assertHasNoErrors()
@@ -484,6 +491,129 @@ class ApplicantProfileTest extends TestCase
         $this->assertNull(
             DB::table('applicant_disclosures')->where('user_id', $this->userId)->value('declared_at'),
             'it was signed with questions unanswered');
+    }
+
+    /**
+     * "required" only asks for something rather than nothing, and N/A is
+     * something. Everybody was born somewhere, so the word is not an answer.
+     */
+    public function test_na_typed_into_a_required_field_is_refused(): void
+    {
+        $c = $this->fillStepOne(Volt::actingAs($this->applicant())->test('applicant.profile'));
+
+        foreach (['N/A', 'n/a', 'none', 'wala', '-', 'x'] as $nothing) {
+            $c->set('p.birthplace', $nothing)
+                ->call('next')
+                ->assertHasErrors('p.birthplace')
+                ->assertSet('step', 1);
+        }
+
+        $c->set('p.birthplace', 'Naga City')->call('next')->assertSet('step', 2);
+    }
+
+    /**
+     * Everybody was raised by somebody. An adopted person has parents or a
+     * guardian, and either one answers this - but not neither.
+     */
+    public function test_both_parents_cannot_be_left_out(): void
+    {
+        // Both written off.
+        $this->fillStepOne(Volt::actingAs($this->applicant())->test('applicant.profile'))
+            ->set('p.fathers_name', 'N/A')
+            ->set('p.mothers_maiden_name', 'N/A')
+            ->call('next')
+            ->assertHasErrors('p.fathers_name')
+            ->assertSet('step', 1);
+
+        // Both simply left empty - the case a closure rule would have skipped.
+        $this->fillStepOne(Volt::actingAs($this->applicant())->test('applicant.profile'))
+            ->set('p.fathers_name', '')
+            ->set('p.mothers_maiden_name', '')
+            ->call('next')
+            ->assertHasErrors('p.fathers_name')
+            ->assertSet('step', 1);
+    }
+
+    public function test_one_parent_or_a_guardian_is_enough(): void
+    {
+        // A guardian goes in the first box.
+        $this->fillStepOne(Volt::actingAs($this->applicant())->test('applicant.profile'))
+            ->set('p.fathers_name', 'Tito Ramon')
+            ->set('p.mothers_maiden_name', 'N/A')
+            ->call('next')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->fillStepOne(Volt::actingAs($this->applicant())->test('applicant.profile'))
+            ->set('p.fathers_name', '')
+            ->set('p.mothers_maiden_name', 'Reyes')
+            ->call('next')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+    }
+
+    /**
+     * Junior high, senior high and plain high school were listed together, so
+     * everybody saw one row that was not theirs. Now the answer decides.
+     */
+    public function test_the_curriculum_decides_which_rows_are_shown(): void
+    {
+        $c = Volt::actingAs($this->applicant())->test('applicant.profile')->set('step', 3);
+
+        $c->set('secondary', 'k12');
+        $shown = array_keys($c->instance()->shownLevels());
+        $this->assertContains('junior_high', $shown);
+        $this->assertContains('senior_high', $shown);
+        $this->assertNotContains('high_school', $shown, 'K-12 should not be offered plain high school too');
+
+        $c->set('secondary', 'high_school');
+        $shown = array_keys($c->instance()->shownLevels());
+        $this->assertContains('high_school', $shown);
+        $this->assertNotContains('junior_high', $shown);
+        $this->assertNotContains('senior_high', $shown);
+
+        // Elementary and the rest are on both.
+        $this->assertContains('elementary', $shown);
+        $this->assertContains('tertiary', $shown);
+    }
+
+    /**
+     * Somebody who fills in K-12 and then says they took the old curriculum
+     * must not leave three secondary schools behind them in the record.
+     */
+    public function test_switching_curriculum_clears_what_no_longer_applies(): void
+    {
+        $user = $this->applicant();
+
+        $c = $this->fillStepOne(Volt::actingAs($user)->test('applicant.profile'))
+            ->set('secondary', 'k12')
+            ->set('edu.junior_high.school_name', 'Naga JHS')
+            ->set('edu.senior_high.school_name', 'Naga SHS');
+
+        $c->set('secondary', 'high_school')
+            ->set('edu.high_school.school_name', 'Naga High School')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $levels = DB::table('applicant_education')->where('user_id', $user->user_id)->pluck('level')->all();
+
+        $this->assertContains('high_school', $levels);
+        $this->assertNotContains('junior_high', $levels, 'the K-12 rows were left behind');
+        $this->assertNotContains('senior_high', $levels);
+    }
+
+    /** The answer is remembered, rather than asked again on every visit. */
+    public function test_the_curriculum_is_remembered(): void
+    {
+        $user = $this->applicant();
+
+        $this->fillStepOne(Volt::actingAs($user)->test('applicant.profile'))
+            ->set('secondary', 'k12')
+            ->set('edu.senior_high.school_name', 'Naga SHS')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        Volt::actingAs($user)->test('applicant.profile')->assertSet('secondary', 'k12');
     }
 
     /** A typo in a number field must not ask the browser to draw thousands of boxes. */

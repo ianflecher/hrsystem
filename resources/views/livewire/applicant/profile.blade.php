@@ -25,6 +25,9 @@ new #[Layout('components.layouts.applicant')] class extends Component
     public array $refs = [];       // character references, optional
     public array $relatives = [];  // relatives working here
     public array $siblings = [];   // one box per sibling they say they have
+
+    /** 'k12' (junior and senior high) or 'high_school' (the old curriculum). */
+    public string $secondary = '';
     public array $d = [];          // the disclosures
 
     /** Nobody has more than this many, and a number field invites typos. */
@@ -74,7 +77,6 @@ new #[Layout('components.layouts.applicant')] class extends Component
             'date_of_birth'     => 'date of birth',
             'birthplace'        => 'birthplace',
             'civil_status'      => 'civil status',
-            'mothers_maiden_name' => "mother's maiden name",
         ],
         2 => [
             'emergency_name'         => 'emergency contact name',
@@ -83,6 +85,20 @@ new #[Layout('components.layouts.applicant')] class extends Component
             'emergency_address'      => 'their address',
         ],
     ];
+
+    /**
+     * Ways of writing "nothing here". Accepted in an optional box, refused in
+     * a required one: N/A is not a birthplace.
+     */
+    private const NA_WORDS = [
+        'n/a', 'na', 'n.a.', 'n.a', 'n\a', 'none', 'nil', 'wala', 'not applicable',
+        '-', '--', '.', 'x',
+    ];
+
+    private function saysNothing(mixed $value): bool
+    {
+        return in_array(mb_strtolower(trim((string) $value)), self::NA_WORDS, true);
+    }
 
     /**
      * The form tells people to write N/A where something does not apply to
@@ -137,15 +153,50 @@ new #[Layout('components.layouts.applicant')] class extends Component
         'separated' => 'Separated',
     ];
 
-    /** Both shapes of secondary school: K-12 split, and plain high school. */
+    /**
+     * Both shapes of secondary school. Which of the two a person sees depends
+     * on the one question asked above them, so nobody is shown junior high,
+     * senior high and plain high school all at once and left to guess which
+     * rows are theirs.
+     */
     public array $levels = [
         'elementary'  => 'Elementary',
         'junior_high' => 'Junior high school',
         'senior_high' => 'Senior high school',
-        'high_school' => 'High school (if not split into junior and senior)',
+        'high_school' => 'High school',
         'vocational'  => 'Vocational',
         'tertiary'    => 'College / tertiary',
     ];
+
+    /** The levels on screen, given the answer to that question. */
+    public function shownLevels(): array
+    {
+        $hide = match ($this->secondary) {
+            'k12'         => ['high_school'],
+            'high_school' => ['junior_high', 'senior_high'],
+            default       => ['junior_high', 'senior_high', 'high_school'],
+        };
+
+        return array_diff_key($this->levels, array_flip($hide));
+    }
+
+    /**
+     * Switching curriculum empties the rows that no longer apply, so a person
+     * who fills in K-12 and then says they took plain high school does not
+     * leave three secondary schools behind them in the record.
+     */
+    public function updatedSecondary(): void
+    {
+        $drop = match ($this->secondary) {
+            'k12'         => ['high_school'],
+            'high_school' => ['junior_high', 'senior_high'],
+            default       => [],
+        };
+
+        foreach ($drop as $level) {
+            $this->edu[$level] = ['school_name' => '', 'course' => '', 'year_from' => '', 'year_to' => ''];
+        }
+    }
 
     public function mount(): void
     {
@@ -173,6 +224,14 @@ new #[Layout('components.layouts.applicant')] class extends Component
                 'year_to'     => $e->year_to ?? '',
             ];
         }
+
+        $filled = fn (string $level) => trim((string) ($this->edu[$level]['school_name'] ?? '')) !== '';
+
+        $this->secondary = match (true) {
+            $filled('high_school') => 'high_school',
+            $filled('junior_high') || $filled('senior_high') => 'k12',
+            default => '',
+        };
 
         $this->jobs = DB::table('applicant_employment')->where('user_id', $id)
             ->orderBy('sort_order')->get()->map(fn ($j) => (array) $j)->all();
@@ -244,8 +303,25 @@ new #[Layout('components.layouts.applicant')] class extends Component
         // validating empties the error bag, so an error added earlier would be
         // wiped on the way past. Saving anyway is harmless - the step is kept,
         // it just does not advance.
+        if ($this->step === 3 && $this->secondary === '') {
+            $this->addError('secondary', 'Please say which secondary schooling you took.');
+
+            return;
+        }
+
         if ($this->step === 3 && ! $this->hasSchooling()) {
             $this->addError('edu', 'Please fill in at least one level of schooling.');
+
+            return;
+        }
+
+        // Somebody raised them. An adopted person has parents or a guardian,
+        // and either one answers this - but not neither. Checked here rather
+        // than as a rule because a closure rule is skipped when the value is
+        // empty, which is exactly the case being caught.
+        if ($this->step === 1 && ! $this->hasAParent()) {
+            $this->addError('p.fathers_name',
+                "Please give at least one: your father's name, your mother's maiden name, or your guardian's.");
 
             return;
         }
@@ -264,9 +340,17 @@ new #[Layout('components.layouts.applicant')] class extends Component
         $names = [];
 
         foreach (self::REQUIRED[$step] ?? [] as $column => $label) {
-            $rules['p.'.$column] = ['required'];
+            // "required" only asks for something rather than nothing, and N/A
+            // is something. These are all facts every person has, so a box
+            // holding the word N/A is still an unanswered box.
+            $rules['p.'.$column] = ['required', function ($attribute, $value, $fail) use ($label) {
+                if ($this->saysNothing($value)) {
+                    $fail('Please give your actual '.$label.'.');
+                }
+            }];
             $names['p.'.$column] = $label;
         }
+
 
         if ($rules) {
             $this->validate($rules, [], $names);
@@ -282,6 +366,18 @@ new #[Layout('components.layouts.applicant')] class extends Component
     public function goToStep(int $step): void
     {
         $this->step = max(1, min($step, count($this->steps)));
+    }
+
+    /** Either parent, or a guardian in their place - but not nobody. */
+    private function hasAParent(): bool
+    {
+        foreach ([$this->p['fathers_name'] ?? '', $this->p['mothers_maiden_name'] ?? ''] as $name) {
+            if (trim((string) $name) !== '' && ! $this->saysNothing($name)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Everybody went to school somewhere; which level is theirs to say. */

@@ -110,16 +110,23 @@
             </div>
         @endif
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <label class="form-label" for="fathers_name">Father's name</label>
-                <input id="fathers_name" type="text" wire:model="p.fathers_name" class="form-input" placeholder="N/A if none">
+        {{-- Either one will do, but not neither: everybody was raised by
+             somebody, and an adopted person has parents or a guardian. --}}
+        <div>
+            <span class="form-label">Parents or guardian <span class="text-red-600">*</span>
+                <span class="font-normal text-gray-500">&mdash; at least one</span></span>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1">
+                <div>
+                    <input id="fathers_name" type="text" wire:model="p.fathers_name" class="form-input"
+                           placeholder="Father's name, or guardian's">
+                </div>
+                <div>
+                    <input id="mothers_maiden_name" type="text" wire:model="p.mothers_maiden_name" class="form-input"
+                           placeholder="Mother's maiden name">
+                </div>
             </div>
-            <div>
-                <label class="form-label" for="mothers_maiden_name">Mother's maiden name <span class="text-red-600">*</span></label>
-                <input id="mothers_maiden_name" type="text" wire:model="p.mothers_maiden_name" class="form-input">
-                @error('p.mothers_maiden_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-            </div>
+            @error('p.fathers_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+            @error('p.mothers_maiden_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
         </div>
 
         {{-- How many first, then that many boxes. Fixed slots either left empty
