@@ -67,12 +67,6 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
             </div>
 
             @include('partials.careers-clip', ['clipSlot' => 2])
-
-            <p style="margin: 20px 0 0">
-                <a href="{{ route('careers.inside') }}" class="path__go">
-                    See every workstation <i class="fas fa-arrow-right"></i>
-                </a>
-            </p>
         </div>
     </section>
 
