@@ -18,8 +18,9 @@ class HrApplicationWorkflowTest extends TestCase
     protected function tearDown(): void
     {
         foreach ($this->createdUserIds as $id) {
-            DB::table('job_applications')->where('user_id', $id)->update(['interviewer_id' => null]);
-            DB::table('job_applications')->where('interviewer_id', $id)->update(['interviewer_id' => null]);
+            // Interviews cascade with the application, but one where this
+            // person was the interviewer hangs off somebody else's.
+            DB::table('application_interviews')->where('interviewer_id', $id)->delete();
             DB::table('application_documents')->where('user_id', $id)->delete();
             DB::table('job_applications')->where('user_id', $id)->delete();
             DB::table('employees')->where('user_id', $id)->delete();
@@ -49,10 +50,14 @@ class HrApplicationWorkflowTest extends TestCase
             ->call('saveInterviewSchedule')
             ->assertHasNoErrors();
 
-        $row = DB::table('job_applications')->where('application_id', $applicationId)->first();
-        $this->assertSame('scheduled', $row->interview_status);
+        // The interview is its own row now, so a second round can be added
+        // later without writing over this one.
+        $row = DB::table('application_interviews')->where('application_id', $applicationId)->first();
+        $this->assertNotNull($row, 'scheduling should create an interview');
+        $this->assertSame('scheduled', $row->status);
+        $this->assertSame(1, (int) $row->round);
         $this->assertSame((int) $hr->user_id, (int) $row->interviewer_id);
-        $this->assertStringContainsString('14:30', $row->interview_date);
+        $this->assertStringContainsString('14:30', $row->scheduled_at);
     }
 
     public function test_hiring_an_applicant_promotes_them_to_employee(): void

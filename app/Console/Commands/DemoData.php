@@ -714,11 +714,6 @@ class DemoData extends Command
                     'years_experience' => random_int(0, 12),
                     'status'           => $status,
                     'application_date' => today()->subDays(random_int(1, 60))->toDateString(),
-                    'interview_date'   => $interviewed ? today()->addDays(random_int(1, 10))->toDateString() : null,
-                    // Not nullable, and defaulted to in_person by the schema, so
-                    // an uninterviewed applicant gets the default rather than null.
-                    'interview_type'   => $interviewed ? ['in_person', 'phone', 'video'][random_int(0, 2)] : 'in_person',
-                    'interview_status' => $interviewed ? 'scheduled' : null,
                     'notes'            => 'Demo application, for testing the hiring screens.',
                     'resume_data'      => json_encode([
                         'filename' => 'resume.txt',
@@ -727,6 +722,21 @@ class DemoData extends Command
                     'created_at'       => now(),
                     'updated_at'       => now(),
                 ]);
+
+                // Interviews are their own rows now, so a demo applicant who
+                // got that far has one rather than a set of columns.
+                if ($interviewed) {
+                    DB::table('application_interviews')->insert([
+                        'application_id' => $applicationId,
+                        'interviewer_id' => null,
+                        'round'          => 1,
+                        'scheduled_at'   => today()->addDays(random_int(1, 10))->setTime(random_int(9, 16), 0),
+                        'type'           => ['in_person', 'phone', 'video'][random_int(0, 2)],
+                        'status'         => 'scheduled',
+                        'created_at'     => now(),
+                        'updated_at'     => now(),
+                    ]);
+                }
 
                 // Every third one also uploaded a file, so the vault has
                 // something to carry over when they are hired.

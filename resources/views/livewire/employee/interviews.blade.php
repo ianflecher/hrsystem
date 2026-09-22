@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\DB;
  */
 new #[Layout('components.layouts.employeeland')] class extends Component
 {
-    /** Which interview is open, by application id. Null closes the panel. */
+    /** Which interview is open, by interview id. Null closes the panel. */
     public ?int $openId = null;
 
     public string $recommendation = '';
@@ -53,38 +53,45 @@ new #[Layout('components.layouts.employeeland')] class extends Component
         'undecided'     => 'Undecided',
     ];
 
-    /** @return \Illuminate\Support\Collection<int, object> */
+    /**
+     * The rounds given to this person - one row each, so being asked back for
+     * a second interview is two entries rather than one overwriting the other.
+     *
+     * @return \Illuminate\Support\Collection<int, object>
+     */
     public function interviews()
     {
-        return DB::table('job_applications as ja')
-            ->select('ja.*', 'u.full_name', 'u.email')
+        return DB::table('application_interviews as ai')
+            ->select(
+                'ai.*',
+                'ja.application_id', 'ja.position_applied', 'ja.status as application_status',
+                'u.full_name', 'u.email', 'u.user_id as applicant_user_id',
+            )
+            ->join('job_applications as ja', 'ai.application_id', '=', 'ja.application_id')
             ->join('users as u', 'ja.user_id', '=', 'u.user_id')
-            ->where('ja.interviewer_id', Auth::id())
-            ->whereNotNull('ja.interview_date')
-            ->where(fn ($q) => $q->whereNull('ja.interview_status')
-                ->orWhere('ja.interview_status', '!=', 'cancelled'))
-            ->orderBy('ja.interview_date')
+            ->where('ai.interviewer_id', Auth::id())
+            ->where('ai.status', '!=', 'cancelled')
+            ->orderBy('ai.scheduled_at')
             ->get();
     }
 
     /** Still to happen, and not yet answered: what the screen leads with. */
     public function upcomingCount(): int
     {
-        return $this->interviews()
-            ->filter(fn ($i) => $i->interviewer_recommendation === null)
-            ->count();
+        return $this->interviews()->filter(fn ($i) => $i->recommendation === null)->count();
     }
 
-    public function open(int $applicationId): void
+    public function open(int $interviewId): void
     {
-        $row = $this->mine($applicationId);
+        $row = $this->mine($interviewId);
 
-        $this->openId = $applicationId;
-        $this->recommendation = (string) ($row->interviewer_recommendation ?? '');
+        $this->openId = $interviewId;
+        $this->recommendation = (string) ($row->recommendation ?? '');
         $this->notes = (string) ($row->recommendation_notes ?? '');
         $this->resetValidation();
 
-        $this->loadProfile((int) $row->user_id);
+        $applicantId = DB::table('job_applications')->where('application_id', $row->application_id)->value('user_id');
+        $this->loadProfile((int) $applicantId);
     }
 
     public function close(): void
@@ -104,13 +111,15 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             'notes'          => ['nullable', 'string', 'max:2000'],
         ], [], ['recommendation' => 'recommendation']);
 
-        DB::table('job_applications')->where('application_id', $row->application_id)->update([
-            'interviewer_recommendation' => $this->recommendation,
-            'recommendation_notes'       => $this->notes === '' ? null : $this->notes,
-            'recommended_at'             => now(),
-            // The interview has plainly happened if there is a verdict on it.
-            'interview_status'           => 'completed',
-            'updated_at'                 => now(),
+        // Against this round, not against the application - so a later round
+        // by somebody else cannot end up wearing this person's words.
+        DB::table('application_interviews')->where('interview_id', $row->interview_id)->update([
+            'recommendation'       => $this->recommendation,
+            'recommendation_notes' => $this->notes === '' ? null : $this->notes,
+            'recommended_at'       => now(),
+            // It has plainly happened if there is a verdict on it.
+            'status'               => 'completed',
+            'updated_at'           => now(),
         ]);
 
         $this->close();
@@ -124,10 +133,10 @@ new #[Layout('components.layouts.employeeland')] class extends Component
      * from the browser - otherwise a supervisor could read and write any
      * application by changing a number.
      */
-    private function mine(int $applicationId): object
+    private function mine(int $interviewId): object
     {
-        $row = DB::table('job_applications')
-            ->where('application_id', $applicationId)
+        $row = DB::table('application_interviews')
+            ->where('interview_id', $interviewId)
             ->where('interviewer_id', Auth::id())
             ->first();
 
@@ -189,22 +198,29 @@ new #[Layout('components.layouts.employeeland')] class extends Component
         <div class="space-y-4">
             @foreach ($rows as $row)
                 @php
-                    $when = \Illuminate\Support\Carbon::parse($row->interview_date);
-                    $done = $row->interviewer_recommendation !== null;
+                    $when = \Illuminate\Support\Carbon::parse($row->scheduled_at);
+                    $done = $row->recommendation !== null;
                     $past = $when->isPast();
                 @endphp
 
-                <div class="bg-white rounded-xl border border-gray-200 shadow-sm" wire:key="iv-{{ $row->application_id }}">
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm" wire:key="iv-{{ $row->interview_id }}">
                     <div class="px-5 py-4 flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <div class="flex items-center gap-2">
                                 <h2 class="font-semibold text-gray-900">{{ $row->full_name }}</h2>
+                                {{-- Which round this is. A candidate asked back is two
+                                     entries now, not one written over the other. --}}
+                                @if ($row->round > 1)
+                                    <span class="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                                        Round {{ $row->round }}
+                                    </span>
+                                @endif
                                 @if ($done)
                                     <span class="text-xs px-2 py-0.5 rounded-full
-                                        {{ $row->interviewer_recommendation === 'recommend' ? 'bg-green-100 text-green-800' : '' }}
-                                        {{ $row->interviewer_recommendation === 'not_recommend' ? 'bg-red-100 text-red-800' : '' }}
-                                        {{ $row->interviewer_recommendation === 'undecided' ? 'bg-gray-100 text-gray-700' : '' }}">
-                                        {{ $verdicts[$row->interviewer_recommendation] }}
+                                        {{ $row->recommendation === 'recommend' ? 'bg-green-100 text-green-800' : '' }}
+                                        {{ $row->recommendation === 'not_recommend' ? 'bg-red-100 text-red-800' : '' }}
+                                        {{ $row->recommendation === 'undecided' ? 'bg-gray-100 text-gray-700' : '' }}">
+                                        {{ $verdicts[$row->recommendation] }}
                                     </span>
                                 @elseif ($past)
                                     <span class="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
@@ -218,34 +234,48 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         <div class="text-sm text-right">
                             <p class="font-medium text-gray-900">{{ $when->format('D j M Y, g:ia') }}</p>
                             <p class="text-gray-500">
-                                {{ ucfirst(str_replace('_', ' ', (string) $row->interview_type)) }}
+                                {{ ucfirst(str_replace('_', ' ', (string) $row->type)) }}
                                 @if (! $past) &middot; {{ $when->diffForHumans() }} @endif
                             </p>
                         </div>
                     </div>
 
+                    {{-- What they said last time, without having to open it again. --}}
+                    @if ($done && trim((string) $row->recommendation_notes) !== '')
+                        <div class="px-5 pb-3 -mt-1">
+                            <div class="rounded bg-gray-50 p-3 text-sm text-gray-700">
+                                {{ $row->recommendation_notes }}
+                                @if ($row->recommended_at)
+                                    <span class="block text-xs text-gray-500 mt-1">
+                                        Recorded {{ \Illuminate\Support\Carbon::parse($row->recommended_at)->format('j M Y, g:ia') }}
+                                    </span>
+                                @endif
+                            </div>
+                        </div>
+                    @endif
+
                     {{-- HR's own note when they booked it - what they want asked. --}}
-                    @if (trim((string) $row->interview_notes) !== '')
+                    @if (trim((string) $row->hr_notes) !== '')
                         <div class="px-5 pb-3 -mt-1">
                             <p class="text-sm text-gray-600">
-                                <span class="text-gray-400">From HR:</span> {{ $row->interview_notes }}
+                                <span class="text-gray-400">From HR:</span> {{ $row->hr_notes }}
                             </p>
                         </div>
                     @endif
 
                     <div class="px-5 py-3 border-t border-gray-100 flex flex-wrap gap-2">
-                        @if ($openId === $row->application_id)
+                        @if ($openId === $row->interview_id)
                             <button type="button" wire:click="close" class="btn-secondary text-sm">
                                 <i class="fas fa-xmark mr-2"></i>Close
                             </button>
                         @else
-                            <button type="button" wire:click="open({{ $row->application_id }})" class="btn-primary text-sm">
+                            <button type="button" wire:click="open({{ $row->interview_id }})" class="btn-primary text-sm">
                                 <i class="fas fa-id-card mr-2"></i>{{ $done ? 'View and revise' : 'Open details' }}
                             </button>
                         @endif
                     </div>
 
-                    @if ($openId === $row->application_id)
+                    @if ($openId === $row->interview_id)
                         <div class="px-5 pb-5 border-t border-gray-100 pt-4">
                             {{-- Health, medication and criminal history are not shown: they
                                  stay with HR. Nor is the print link, which is theirs. --}}
@@ -272,8 +302,8 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                 @error('recommendation') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
 
                                 <div class="mt-3">
-                                    <label class="form-label" for="notes-{{ $row->application_id }}">Notes</label>
-                                    <textarea id="notes-{{ $row->application_id }}" wire:model="notes" rows="3"
+                                    <label class="form-label" for="notes-{{ $row->interview_id }}">Notes</label>
+                                    <textarea id="notes-{{ $row->interview_id }}" wire:model="notes" rows="3"
                                               class="form-input" placeholder="How the interview went, and why."></textarea>
                                     @error('notes') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                                 </div>

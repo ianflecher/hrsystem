@@ -58,20 +58,26 @@ new #[Layout('components.layouts.applicant')] class extends Component
                 ->get()
                 ->toArray();
             
-            // Get interview details if exists
-            if ($this->application->interview_date) {
-                $this->interviewDetails = DB::table('job_applications as ja')
-                    ->select(
-                        'ja.*',
-                        'interviewer.full_name as interviewer_name',
-                        'interviewer.email as interviewer_email',
-                        DB::raw('DATE(ja.interview_date) as interview_date_only'),
-                        DB::raw('TIME(ja.interview_date) as interview_time_only')
-                    )
-                    ->leftJoin('users as interviewer', 'ja.interviewer_id', '=', 'interviewer.user_id')
-                    ->where('ja.application_id', $this->application->application_id)
-                    ->first();
-            }
+            // The interview they are next due at. Several rounds can exist
+            // now, and the one worth showing somebody is the next live one -
+            // or the most recent, once they have all happened.
+            $this->interviewDetails = DB::table('application_interviews as ai')
+                ->select(
+                    'ai.*',
+                    'ai.scheduled_at as interview_date',
+                    'ai.type as interview_type',
+                    'ai.status as interview_status',
+                    'interviewer.full_name as interviewer_name',
+                    'interviewer.email as interviewer_email',
+                    DB::raw('DATE(ai.scheduled_at) as interview_date_only'),
+                    DB::raw('TIME(ai.scheduled_at) as interview_time_only')
+                )
+                ->leftJoin('users as interviewer', 'ai.interviewer_id', '=', 'interviewer.user_id')
+                ->where('ai.application_id', $this->application->application_id)
+                ->where('ai.status', '!=', 'cancelled')
+                ->orderByRaw('ai.scheduled_at >= NOW() DESC')
+                ->orderBy('ai.scheduled_at')
+                ->first();
         }
     }
     

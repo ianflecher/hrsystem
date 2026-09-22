@@ -28,6 +28,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
      * email and a position - while everything HR actually reviews sat in
      * applicant_profiles and was never read by anything.
      */
+    /** Every interview this application has had, in order. */
+    public array $rounds = [];
+
     public $profile = null;
     public array $education = [];
     public array $employment = [];
@@ -56,6 +59,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public $interviewTime = '';
     public $interviewNotes = '';
     public $interviewerId = '';
+
+    /** Set when an existing round is being moved rather than a new one added. */
+    public $editingInterviewId = null;
     public $interviewType = 'in_person';
     
     // Interview results
@@ -88,11 +94,13 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'ja.years_experience',
                 'ja.application_date',
                 'ja.status',
-                'ja.interview_date',
-                'ja.interview_type',
-                'ja.interviewer_id',
-                'ja.interview_notes',
-                'ja.interview_status',
+                'ai.scheduled_at as interview_date',
+                'ai.type as interview_type',
+                'ai.interviewer_id',
+                'ai.hr_notes as interview_notes',
+                'ai.status as interview_status',
+                'ai.round as interview_round',
+                'ai.recommendation as interviewer_recommendation',
                 'ja.notes',
                 'ja.resume_data',
                 'ja.created_at',
@@ -105,8 +113,13 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 DB::raw('(SELECT COUNT(*) FROM job_applications ja2 WHERE ja2.user_id = ja.user_id) as total_applications')
             )
             ->join('users as u', 'ja.user_id', '=', 'u.user_id')
-            ->leftJoin('users as interviewer', 'ja.interviewer_id', '=', 'interviewer.user_id')
-            ->orderBy('ja.interview_date', 'desc')
+            ->leftJoin('application_interviews as ai', 'ai.interview_id', '=', DB::raw(
+                '(SELECT interview_id FROM application_interviews x
+                    WHERE x.application_id = ja.application_id AND x.status != "cancelled"
+                    ORDER BY x.round DESC, x.scheduled_at DESC LIMIT 1)'
+            ))
+            ->leftJoin('users as interviewer', 'ai.interviewer_id', '=', 'interviewer.user_id')
+            ->orderBy('ai.scheduled_at', 'desc')
             ->orderBy('ja.application_date', 'desc');
 
         if ($this->filters['status']) {
@@ -114,7 +127,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 $query->whereIn('ja.status', ['pending', 'reviewed', 'shortlisted', 'rejected']);
             } elseif ($this->filters['status'] === 'interview_scheduled') {
                 $query->where('ja.status', 'reviewed')
-                      ->whereNotNull('ja.interview_date');
+                      ->whereNotNull('ai.scheduled_at');
             } else {
                 $query->where('ja.status', $this->filters['status']);
             }
@@ -194,8 +207,14 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $stats = DB::table('job_applications')
             ->select(
                 DB::raw('COUNT(CASE WHEN status = "pending" THEN 1 END) as pending_count'),
-                DB::raw('COUNT(CASE WHEN status = "reviewed" AND interview_date IS NOT NULL THEN 1 END) as interview_scheduled_count'),
-                DB::raw('COUNT(CASE WHEN status = "reviewed" AND interview_date IS NULL THEN 1 END) as reviewed_count'),
+                DB::raw('COUNT(CASE WHEN status = "reviewed" AND EXISTS (
+                    SELECT 1 FROM application_interviews ai
+                    WHERE ai.application_id = job_applications.application_id
+                      AND ai.status != "cancelled") THEN 1 END) as interview_scheduled_count'),
+                DB::raw('COUNT(CASE WHEN status = "reviewed" AND NOT EXISTS (
+                    SELECT 1 FROM application_interviews ai
+                    WHERE ai.application_id = job_applications.application_id
+                      AND ai.status != "cancelled") THEN 1 END) as reviewed_count'),
                 DB::raw('COUNT(CASE WHEN status = "shortlisted" THEN 1 END) as shortlisted_count'),
                 DB::raw('COUNT(CASE WHEN status = "rejected" THEN 1 END) as rejected_count'),
                 DB::raw('COUNT(CASE WHEN status = "hired" THEN 1 END) as hired_count'),
@@ -217,18 +236,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public function viewApplication($applicationId)
     {
         $this->selectedApplication = DB::table('job_applications as ja')
-            ->select(
-                'ja.*',
-                'u.full_name',
-                'u.username',
-                'u.email',
-                'u.role',
-                'interviewer.full_name as interviewer_name'
-            )
+            ->select('ja.*', 'u.full_name', 'u.username', 'u.email', 'u.role')
             ->join('users as u', 'ja.user_id', '=', 'u.user_id')
-            ->leftJoin('users as interviewer', 'ja.interviewer_id', '=', 'interviewer.user_id')
             ->where('ja.application_id', $applicationId)
             ->first();
+
+        $this->rounds = $this->roundsFor($applicationId);
 
         $this->loadProfile($this->selectedApplication->user_id ?? null);
 
@@ -240,6 +253,24 @@ new #[Layout('components.layouts.humanresource')] class extends Component
      * rather than on this application - so it is the same record whether they
      * applied once or three times.
      */
+    /**
+     * The rounds an application has been through, oldest first, each with who
+     * ran it and what they made of it.
+     *
+     * @return list<object>
+     */
+    private function roundsFor(int $applicationId): array
+    {
+        return DB::table('application_interviews as ai')
+            ->select('ai.*', 'u.full_name as interviewer_name', 'u.role as interviewer_role')
+            ->leftJoin('users as u', 'ai.interviewer_id', '=', 'u.user_id')
+            ->where('ai.application_id', $applicationId)
+            ->orderBy('ai.round')
+            ->orderBy('ai.scheduled_at')
+            ->get()
+            ->all();
+    }
+
     private function loadProfile(?int $userId): void
     {
         $this->profile = null;
@@ -310,10 +341,12 @@ public function updateApplicationStatus($applicationId, $status)
     ];
 
     if ($status !== 'reviewed') {
-        $updates['interview_date'] = null;
-        $updates['interview_notes'] = null;
-        $updates['interviewer_id'] = null;
-        $updates['interview_status'] = null;
+        // Cancelled, not deleted. The rounds happened, and one already given a
+        // recommendation is a record worth keeping.
+        DB::table('application_interviews')
+            ->where('application_id', $applicationId)
+            ->where('status', 'scheduled')
+            ->update(['status' => 'cancelled', 'updated_at' => now()]);
     }
 
     DB::table('job_applications')
@@ -395,25 +428,39 @@ public function updateApplicationStatus($applicationId, $status)
         session()->flash('success', 'Application marked as reviewed. You can now schedule an interview.');
     }
 
-    public function openInterviewModal($applicationId)
+    /**
+     * Book a round. Called with an interview id to move one that exists, and
+     * without to add the next - which is how a second interview is arranged
+     * without disturbing the first.
+     */
+    public function openInterviewModal($applicationId, $interviewId = null)
     {
         $this->selectedApplication = DB::table('job_applications')
             ->where('application_id', $applicationId)
             ->first();
 
-        $this->interviewDate = date('Y-m-d', strtotime('+2 days'));
-        $this->interviewTime = '10:00';
-        $this->interviewNotes = '';
-        $this->interviewerId = '';
-        $this->interviewType = 'in_person';
+        $this->rounds = $this->roundsFor($applicationId);
+        $this->editingInterviewId = $interviewId;
+        $this->resetValidation();
 
-        if ($this->selectedApplication->interview_date) {
-            $interviewDateTime = \Carbon\Carbon::parse($this->selectedApplication->interview_date);
-            $this->interviewDate = $interviewDateTime->format('Y-m-d');
-            $this->interviewTime = $interviewDateTime->format('H:i');
-            $this->interviewNotes = $this->selectedApplication->interview_notes ?? '';
-            $this->interviewerId = $this->selectedApplication->interviewer_id ?? '';
-            $this->interviewType = $this->selectedApplication->interview_type ?? 'in_person';
+        $existing = $interviewId
+            ? DB::table('application_interviews')->where('interview_id', $interviewId)
+                ->where('application_id', $applicationId)->first()
+            : null;
+
+        if ($existing) {
+            $when = \Carbon\Carbon::parse($existing->scheduled_at);
+            $this->interviewDate = $when->format('Y-m-d');
+            $this->interviewTime = $when->format('H:i');
+            $this->interviewNotes = $existing->hr_notes ?? '';
+            $this->interviewerId = $existing->interviewer_id ?? '';
+            $this->interviewType = $existing->type ?? 'in_person';
+        } else {
+            $this->interviewDate = date('Y-m-d', strtotime('+2 days'));
+            $this->interviewTime = '10:00';
+            $this->interviewNotes = '';
+            $this->interviewerId = '';
+            $this->interviewType = 'in_person';
         }
 
         $this->showInterviewModal = true;
@@ -428,39 +475,66 @@ public function updateApplicationStatus($applicationId, $status)
             'interviewType' => 'required|in:phone,video,in_person,technical,hr',
         ]);
 
-        $interviewDateTime = $this->interviewDate . ' ' . $this->interviewTime . ':00';
+        $applicationId = $this->selectedApplication->application_id;
+        $when = $this->interviewDate.' '.$this->interviewTime.':00';
 
-        DB::table('job_applications')
-            ->where('application_id', $this->selectedApplication->application_id)
-            ->update([
-                'interview_date' => $interviewDateTime,
-                'interview_notes' => $this->interviewNotes,
-                'interviewer_id' => $this->interviewerId,
-                'interview_type' => $this->interviewType,
-                'interview_status' => 'scheduled',
-                'updated_at' => now()
+        $fields = [
+            'interviewer_id' => $this->interviewerId,
+            'scheduled_at'   => $when,
+            'type'           => $this->interviewType,
+            'hr_notes'       => $this->interviewNotes ?: null,
+            'updated_at'     => now(),
+        ];
+
+        if ($this->editingInterviewId) {
+            // Moving a round that already exists: same round, new details.
+            DB::table('application_interviews')
+                ->where('interview_id', $this->editingInterviewId)
+                ->where('application_id', $applicationId)
+                ->update($fields);
+
+            $message = 'Interview updated.';
+        } else {
+            // A further round. It is added rather than written over the last
+            // one, so both interviewers keep their own record and their own
+            // recommendation.
+            $next = 1 + (int) DB::table('application_interviews')
+                ->where('application_id', $applicationId)->max('round');
+
+            DB::table('application_interviews')->insert($fields + [
+                'application_id' => $applicationId,
+                'round'          => $next,
+                'status'         => 'scheduled',
+                'created_at'     => now(),
             ]);
+
+            $message = $next > 1
+                ? 'Round '.$next.' scheduled. The earlier round is kept.'
+                : 'Interview scheduled.';
+        }
 
         $this->showInterviewModal = false;
+        $this->editingInterviewId = null;
+        $this->rounds = $this->roundsFor($applicationId);
         $this->loadData();
-        session()->flash('success', 'Interview scheduled successfully!');
+        session()->flash('success', $message);
     }
 
-    public function cancelInterview($applicationId)
+    /** Cancels one round, leaving any others alone. */
+    public function cancelInterview($interviewId)
     {
-        DB::table('job_applications')
-            ->where('application_id', $applicationId)
-            ->update([
-                'interview_date' => null,
-                'interview_notes' => null,
-                'interviewer_id' => null,
-                'interview_type' => null,
-                'interview_status' => null,
-                'updated_at' => now()
-            ]);
+        $row = DB::table('application_interviews')->where('interview_id', $interviewId)->first();
 
+        if (! $row) {
+            return;
+        }
+
+        DB::table('application_interviews')->where('interview_id', $interviewId)
+            ->update(['status' => 'cancelled', 'updated_at' => now()]);
+
+        $this->rounds = $this->roundsFor((int) $row->application_id);
         $this->loadData();
-        session()->flash('success', 'Interview cancelled successfully!');
+        session()->flash('success', 'Interview cancelled.');
     }
 
     public function markInterviewCompleted($applicationId)
@@ -482,19 +556,25 @@ public function updateApplicationStatus($applicationId, $status)
             'interviewResult' => 'required|in:passed,failed'
         ]);
         
-        $existingNotes = $this->selectedApplication->interview_notes ?? '';
-        $combinedNotes = $existingNotes . "\n\n--- Interview Results ---\n";
-        $combinedNotes .= "Result: " . ucfirst($this->interviewResult) . "\n";
-        $combinedNotes .= "Feedback: " . $this->interviewFeedback . "\n";
-        $combinedNotes .= "Completed on: " . date('Y-m-d H:i:s');
-        
-        DB::table('job_applications')
+        // Against the latest live round: that is the one being reported on.
+        $round = DB::table('application_interviews')
             ->where('application_id', $this->selectedApplication->application_id)
-            ->update([
-                'interview_status' => 'completed',
-                'interview_notes' => $combinedNotes,
-                'updated_at' => now()
+            ->where('status', '!=', 'cancelled')
+            ->orderByDesc('round')
+            ->first();
+
+        if ($round) {
+            $note = "Result: ".ucfirst($this->interviewResult)."\n"
+                .$this->interviewFeedback;
+
+            DB::table('application_interviews')->where('interview_id', $round->interview_id)->update([
+                'status' => 'completed',
+                // Only if the interviewer has not already given their own; HR
+                // recording an outcome must not overwrite what they wrote.
+                'recommendation_notes' => $round->recommendation_notes ?: $note,
+                'updated_at' => now(),
             ]);
+        }
         
         if ($this->interviewResult === 'passed') {
             DB::table('job_applications')
@@ -1297,81 +1377,98 @@ public function updateApplicationStatus($applicationId, $status)
                         </div>
 
                         @include('partials.hr-application-201')
-
-                        {{-- What the interviewing supervisor made of them. HR
-                             decides; this is what they weigh. --}}
-                        @if ($selectedApplication->interviewer_recommendation ?? null)
+                        {{-- Every round this application has been through, in order.
+                             It used to be one block, because the application held one
+                             interview - so a second round wrote over the first, and the
+                             first interviewer's recommendation ended up printed under
+                             the second interviewer's name. --}}
+                        @if (count($rounds) > 0)
                             @php
                                 $verdicts = [
                                     'recommend'     => ['Recommends', 'bg-green-100 text-green-800', 'fa-thumbs-up'],
                                     'not_recommend' => ['Does not recommend', 'bg-red-100 text-red-800', 'fa-thumbs-down'],
                                     'undecided'     => ['Undecided', 'bg-gray-100 text-gray-700', 'fa-circle-question'],
                                 ];
-                                [$label, $tone, $icon] = $verdicts[$selectedApplication->interviewer_recommendation];
                             @endphp
+
                             <div class="md:col-span-2 border-t pt-4">
-                                <h4 class="text-sm font-medium text-gray-700 mb-3">Interviewer's recommendation</h4>
-                                <div class="rounded-lg border border-gray-200 p-4">
-                                    <div class="flex flex-wrap items-center justify-between gap-2">
-                                        <span class="px-3 py-1 rounded-full text-sm font-medium {{ $tone }}">
-                                            <i class="fas {{ $icon }} mr-1"></i>{{ $label }}
-                                        </span>
-                                        <span class="text-xs text-gray-500">
-                                            {{ $selectedApplication->interviewer_name ?? 'Interviewer' }}
-                                            @if ($selectedApplication->recommended_at)
-                                                &middot; {{ \Illuminate\Support\Carbon::parse($selectedApplication->recommended_at)->format('j M Y, g:ia') }}
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="text-sm font-medium text-gray-700">
+                                        Interviews <span class="text-gray-400">({{ count($rounds) }})</span>
+                                    </h4>
+                                    <button type="button"
+                                            wire:click="openInterviewModal({{ $selectedApplication->application_id }})"
+                                            class="text-xs text-red-600 hover:text-red-700 font-medium">
+                                        <i class="fas fa-plus mr-1"></i>Add another round
+                                    </button>
+                                </div>
+
+                                <div class="space-y-3">
+                                    @foreach ($rounds as $round)
+                                        <div class="rounded-lg border p-4 {{ $round->status === 'cancelled' ? 'border-gray-200 bg-gray-50 opacity-70' : 'border-gray-200' }}">
+                                            <div class="flex flex-wrap items-start justify-between gap-2">
+                                                <div>
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                                                            Round {{ $round->round }}
+                                                        </span>
+                                                        <span class="font-medium text-gray-900">
+                                                            {{ $round->interviewer_name ?? 'Interviewer removed' }}
+                                                        </span>
+                                                        @if ($round->interviewer_role)
+                                                            <span class="text-xs text-gray-500">{{ ucfirst($round->interviewer_role) }}</span>
+                                                        @endif
+                                                    </div>
+                                                    <p class="text-sm text-gray-600 mt-0.5">
+                                                        {{ \Illuminate\Support\Carbon::parse($round->scheduled_at)->format('D j M Y, g:ia') }}
+                                                        &middot; {{ ucfirst(str_replace('_', ' ', $round->type)) }}
+                                                        &middot; {{ ucfirst(str_replace('_', ' ', $round->status)) }}
+                                                    </p>
+                                                </div>
+
+                                                <div class="flex items-center gap-2">
+                                                    @if ($round->recommendation)
+                                                        @php [$label, $tone, $icon] = $verdicts[$round->recommendation]; @endphp
+                                                        <span class="px-3 py-1 rounded-full text-sm font-medium {{ $tone }}">
+                                                            <i class="fas {{ $icon }} mr-1"></i>{{ $label }}
+                                                        </span>
+                                                    @elseif ($round->status !== 'cancelled')
+                                                        <span class="text-xs text-gray-500">No recommendation yet</span>
+                                                    @endif
+
+                                                    @if ($round->status === 'scheduled')
+                                                        <button type="button"
+                                                                wire:click="openInterviewModal({{ $selectedApplication->application_id }}, {{ $round->interview_id }})"
+                                                                class="text-xs text-gray-500 hover:text-gray-700">Edit</button>
+                                                        <button type="button"
+                                                                wire:click="cancelInterview({{ $round->interview_id }})"
+                                                                class="text-xs text-red-600 hover:text-red-700">Cancel</button>
+                                                    @endif
+                                                </div>
+                                            </div>
+
+                                            @if (trim((string) $round->hr_notes) !== '')
+                                                <p class="text-sm text-gray-600 mt-2">
+                                                    <span class="text-gray-400">Brief:</span> {{ $round->hr_notes }}
+                                                </p>
                                             @endif
-                                        </span>
-                                    </div>
-                                    @if (trim((string) ($selectedApplication->recommendation_notes ?? '')) !== '')
-                                        <p class="text-sm text-gray-700 mt-3">{{ $selectedApplication->recommendation_notes }}</p>
-                                    @endif
+
+                                            @if (trim((string) $round->recommendation_notes) !== '')
+                                                <div class="mt-2 rounded bg-gray-50 p-3 text-sm text-gray-700">
+                                                    {{ $round->recommendation_notes }}
+                                                    @if ($round->recommended_at)
+                                                        <span class="block text-xs text-gray-500 mt-1">
+                                                            {{ $round->interviewer_name }},
+                                                            {{ \Illuminate\Support\Carbon::parse($round->recommended_at)->format('j M Y, g:ia') }}
+                                                        </span>
+                                                    @endif
+                                                </div>
+                                            @endif
+                                        </div>
+                                    @endforeach
                                 </div>
-                            </div>
-                        @elseif (($selectedApplication->interviewer_id ?? null) && ($selectedApplication->interview_date ?? null))
-                            <div class="md:col-span-2 border-t pt-4">
-                                <h4 class="text-sm font-medium text-gray-700 mb-2">Interviewer's recommendation</h4>
-                                <p class="text-sm text-gray-500">
-                                    Not yet given by {{ $selectedApplication->interviewer_name ?? 'the interviewer' }}.
-                                    It appears here once they record it.
-                                </p>
                             </div>
                         @endif
-
-                        <!-- Interview Information (if exists) -->
-                        @if($selectedApplication->interview_date ?? false)
-                        <div class="md:col-span-2 border-t pt-4">
-                            <h4 class="text-sm font-medium text-gray-700 mb-3">Interview Information</h4>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label class="text-xs text-gray-500">Interview Date & Time</label>
-                                    <p class="font-medium">{{ date('M d, Y h:i A', strtotime($selectedApplication->interview_date)) }}</p>
-                                    @if($selectedApplication->interview_status === 'completed')
-                                        <span class="text-xs text-green-600">
-                                            <i class="fas fa-check-circle mr-1"></i>Completed
-                                        </span>
-                                    @endif
-                                </div>
-                                <div>
-                                    <label class="text-xs text-gray-500">Interviewer</label>
-                                    <p class="font-medium">{{ $selectedApplication->interviewer_name ?? 'Not assigned' }}</p>
-                                </div>
-                                <div>
-                                    <label class="text-xs text-gray-500">Interview Type</label>
-                                    <p class="font-medium">{{ ucfirst(str_replace('_', ' ', $selectedApplication->interview_type ?? '')) }}</p>
-                                </div>
-                                @if($selectedApplication->interview_notes ?? false)
-                                <div class="md:col-span-3">
-                                    <label class="text-xs text-gray-500">Interview Notes</label>
-                                    <div class="p-3 bg-gray-50 rounded-lg mt-1">
-                                        {{ $selectedApplication->interview_notes }}
-                                    </div>
-                                </div>
-                                @endif
-                            </div>
-                        </div>
-                        @endif
-
                         <!-- Notes -->
                         @if($selectedApplication->notes ?? false)
                         <div class="md:col-span-2 border-t pt-4">
@@ -1496,7 +1593,7 @@ public function updateApplicationStatus($applicationId, $status)
                     <div class="flex justify-between items-start mb-4">
                         <div>
                             <h3 class="text-lg font-medium text-gray-900">
-                                {{ $selectedApplication->interview_date ? 'Reschedule Interview' : 'Schedule Interview' }}
+                                {{ $editingInterviewId ? 'Reschedule interview' : (count($rounds) > 0 ? 'Schedule another round' : 'Schedule interview') }}
                             </h3>
                             <p class="text-sm text-gray-500">{{ $selectedApplication->full_name ?? 'N/A' }} - {{ $selectedApplication->position_applied ?? 'N/A' }}</p>
                         </div>
@@ -1568,7 +1665,7 @@ public function updateApplicationStatus($applicationId, $status)
                     <button wire:click="saveInterviewSchedule" 
                             class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-purple-600 text-base font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 sm:ml-3 sm:w-auto sm:text-sm">
                         <i class="fas fa-calendar-check mr-2"></i>
-                        {{ $selectedApplication->interview_date ? 'Update Schedule' : 'Schedule Interview' }}
+                        {{ $editingInterviewId ? 'Update schedule' : 'Schedule' }}
                     </button>
                     <button wire:click="$set('showInterviewModal', false)" 
                             class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
