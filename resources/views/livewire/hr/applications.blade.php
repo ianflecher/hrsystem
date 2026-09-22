@@ -177,9 +177,14 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
     public function loadUsers()
     {
+        // Who can be given an interview to conduct. Supervisors and leaders
+        // were left out, so the only people who could ever be picked were the
+        // two back-office accounts - and the supervisor who actually runs the
+        // team being hired for could not be handed the interview at all.
         $this->users = DB::table('users')
             ->select('user_id', 'full_name', 'username', 'email', 'role')
-            ->whereIn('role', ['admin', 'hr'])
+            ->whereIn('role', ['admin', 'hr', 'supervisor', 'leader'])
+            ->orderByRaw("FIELD(role, 'supervisor', 'leader', 'hr', 'admin')")
             ->orderBy('full_name')
             ->get();
     }
