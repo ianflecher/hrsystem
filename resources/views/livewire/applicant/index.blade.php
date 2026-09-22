@@ -61,12 +61,17 @@ new #[Layout('components.layouts.applicant')] class extends Component
             // The interview they are next due at. Several rounds can exist
             // now, and the one worth showing somebody is the next live one -
             // or the most recent, once they have all happened.
+            // Named columns, not ai.* - this is a public Livewire property, so
+            // whatever it holds is serialised into the page and readable by
+            // the candidate in view-source. ai.* handed them hr_notes (the
+            // brief written for their interviewer), the recommendation made
+            // about them and the notes behind it.
             $this->interviewDetails = DB::table('application_interviews as ai')
                 ->select(
-                    'ai.*',
                     'ai.scheduled_at as interview_date',
                     'ai.type as interview_type',
                     'ai.status as interview_status',
+                    'ai.round as interview_round',
                     'interviewer.full_name as interviewer_name',
                     'interviewer.email as interviewer_email',
                     DB::raw('DATE(ai.scheduled_at) as interview_date_only'),
@@ -404,23 +409,15 @@ new #[Layout('components.layouts.applicant')] class extends Component
                                 </div>
                             </div>
                             
-                            <!-- Interview Notes -->
-                            @if($interviewDetails->interview_notes)
-                            <div class="mt-6 pt-6 border-t border-gray-200">
-                                <h5 class="text-sm font-medium text-gray-500 mb-2">Interview Instructions & Notes</h5>
-                                <div class="bg-gray-50 rounded-lg p-4">
-                                    <div class="flex">
-                                        <div class="flex-shrink-0">
-                                            <i class="fas fa-info-circle text-gray-400"></i>
-                                        </div>
-                                        <div class="ml-3">
-                                            <p class="text-sm text-gray-700">{{ $interviewDetails->interview_notes }}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            @endif
-                            
+                            {{-- The note HR writes when booking an interview is a brief for
+                                 whoever conducts it - "walk him through the press floor",
+                                 "ask about the night shift" - and it used to be shown here
+                                 to the candidate under the heading "Interview Instructions".
+                                 It was never written for them to read, so it is not shown.
+
+                                 If applicants should get instructions - what to bring, which
+                                 entrance - that wants a field of its own, written knowing
+                                 they will see it. --}}
                             <!-- Preparation Tips -->
                             <div class="mt-6 pt-6 border-t border-gray-200">
                                 <h5 class="text-sm font-medium text-gray-500 mb-2">Preparation Tips</h5>
