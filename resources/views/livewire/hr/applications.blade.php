@@ -77,6 +77,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public bool $showHireModal = false;
     public $hiringApplicationId = null;
     public $hireSalary = '';
+    public $hireAllowance = '';
     public $hirePayBasis = 'monthly';
     public $hireDailyRate = '';
     public $hireDepartmentId = '';
@@ -352,6 +353,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->hirePayBasis = $existing->pay_basis ?? 'monthly';
         // A re-hire keeps whatever they were on, if it was anything.
         $this->hireSalary = ($existing && $existing->salary > 0) ? $existing->salary : '';
+        $this->hireAllowance = ($existing && $existing->allowance > 0) ? $existing->allowance : '';
         $this->hireDailyRate = ($existing && $existing->daily_rate > 0) ? $existing->daily_rate : '';
         $this->hireDepartmentId = $existing->department_id ?? '';
 
@@ -367,6 +369,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             // Whichever figure the basis actually uses has to be a real one.
             'hireSalary'    => [$this->hirePayBasis === 'monthly' ? 'required' : 'nullable', 'numeric', 'min:1'],
             'hireDailyRate' => [$this->hirePayBasis === 'monthly' ? 'nullable' : 'required', 'numeric', 'min:1'],
+            // Optional: plenty of roles carry none.
+            'hireAllowance' => ['nullable', 'numeric', 'min:0'],
         ], [], [
             'hireJobTitle'  => 'job title',
             'hireSalary'    => 'monthly salary',
@@ -415,6 +419,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'job_title'     => $this->hireJobTitle ?: $application->position_applied,
                 'hire_date'     => date('Y-m-d'),
                 'salary'        => $salary,
+                'allowance'     => (float) ($this->hireAllowance ?: 0),
                 'daily_rate'    => $daily,
                 'pay_basis'     => $this->hirePayBasis,
                 'department_id' => $this->hireDepartmentId ?: null,
@@ -1448,17 +1453,44 @@ public function updateApplicationStatus($applicationId, $status)
                             </select>
                         </div>
 
-                        @if ($hirePayBasis === 'monthly')
+                        {{-- Basic and allowance are entered apart because they are
+                             treated apart: basic carries the tax and the SSS,
+                             PhilHealth and Pag-IBIG contributions, while a de
+                             minimis allowance is paid whole. --}}
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            @if ($hirePayBasis === 'monthly')
+                                <div>
+                                    <label class="form-label">Basic salary (monthly)</label>
+                                    <input type="number" step="0.01" min="1" wire:model.live="hireSalary" class="form-input" placeholder="0.00">
+                                    @error('hireSalary') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                                </div>
+                            @else
+                                <div>
+                                    <label class="form-label">Basic daily rate</label>
+                                    <input type="number" step="0.01" min="1" wire:model.live="hireDailyRate" class="form-input" placeholder="0.00">
+                                    @error('hireDailyRate') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                                </div>
+                            @endif
+
                             <div>
-                                <label class="form-label">Monthly salary</label>
-                                <input type="number" step="0.01" min="1" wire:model="hireSalary" class="form-input" placeholder="0.00">
-                                @error('hireSalary') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                                <label class="form-label">Allowance <span class="text-gray-400 font-normal">(optional)</span></label>
+                                <input type="number" step="0.01" min="0" wire:model.live="hireAllowance" class="form-input" placeholder="0.00">
+                                @error('hireAllowance') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                             </div>
-                        @else
-                            <div>
-                                <label class="form-label">Daily rate</label>
-                                <input type="number" step="0.01" min="1" wire:model="hireDailyRate" class="form-input" placeholder="0.00">
-                                @error('hireDailyRate') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        </div>
+
+                        @php
+                            $basicFigure = (float) ($hirePayBasis === 'monthly' ? $hireSalary : $hireDailyRate);
+                            $allowanceFigure = (float) ($hireAllowance ?: 0);
+                        @endphp
+                        @if ($basicFigure > 0 || $allowanceFigure > 0)
+                            <div class="rounded-lg bg-gray-50 px-3 py-2 text-sm flex items-center justify-between">
+                                <span class="text-gray-600">
+                                    Total {{ $hirePayBasis === 'monthly' ? 'monthly' : 'per day' }}
+                                </span>
+                                <span class="font-semibold text-gray-900">
+                                    &#8369;{{ number_format($basicFigure + $allowanceFigure, 2) }}
+                                </span>
                             </div>
                         @endif
 

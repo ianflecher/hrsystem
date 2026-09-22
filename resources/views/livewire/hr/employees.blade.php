@@ -39,6 +39,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public $department_id = '';
     public string $hire_date = '';
     public $salary = '';
+    public $allowance = '';
     public string $status = 'active';
     public string $role = 'employee';
 
@@ -95,7 +96,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->leftJoin('departments as d', 'e.department_id', '=', 'd.department_id')
             ->whereNull('u.deleted_at')
             ->select(
-                'e.employee_id', 'e.job_title', 'e.status', 'e.hire_date', 'e.salary',
+                'e.employee_id', 'e.job_title', 'e.status', 'e.hire_date', 'e.salary', 'e.allowance',
                 'u.user_id', 'u.full_name', 'u.username', 'u.email', 'u.role',
                 'u.must_change_password',
                 'd.department_name'
@@ -176,6 +177,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->department_id = $row->department_id ?? '';
         $this->hire_date     = $row->hire_date;
         $this->salary        = $row->salary;
+        $this->allowance     = $row->allowance;
         $this->status        = $row->status;
         $this->role          = $row->role;
         $this->showModal     = true;
@@ -240,6 +242,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'department_id' => ['nullable'],
             'hire_date'     => ['required', 'date'],
             'salary'        => ['nullable', 'numeric', 'min:0'],
+            'allowance'     => ['nullable', 'numeric', 'min:0'],
             'status'        => ['required', Rule::in(array_keys($this->statuses))],
             'role'          => ['required', Rule::in(array_keys($this->roles))],
         ]);
@@ -259,9 +262,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         // would collide where two unenrolled people should not.
         $biometricId = ($data['biometric_id'] ?? '') !== '' ? $data['biometric_id'] : null;
         $salary = $data['salary'] === '' || $data['salary'] === null ? 0 : $data['salary'];
+        // Kept apart from basic: an allowance is paid whole, outside tax and
+        // outside the contribution base, so it must not be folded into salary.
+        $allowance = $data['allowance'] === '' || $data['allowance'] === null ? 0 : $data['allowance'];
 
         if ($this->editingId) {
-            DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $userId) {
+            DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $userId) {
                 DB::table('users')->where('user_id', $userId)->update([
                     'full_name'  => $data['full_name'],
                     'username'   => $data['username'],
@@ -281,6 +287,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     'department_id' => $departmentId,
                     'hire_date'     => $data['hire_date'],
                     'salary'        => $salary,
+                'allowance'     => $allowance,
+                    'allowance'     => $allowance,
                     'status'        => $data['status'],
                     'updated_at'    => now(),
                 ]);
@@ -299,7 +307,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         // house default, and the account must replace it at first sign-in.
         $password = Str::password(12, symbols: false);
 
-        DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $password) {
+        DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $password) {
             $newUserId = DB::table('users')->insertGetId([
                 'full_name'            => $data['full_name'],
                 'username'             => $data['username'],
@@ -489,6 +497,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->department_id = '';
         $this->hire_date     = now()->toDateString();
         $this->salary        = '';
+        $this->allowance     = '';
         $this->status        = 'active';
         $this->role          = 'employee';
         $this->resetErrorBag();
@@ -812,11 +821,25 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <input id="hire_date" type="date" wire:model="hire_date" class="form-input">
                                 @error('hire_date') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
+                            {{-- Two figures, because they are treated differently:
+                                 basic carries the tax and the contributions, an
+                                 allowance is paid whole. --}}
                             <div>
-                                <label class="form-label" for="salary">Monthly salary</label>
-                                <input id="salary" type="number" step="0.01" min="0" wire:model="salary"
+                                <label class="form-label" for="salary">Basic salary (monthly)</label>
+                                <input id="salary" type="number" step="0.01" min="0" wire:model.live="salary"
                                        class="form-input" placeholder="0.00">
                                 @error('salary') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="allowance">Allowance</label>
+                                <input id="allowance" type="number" step="0.01" min="0" wire:model.live="allowance"
+                                       class="form-input" placeholder="0.00">
+                                @error('allowance') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                                @if ((float) $salary > 0 || (float) $allowance > 0)
+                                    <p class="mt-1 text-xs text-gray-600">
+                                        Total &#8369;{{ number_format((float) $salary + (float) $allowance, 2) }} a month
+                                    </p>
+                                @endif
                             </div>
                             <div>
                                 <label class="form-label" for="status">Status</label>

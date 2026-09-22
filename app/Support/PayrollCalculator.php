@@ -15,10 +15,18 @@ class PayrollCalculator
         ?string $ruleDate = null,
         bool $minimumWageEarner = false,
         float $otherTaxableCompensation = 0.0,
+        float $allowance = 0.0,
     ): array {
         $basic = round($monthlySalary / 2, 2);
         $otherTaxableCompensation = round(max(0, $otherTaxableCompensation), 2);
-        $gross = round($basic + $overtimePay + $holidayPay + $nsdPay + $otherTaxableCompensation, 2);
+
+        // A de minimis allowance is paid in full: it counts towards gross and
+        // reaches net untouched, but it is not taxable income and it is not
+        // part of the SSS, PhilHealth or Pag-IBIG base. Those are worked out
+        // from $monthlySalary, which is basic pay, so they exclude it already.
+        $allowance = round(max(0, $allowance), 2);
+
+        $gross = round($basic + $overtimePay + $holidayPay + $nsdPay + $otherTaxableCompensation + $allowance, 2);
         $share = $statutory ? self::monthlyShare($isSecondCutoff, $ruleDate) : 0.0;
 
         $sss = round(self::sss($monthlySalary, $ruleDate) * $share, 2);
@@ -26,7 +34,9 @@ class PayrollCalculator
         $pagibig = round(self::pagIbig($monthlySalary, $ruleDate) * $share, 2);
         $employer = $statutory ? self::employerContributions($monthlySalary, $ruleDate, $share) : ['sss' => 0, 'ec' => 0, 'philhealth' => 0, 'pagibig' => 0];
 
-        $preTax = max(0, $gross - ($sss + $philhealth + $pagibig) - $lateDeduction);
+        // Taken back out before tax: it is in gross because it is money the
+        // person receives, and out of here because it is not taxable.
+        $preTax = max(0, ($gross - $allowance) - ($sss + $philhealth + $pagibig) - $lateDeduction);
         $mweExempt = $minimumWageEarner ? round($basic + $overtimePay + $holidayPay + $nsdPay, 2) : 0.0;
         $taxable = max(0, $preTax - $mweExempt);
         if (! $minimumWageEarner) {
@@ -38,6 +48,7 @@ class PayrollCalculator
         return [
             'basic' => $basic, 'gross' => $gross, 'overtime' => round($overtimePay, 2),
             'holiday' => round($holidayPay, 2), 'nsd' => round($nsdPay, 2),
+            'allowance' => $allowance,
             'other_taxable' => $otherTaxableCompensation,
             'sss' => $sss, 'philhealth' => $philhealth, 'pagibig' => $pagibig,
             'employer_sss' => $employer['sss'], 'employer_ec' => $employer['ec'],
@@ -61,19 +72,21 @@ class PayrollCalculator
         ?string $ruleDate = null,
         bool $minimumWageEarner = false,
         float $otherTaxableCompensation = 0.0,
+        float $allowance = 0.0,
     ): array {
         $basicPay=round(max(0,$basicPay),2); $monthlyStatutoryBase=round(max(0,$monthlyStatutoryBase),2);
-        $gross=round($basicPay+$overtimePay+$holidayPay+$nsdPay+$otherTaxableCompensation,2);
+        $allowance = round(max(0, $allowance), 2);
+        $gross=round($basicPay+$overtimePay+$holidayPay+$nsdPay+$otherTaxableCompensation+$allowance,2);
         $share=$statutory ? self::monthlyShare($isSecondCutoff,$ruleDate) : 0.0;
         $sss=round(self::sss($monthlyStatutoryBase,$ruleDate)*$share,2);
         $philhealth=round(self::philHealth($monthlyStatutoryBase,$ruleDate)*$share,2);
         $pagibig=round(self::pagIbig($monthlyStatutoryBase,$ruleDate)*$share,2);
         $employer=$statutory?self::employerContributions($monthlyStatutoryBase,$ruleDate,$share):['sss'=>0,'ec'=>0,'philhealth'=>0,'pagibig'=>0];
-        $preTax=max(0,$gross-($sss+$philhealth+$pagibig)-$lateDeduction);
+        $preTax=max(0,($gross-$allowance)-($sss+$philhealth+$pagibig)-$lateDeduction);
         $mweExempt=$minimumWageEarner?round($basicPay+$overtimePay+$holidayPay+$nsdPay,2):0.0;
         $taxable=$minimumWageEarner?max(0,$preTax-$mweExempt):$preTax;
         $tax=$statutory?self::tax($taxable,$ruleDate):0.0; $deductions=round($sss+$philhealth+$pagibig+$tax+$lateDeduction,2);
-        return ['basic'=>$basicPay,'gross'=>$gross,'overtime'=>round($overtimePay,2),'holiday'=>round($holidayPay,2),'nsd'=>round($nsdPay,2),'other_taxable'=>round($otherTaxableCompensation,2),'sss'=>$sss,'philhealth'=>$philhealth,'pagibig'=>$pagibig,'employer_sss'=>$employer['sss'],'employer_ec'=>$employer['ec'],'employer_philhealth'=>$employer['philhealth'],'employer_pagibig'=>$employer['pagibig'],'tax'=>round($tax,2),'taxable'=>round($taxable,2),'mwe_exempt_compensation'=>$mweExempt,'late'=>round($lateDeduction,2),'deductions'=>$deductions,'net'=>round($gross-$deductions,2),'rule_version'=>Statutory::snapshot($ruleDate)['version']];
+        return ['basic'=>$basicPay,'gross'=>$gross,'overtime'=>round($overtimePay,2),'holiday'=>round($holidayPay,2),'nsd'=>round($nsdPay,2),'allowance'=>$allowance,'other_taxable'=>round($otherTaxableCompensation,2),'sss'=>$sss,'philhealth'=>$philhealth,'pagibig'=>$pagibig,'employer_sss'=>$employer['sss'],'employer_ec'=>$employer['ec'],'employer_philhealth'=>$employer['philhealth'],'employer_pagibig'=>$employer['pagibig'],'tax'=>round($tax,2),'taxable'=>round($taxable,2),'mwe_exempt_compensation'=>$mweExempt,'late'=>round($lateDeduction,2),'deductions'=>$deductions,'net'=>round($gross-$deductions,2),'rule_version'=>Statutory::snapshot($ruleDate)['version']];
     }
 
     /**

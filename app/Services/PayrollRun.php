@@ -50,9 +50,14 @@ class PayrollRun
             $ruleSnapshot = Statutory::snapshot($period->start);
             $overtimeAmount=(float) $overtime->sum('approved_amount');
             $statutoryBase = $monthlyBase > 0 ? $monthlyBase : (float) $employee->salary;
+
+            // Split across the two cutoffs like basic pay, so a monthly
+            // allowance arrives as the month goes rather than all at once.
+            // Nobody on immersion is paid one: they are paid in full anyway.
+            $allowance = $onImmersion ? 0.0 : round(((float) ($employee->allowance ?? 0)) / 2, 2);
             $c = $payBasis === 'monthly'
-                ? PayrollCalculator::forCutoff($statutoryBase, $time['total'], $period->isSecondCutoff, $overtimeAmount, $holiday['amount'], ! $onImmersion, $nsd['amount'], $period->start, (bool) ($employee->minimum_wage_earner ?? false))
-                : PayrollCalculator::forNonMonthlyCutoff((float) ($time['basic_override'] ?? 0), $statutoryBase, 0, $period->isSecondCutoff, $overtimeAmount, $holiday['amount'], ! $onImmersion, $nsd['amount'], $period->start, (bool) ($employee->minimum_wage_earner ?? false));
+                ? PayrollCalculator::forCutoff($statutoryBase, $time['total'], $period->isSecondCutoff, $overtimeAmount, $holiday['amount'], ! $onImmersion, $nsd['amount'], $period->start, (bool) ($employee->minimum_wage_earner ?? false), 0.0, $allowance)
+                : PayrollCalculator::forNonMonthlyCutoff((float) ($time['basic_override'] ?? 0), $statutoryBase, 0, $period->isSecondCutoff, $overtimeAmount, $holiday['amount'], ! $onImmersion, $nsd['amount'], $period->start, (bool) ($employee->minimum_wage_earner ?? false), 0.0, $allowance);
             $remainingCents = max(0, (int) round($c['net'] * 100));
             $loans = DB::table('employee_loans')->where('employee_id', $employeeId)->where('status', 'active')->where('starts_on', '<=', $period->start)->orderBy('id')->lockForUpdate()->get();
             $installments = [];
@@ -75,12 +80,13 @@ class PayrollRun
                 // separator only appears when there is something after it.
                 $notes = $notes === '' ? $immersion : $immersion.' | '.$notes;
             }
+            if (($c['allowance'] ?? 0) > 0) $notes .= ' | Allowance: PHP '.number_format($c['allowance'], 2).' (not taxed, not contributory)';
             if ($c['overtime'] > 0) $notes .= ' | Overtime: PHP '.number_format($c['overtime'], 2);
             if ($c['nsd'] > 0) $notes .= ' | NSD: '.number_format($c['nsd'], 2). ' ('.number_format($nsd['hours'], 2).' hours)';
             if ($deduction > 0) $notes .= ' | Loan repayment: PHP '.number_format($deduction, 2);
             $id = DB::table('hr_payroll')->insertGetId([
                 'employee_id' => $employeeId, 'period_start' => $period->start, 'period_end' => $period->end,
-                'gross_pay' => $c['gross'], 'basic_pay' => $c['basic'], 'deductions' => round($c['deductions'] + $deduction, 2), 'net_pay' => round($c['net'] - $deduction, 2),
+                'gross_pay' => $c['gross'], 'basic_pay' => $c['basic'], 'allowance' => $c['allowance'] ?? 0, 'deductions' => round($c['deductions'] + $deduction, 2), 'net_pay' => round($c['net'] - $deduction, 2),
                 'overtime_pay' => $c['overtime'], 'holiday_pay' => $c['holiday'], 'nsd_pay' => $c['nsd'], 'time_deduction' => $time['total'],
                 'sss' => $c['sss'], 'employer_sss' => $c['employer_sss'], 'employer_ec' => $c['employer_ec'], 'philhealth' => $c['philhealth'], 'employer_philhealth' => $c['employer_philhealth'], 'pagibig' => $c['pagibig'], 'employer_pagibig' => $c['employer_pagibig'], 'tax' => $c['tax'], 'taxable_compensation' => $c['taxable'], 'other_taxable_compensation' => $c['other_taxable'], 'mwe_exempt_compensation' => $c['mwe_exempt_compensation'], 'statutory_rule_version' => $ruleSnapshot['version'], 'statutory_snapshot' => json_encode($ruleSnapshot, JSON_THROW_ON_ERROR), 'rules_verified_at' => $compliance['verified_at'], 'employer_total_cost' => round($c['gross'] + $c['employer_sss'] + $c['employer_ec'] + $c['employer_philhealth'] + $c['employer_pagibig'], 2),
                 'loan_deduction' => $deduction, 'status' => 'calculated', 'notes' => $notes,
