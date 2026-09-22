@@ -1390,11 +1390,27 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 to {{ date('F d, Y', strtotime($selectedEmployee->period_end ?? $this->period()->end)) }}
                             </p>
                         </div>
-                        <button wire:click="closePayrollDetails" type="button" class="text-gray-400 hover:text-gray-500">
-                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
+                        <div class="flex items-center gap-2 shrink-0">
+                            {{-- The printable version is a document - a laid-out page
+                                 rather than a panel fitted into a viewport - so it reads
+                                 far better than this does, particularly on a phone. The
+                                 link to it was at the very bottom, which meant scrolling
+                                 through the cramped version to find the uncramped one. --}}
+                            @if($selectedEmployee->payroll_id)
+                                <a href="{{ route('payslip.show', $selectedEmployee->payroll_id) }}" target="_blank"
+                                   class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm hover:bg-gray-200">
+                                    <i class="fas fa-print"></i>
+                                    <span class="hidden sm:inline">Printable payslip</span>
+                                    <span class="sm:hidden">Print</span>
+                                </a>
+                            @endif
+
+                            <button wire:click="closePayrollDetails" type="button" class="text-gray-400 hover:text-gray-500">
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- Employee Information -->
@@ -1607,15 +1623,6 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         </div>
                     @endif
                     
-                    @if($selectedEmployee->payroll_id)
-                        <div class="mt-4 border-t border-gray-200 pt-4">
-                            <a href="{{ route('payslip.show', $selectedEmployee->payroll_id) }}" target="_blank"
-                               class="btn-secondary inline-flex items-center gap-2">
-                                <i class="fas fa-print"></i> Open printable payslip
-                            </a>
-                        </div>
-                    @endif
-
                     <!-- Notes -->
                     @if($selectedEmployee->notes)
                     <div class="mt-4 border-t border-gray-200 pt-4">
