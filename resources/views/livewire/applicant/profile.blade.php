@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
  * about and read in the back office by HR; nothing else on the site touches
  * them.
  */
-new #[Layout('components.layouts.employeeland')] class extends Component
+new #[Layout('components.layouts.applicant')] class extends Component
 {
     public array $p = [];          // the profile
     public array $edu = [];        // one entry per level

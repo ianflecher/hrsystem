@@ -386,6 +386,10 @@
                    class="nav-link {{ request()->routeIs('applicant.index') ? 'active' : '' }}">
                     <i class="fas fa-file-lines mr-2"></i>My application
                 </a>
+                <a href="{{ route('applicant.profile') }}"
+                   class="nav-link {{ request()->routeIs('applicant.profile') ? 'active' : '' }}">
+                    <i class="fas fa-id-card mr-2"></i>My details
+                </a>
                 <a href="{{ route('applicant.inside') }}"
                    class="nav-link {{ request()->routeIs('applicant.inside') ? 'active' : '' }}">
                     <i class="fas fa-building mr-2"></i>About the company
