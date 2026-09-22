@@ -112,13 +112,38 @@
             </div>
         </div>
 
+        {{-- How many first, then that many boxes. Fixed slots either left empty
+             ones on screen or ran out, and neither matched the family. --}}
         <div>
-            <span class="form-label">Siblings</span>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-1">
-                <input id="sibling_1_name" type="text" wire:model="p.sibling_1_name" class="form-input" placeholder="Sibling 1 (N/A if none)">
-                <input type="text" wire:model="p.sibling_2_name" class="form-input" placeholder="Sibling 2">
-                <input type="text" wire:model="p.sibling_3_name" class="form-input" placeholder="Sibling 3">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="form-label" for="sibling_count">How many siblings?</label>
+                    <input id="sibling_count" type="number" min="0" max="20"
+                           wire:model.live="p.sibling_count" class="form-input" placeholder="0">
+                    @error('p.sibling_count') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                </div>
             </div>
+
+            @if (count($siblings) > 0)
+                <div class="mt-3">
+                    <span class="form-label">Their names</span>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-1">
+                        @foreach ($siblings as $i => $sibling)
+                            <div class="flex gap-2" wire:key="sibling-{{ $i }}">
+                                <input type="text" wire:model="siblings.{{ $i }}.name"
+                                       class="form-input flex-1" placeholder="Sibling {{ $i + 1 }}">
+                                <button type="button" wire:click="removeSibling({{ $i }})"
+                                        class="text-sm text-red-600 hover:text-red-700 px-1"
+                                        aria-label="Remove sibling {{ $i + 1 }}">&times;</button>
+                            </div>
+                        @endforeach
+                    </div>
+
+                    <button type="button" wire:click="addSibling" class="btn-secondary text-sm mt-3">
+                        + Add another
+                    </button>
+                </div>
+            @endif
         </div>
     </div>
 </section>

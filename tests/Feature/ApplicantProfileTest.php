@@ -22,7 +22,8 @@ class ApplicantProfileTest extends TestCase
     {
         if ($this->userId) {
             foreach (['applicant_disclosures', 'applicant_relatives', 'applicant_references',
-                      'applicant_employment', 'applicant_education', 'applicant_profiles'] as $t) {
+                      'applicant_siblings', 'applicant_employment', 'applicant_education',
+                      'applicant_profiles'] as $t) {
                 DB::table($t)->where('user_id', $this->userId)->delete();
             }
             DB::table('users')->where('user_id', $this->userId)->delete();
@@ -237,6 +238,45 @@ class ApplicantProfileTest extends TestCase
         // Same as above copies each of the three parts, not one combined string.
         $this->assertSame('12 Rizal St', $profile->permanent_street);
         $this->assertSame('Camarines Sur', $profile->permanent_province);
+    }
+
+    public function test_the_sibling_count_decides_how_many_boxes_there_are(): void
+    {
+        $user = $this->applicant();
+
+        $c = Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Cruz')
+            ->set('p.first_name', 'Ana')
+            ->set('p.sibling_count', 3);
+
+        $c->assertCount('siblings', 3);
+
+        // Asking for fewer takes the boxes away again.
+        $c->set('p.sibling_count', 1)->assertCount('siblings', 1);
+
+        // And the button adds one past the number first given.
+        $c->call('addSibling')->assertCount('siblings', 2)->assertSet('p.sibling_count', 2);
+
+        $c->set('siblings.0.name', 'Jose Cruz')
+            ->set('siblings.1.name', 'Rosa Cruz')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $names = DB::table('applicant_siblings')->where('user_id', $user->user_id)
+            ->orderBy('sort_order')->pluck('name')->all();
+
+        $this->assertSame(['Jose Cruz', 'Rosa Cruz'], $names);
+        $this->assertEquals(2, DB::table('applicant_profiles')->where('user_id', $user->user_id)->value('sibling_count'));
+    }
+
+    /** A typo in a number field must not ask the browser to draw thousands of boxes. */
+    public function test_the_sibling_count_is_capped(): void
+    {
+        Volt::actingAs($this->applicant())
+            ->test('applicant.profile')
+            ->set('p.sibling_count', 9999)
+            ->assertCount('siblings', 20);
     }
 
     public function test_government_numbers_are_their_own_step(): void

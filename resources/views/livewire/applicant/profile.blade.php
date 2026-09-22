@@ -24,7 +24,11 @@ new #[Layout('components.layouts.applicant')] class extends Component
     public array $jobs = [];       // previous employers, repeatable
     public array $refs = [];       // character references, optional
     public array $relatives = [];  // relatives working here
+    public array $siblings = [];   // one box per sibling they say they have
     public array $d = [];          // the disclosures
+
+    /** Nobody has more than this many, and a number field invites typos. */
+    private const MAX_SIBLINGS = 20;
 
     /** Which of the four steps is on screen. */
     public int $step = 1;
@@ -94,6 +98,13 @@ new #[Layout('components.layouts.applicant')] class extends Component
         $this->relatives = DB::table('applicant_relatives')->where('user_id', $id)
             ->get()->map(fn ($r) => (array) $r)->all();
 
+        $this->siblings = DB::table('applicant_siblings')->where('user_id', $id)
+            ->orderBy('sort_order')->get()->map(fn ($r) => (array) $r)->all();
+
+        // Somebody who said four and typed two names still has four siblings,
+        // so the count leads and the boxes follow it.
+        $this->resizeSiblings((int) ($this->p['sibling_count'] ?? count($this->siblings)));
+
         $dis = DB::table('applicant_disclosures')->where('user_id', $id)->first();
         $this->d = $dis ? (array) $dis : $this->blankDisclosures();
     }
@@ -107,7 +118,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
             'cellphone', 'email_address', 'bank_account_number', 'date_of_birth',
             'birthplace', 'civil_status', 'spouse_surname', 'spouse_first_name', 'spouse_middle_name',
             'fathers_name', 'mothers_maiden_name',
-            'sibling_1_name', 'sibling_2_name', 'sibling_3_name', 'sss_number', 'pagibig_number',
+            'sibling_count', 'sss_number', 'pagibig_number',
             'philhealth_number', 'tin', 'emergency_name', 'emergency_contact_no',
             'emergency_relationship', 'emergency_address', 'certified_name',
         ], '') + ['permanent_same_as_present' => false];
@@ -188,9 +199,45 @@ new #[Layout('components.layouts.applicant')] class extends Component
         $this->relatives = array_values($this->relatives);
     }
 
+    /**
+     * One box per sibling. Capped, because a typo in a number field should not
+     * ask the browser to draw nine thousand inputs.
+     */
+    private function resizeSiblings(int $count): void
+    {
+        $count = max(0, min($count, self::MAX_SIBLINGS));
+
+        $this->siblings = array_slice($this->siblings, 0, $count);
+
+        while (count($this->siblings) < $count) {
+            $this->siblings[] = ['name' => ''];
+        }
+    }
+
+    public function addSibling(): void
+    {
+        if (count($this->siblings) >= self::MAX_SIBLINGS) {
+            return;
+        }
+
+        $this->siblings[] = ['name' => ''];
+        $this->p['sibling_count'] = count($this->siblings);
+    }
+
+    public function removeSibling(int $i): void
+    {
+        unset($this->siblings[$i]);
+        $this->siblings = array_values($this->siblings);
+        $this->p['sibling_count'] = count($this->siblings);
+    }
+
     /** Copies the present address down, so it is not typed twice. */
     public function updatedP($value, $key): void
     {
+        if ($key === 'sibling_count') {
+            $this->resizeSiblings((int) $value);
+        }
+
         if ($key === 'permanent_same_as_present' && $value) {
             $this->p['permanent_street']   = $this->p['present_street'] ?? '';
             $this->p['permanent_city']     = $this->p['present_city'] ?? '';
@@ -208,6 +255,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
             'p.email_address' => ['nullable', 'email', 'max:150'],
             'p.date_of_birth' => ['nullable', 'date', 'before:today'],
             'p.civil_status'  => ['nullable', 'in:'.implode(',', array_keys($this->civilStatuses))],
+            'p.sibling_count' => ['nullable', 'integer', 'min:0', 'max:'.self::MAX_SIBLINGS],
             'jobs.*.company_name' => ['nullable', 'string', 'max:180'],
             'jobs.*.daily_salary' => ['nullable', 'numeric', 'min:0'],
             'refs.*.name'         => ['nullable', 'string', 'max:150'],
@@ -260,6 +308,8 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
             $this->rewrite('applicant_relatives', $id, $this->relatives,
                 ['name', 'relationship', 'department'], 'name', ordered: false);
+
+            $this->rewrite('applicant_siblings', $id, $this->siblings, ['name'], 'name');
 
             $dis = collect($this->d)
                 ->only(array_keys($this->blankDisclosures()))
