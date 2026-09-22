@@ -62,6 +62,25 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
     /** Set when an existing round is being moved rather than a new one added. */
     public $editingInterviewId = null;
+
+    /* -------------------------------------------------------------- hiring
+     *
+     * Hiring used to write salary 0.00 and status active straight into the
+     * employees table. That is one "Active employees without salary"
+     * exception, and the payroll control centre refuses to approve any period
+     * while one exists - so every hire silently stopped the whole company's
+     * payslips until somebody worked out why.
+     *
+     * The figure is known at the moment of hiring; it is the offer. So it is
+     * asked for here rather than left at zero to be found later.
+     */
+    public bool $showHireModal = false;
+    public $hiringApplicationId = null;
+    public $hireSalary = '';
+    public $hirePayBasis = 'monthly';
+    public $hireDailyRate = '';
+    public $hireDepartmentId = '';
+    public $hireJobTitle = '';
     public $interviewType = 'in_person';
     
     // Interview results
@@ -317,6 +336,116 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         'tertiary'    => 'College / tertiary',
     ];
 
+    /** Marking somebody hired asks for the terms first. */
+    public function openHireModal($applicationId)
+    {
+        $application = DB::table('job_applications')->where('application_id', $applicationId)->first();
+
+        if (! $application) {
+            return;
+        }
+
+        $existing = DB::table('employees')->where('user_id', $application->user_id)->first();
+
+        $this->hiringApplicationId = $applicationId;
+        $this->hireJobTitle = $application->position_applied;
+        $this->hirePayBasis = $existing->pay_basis ?? 'monthly';
+        // A re-hire keeps whatever they were on, if it was anything.
+        $this->hireSalary = ($existing && $existing->salary > 0) ? $existing->salary : '';
+        $this->hireDailyRate = ($existing && $existing->daily_rate > 0) ? $existing->daily_rate : '';
+        $this->hireDepartmentId = $existing->department_id ?? '';
+
+        $this->resetValidation();
+        $this->showHireModal = true;
+    }
+
+    public function confirmHire()
+    {
+        $this->validate([
+            'hireJobTitle'  => ['required', 'string', 'max:150'],
+            'hirePayBasis'  => ['required', 'in:monthly,daily,hourly'],
+            // Whichever figure the basis actually uses has to be a real one.
+            'hireSalary'    => [$this->hirePayBasis === 'monthly' ? 'required' : 'nullable', 'numeric', 'min:1'],
+            'hireDailyRate' => [$this->hirePayBasis === 'monthly' ? 'nullable' : 'required', 'numeric', 'min:1'],
+        ], [], [
+            'hireJobTitle'  => 'job title',
+            'hireSalary'    => 'monthly salary',
+            'hireDailyRate' => 'daily rate',
+        ]);
+
+        $this->completeHire((int) $this->hiringApplicationId);
+
+        $this->showHireModal = false;
+        $this->hiringApplicationId = null;
+        $this->loadData();
+        session()->flash('success', 'Hired, and their pay is set - payroll will not be held up by this one.');
+    }
+
+    /**
+     * Turn an applicant into an employee, on terms that were actually chosen.
+     *
+     * Called from the hire dialog. If it is ever reached without one - an old
+     * link, a direct call - it refuses rather than falling back to zero,
+     * because a zero here stops everybody's payslips.
+     */
+    private function completeHire(int $applicationId): void
+    {
+        $application = DB::table('job_applications')->where('application_id', $applicationId)->first();
+
+        if (! $application) {
+            return;
+        }
+
+        $monthly = $this->hirePayBasis === 'monthly';
+        $salary  = $monthly ? (float) $this->hireSalary : 0.0;
+        $daily   = $monthly ? 0.0 : (float) $this->hireDailyRate;
+
+        if (($monthly && $salary <= 0) || (! $monthly && $daily <= 0)) {
+            session()->flash('error', 'Set their pay before hiring them, or payroll cannot be approved for anybody.');
+
+            return;
+        }
+
+        DB::transaction(function () use ($application, $applicationId, $salary, $daily) {
+            DB::table('users')->where('user_id', $application->user_id)->update(['role' => 'employee']);
+
+            $existing = DB::table('employees')->where('user_id', $application->user_id)->first();
+
+            $fields = [
+                'job_title'     => $this->hireJobTitle ?: $application->position_applied,
+                'hire_date'     => date('Y-m-d'),
+                'salary'        => $salary,
+                'daily_rate'    => $daily,
+                'pay_basis'     => $this->hirePayBasis,
+                'department_id' => $this->hireDepartmentId ?: null,
+                'status'        => 'active',
+                'updated_at'    => now(),
+            ];
+
+            if ($existing) {
+                DB::table('employees')->where('user_id', $application->user_id)->update($fields);
+            } else {
+                DB::table('employees')->insert($fields + [
+                    'user_id'    => $application->user_id,
+                    'created_at' => now(),
+                ]);
+            }
+
+            $note = ($application->notes ?? '')
+                ."\n\n--- HIRED ---\n"
+                ."Hired as: ".$fields['job_title']."\n"
+                ."Hire date: ".$fields['hire_date']."\n"
+                ."Pay: ".($salary > 0 ? number_format($salary, 2).' monthly' : number_format($daily, 2).' daily')."\n"
+                ."Employee record ".($existing ? 'updated' : 'created');
+
+            DB::table('job_applications')->where('application_id', $applicationId)->update([
+                'status'     => 'hired',
+                'notes'      => $note,
+                'updated_at' => now(),
+            ]);
+        });
+    }
+
     public function viewDocuments($applicationId)
     {
         $this->selectedApplication = DB::table('job_applications')
@@ -353,56 +482,12 @@ public function updateApplicationStatus($applicationId, $status)
         ->where('application_id', $applicationId)
         ->update($updates);
 
+    // Hiring goes through completeHire(), which is reached from the dialog
+    // that asks for the pay. Nothing here creates an employee any more: it
+    // used to write salary 0.00 and status active, which blocked payroll
+    // approval for the whole company until somebody found the cause.
     if ($status === 'hired') {
-        $application = DB::table('job_applications')
-            ->where('application_id', $applicationId)
-            ->first();
-
-        if ($application) {
-            // Update user role to employee
-            DB::table('users')
-                ->where('user_id', $application->user_id)
-                ->update(['role' => 'employee']);
-
-            // Check if employee record already exists
-            $existingEmployee = DB::table('employees')
-                ->where('user_id', $application->user_id)
-                ->first();
-            
-            if (!$existingEmployee) {
-                // Create employee record for new hire with status 'active'
-                DB::table('employees')->insert([
-                    'user_id' => $application->user_id,
-                    'job_title' => $application->position_applied,
-                    'hire_date' => date('Y-m-d'),
-                    'salary' => 0.00,
-                    'status' => 'active', // Explicitly set status to 'active'
-                    'created_at' => now(),
-                    'updated_at' => now()
-                ]);
-            } else {
-                // Update existing employee record for re-hire
-                DB::table('employees')
-                    ->where('user_id', $application->user_id)
-                    ->update([
-                        'job_title' => $application->position_applied,
-                        'hire_date' => date('Y-m-d'),
-                        'status' => 'active', // Ensure status is set to 'active'
-                        'updated_at' => now()
-                    ]);
-            }
-            
-            // Also update application notes to reflect hiring
-            $currentNotes = $application->notes ?? '';
-            $newNotes = $currentNotes . "\n\n--- HIRED ---\n";
-            $newNotes .= "Hired as: " . $application->position_applied . "\n";
-            $newNotes .= "Hire date: " . date('Y-m-d') . "\n";
-            $newNotes .= "Employee record " . ($existingEmployee ? 'updated' : 'created');
-            
-            DB::table('job_applications')
-                ->where('application_id', $applicationId)
-                ->update(['notes' => $newNotes]);
-        }
+        $this->completeHire($applicationId);
     }
 
     if ($this->showApplicationModal) {
@@ -817,7 +902,7 @@ public function updateApplicationStatus($applicationId, $status)
      form both carry typed values that a re-render would discard. --}}
 <div @if (! $showApplicationModal && ! $showInterviewModal && ! $showDocumentsModal
           && ! $showInterviewResultModal && ! $showRoleChangeModal && ! $showSalaryModal
-          && ! $showDepartmentModal)
+          && ! $showDepartmentModal && ! $showHireModal)
         wire:poll.30s.visible
      @endif>
     <!-- Page Header -->
@@ -1159,9 +1244,8 @@ public function updateApplicationStatus($applicationId, $status)
 
                                         @if(in_array($application->status, ['shortlisted', 'reviewed']))
                                             @if($application->interview_status === 'completed' || $application->status === 'shortlisted')
-                                                <button wire:click="updateApplicationStatus('{{ $application->application_id }}', 'hired')" 
-                                                        class="px-3 py-1 text-xs bg-teal-50 text-teal-600 rounded hover:bg-teal-100"
-                                                        onclick="return confirm('Hire {{ $application->full_name }} as {{ $application->position_applied }}?')">
+                                                <button wire:click="openHireModal('{{ $application->application_id }}')" 
+                                                        class="px-3 py-1 text-xs bg-teal-50 text-teal-600 rounded hover:bg-teal-100">
                                                     <i class="fas fa-user-tie mr-1"></i>Hire
                                                 </button>
                                                 <button wire:click="updateApplicationStatus('{{ $application->application_id }}', 'rejected')" 
@@ -1297,6 +1381,89 @@ public function updateApplicationStatus($applicationId, $status)
     </div>
     @endif
 
+
+    {{-- Hiring asks for the pay before it happens. It used to write 0.00 and
+         leave payroll to refuse every period until somebody found out why. --}}
+    @if ($showHireModal)
+    <div class="fixed inset-0 z-[70] overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+                 wire:click="$set('showHireModal', false)"></div>
+
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">Hire this applicant</h3>
+                            <p class="text-sm text-gray-500">Their pay is set now, not later.</p>
+                        </div>
+                        <button wire:click="$set('showHireModal', false)" class="text-gray-400 hover:text-gray-500">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="form-label">Job title</label>
+                            <input type="text" wire:model="hireJobTitle" class="form-input">
+                            @error('hireJobTitle') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        </div>
+
+                        <div>
+                            <label class="form-label">Paid</label>
+                            <select wire:model.live="hirePayBasis" class="form-input">
+                                <option value="monthly">Monthly</option>
+                                <option value="daily">Daily</option>
+                                <option value="hourly">Hourly</option>
+                            </select>
+                        </div>
+
+                        @if ($hirePayBasis === 'monthly')
+                            <div>
+                                <label class="form-label">Monthly salary</label>
+                                <input type="number" step="0.01" min="1" wire:model="hireSalary" class="form-input" placeholder="0.00">
+                                @error('hireSalary') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                            </div>
+                        @else
+                            <div>
+                                <label class="form-label">Daily rate</label>
+                                <input type="number" step="0.01" min="1" wire:model="hireDailyRate" class="form-input" placeholder="0.00">
+                                @error('hireDailyRate') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                            </div>
+                        @endif
+
+                        <div>
+                            <label class="form-label">Department <span class="text-gray-400 font-normal">(optional)</span></label>
+                            <select wire:model="hireDepartmentId" class="form-input">
+                                <option value="">Not assigned</option>
+                                @foreach ($departments as $department)
+                                    <option value="{{ $department->department_id }}">{{ $department->department_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            An active employee with no pay set stops payroll being approved for
+                            everybody, so this cannot be left blank.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button wire:click="confirmHire"
+                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-teal-600 text-base font-medium text-white hover:bg-teal-700 sm:ml-3 sm:w-auto sm:text-sm">
+                        <i class="fas fa-user-tie mr-2"></i>Hire
+                    </button>
+                    <button wire:click="$set('showHireModal', false)"
+                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
 
     <!-- Application Details Modal -->
     @if($showApplicationModal && $selectedApplication)
