@@ -166,7 +166,6 @@ class ApplicantProfileTest extends TestCase
             ->set('d.pagibig_on_file', '1')
             ->set('d.philhealth_on_file', '1')
             ->set('d.tin_on_file', '0')
-            ->set('d.declared_name', 'Pedro Reyes')
             ->call('declare')
             ->assertHasNoErrors();
 
@@ -484,9 +483,8 @@ class ApplicantProfileTest extends TestCase
             ->test('applicant.profile')
             ->set('p.surname', 'Cruz')
             ->set('p.first_name', 'Ana')
-            ->set('d.declared_name', 'Ana Cruz')
             ->call('declare')
-            ->assertHasErrors(['d.has_medical_condition', 'd.ever_convicted', 'd.tin_on_file']);
+            ->assertHasErrors(['d.has_medical_condition', 'd.ever_convicted']);
 
         $this->assertNull(
             DB::table('applicant_disclosures')->where('user_id', $this->userId)->value('declared_at'),
@@ -616,6 +614,77 @@ class ApplicantProfileTest extends TestCase
         Volt::actingAs($user)->test('applicant.profile')->assertSet('secondary', 'k12');
     }
 
+    /**
+     * The number and "do you have one" are the same fact asked twice, so the
+     * answer follows the box and the two cannot end up contradicting.
+     */
+    public function test_the_id_questions_answer_themselves(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Cruz')
+            ->set('p.first_name', 'Ana')
+            ->set('p.sss_number', '34-1234567-8')
+            ->set('p.pagibig_number', 'N/A')
+            ->set('p.philhealth_number', '')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $d = DB::table('applicant_disclosures')->where('user_id', $user->user_id)->first();
+        $this->assertEquals(1, $d->sss_on_file, 'a number was given');
+        $this->assertEquals(0, $d->pagibig_on_file, 'N/A means there is none');
+        $this->assertEquals(0, $d->philhealth_on_file, 'blank means there is none');
+        $this->assertEquals(0, $d->tin_on_file, 'never touched, so there is none');
+    }
+
+    /** Somebody who has one but has not typed it can still say so. */
+    public function test_an_id_answer_given_by_hand_is_kept(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Cruz')
+            ->set('p.first_name', 'Ana')
+            ->set('d.tin_on_file', '1')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertEquals(1,
+            DB::table('applicant_disclosures')->where('user_id', $user->user_id)->value('tin_on_file'));
+    }
+
+    /**
+     * Nobody types their own name to sign now - being signed in says who they
+     * are, and the record keeps the name and the time by itself.
+     */
+    public function test_declaring_records_who_and_when_without_asking(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Santos')
+            ->set('p.first_name', 'Mia')
+            ->set('d.has_medical_condition', '0')
+            ->set('d.takes_maintenance_medication', '0')
+            ->set('d.has_relative_employed', '0')
+            ->set('d.ever_terminated', '0')
+            ->set('d.ever_convicted', '0')
+            ->set('d.employed_elsewhere', '0')
+            ->set('d.has_employment_bond', '0')
+            ->set('d.was_union_member', '0')
+            ->set('d.can_start_immediately', '1')
+            ->call('declare')
+            ->assertHasNoErrors();
+
+        $d = DB::table('applicant_disclosures')->where('user_id', $user->user_id)->first();
+        $this->assertSame('Mia Santos', $d->declared_name);
+        $this->assertNotNull($d->declared_at);
+    }
+
     /** A typo in a number field must not ask the browser to draw thousands of boxes. */
     public function test_the_sibling_count_is_capped(): void
     {
@@ -649,11 +718,11 @@ class ApplicantProfileTest extends TestCase
             ->test('applicant.profile')
             ->set('p.surname', 'Lim')
             ->set('p.first_name', 'Grace')
-            ->set('p.certified_name', 'Grace Lim')
             ->call('certify')
             ->assertHasNoErrors();
 
         $profile = DB::table('applicant_profiles')->where('user_id', $user->user_id)->first();
+        // Taken from the form rather than typed into a box of its own.
         $this->assertSame('Grace Lim', $profile->certified_name);
         $this->assertNotNull($profile->certified_at);
     }

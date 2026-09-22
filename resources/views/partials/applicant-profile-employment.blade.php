@@ -92,13 +92,7 @@
             knowledge and belief.
         </p>
 
-        <div class="mt-3 flex flex-wrap items-end gap-3">
-            <div class="flex-1 min-w-[16rem]">
-                <label class="form-label" for="certified_name">Signature over printed name</label>
-                <input id="certified_name" type="text" wire:model="p.certified_name" class="form-input"
-                       placeholder="Type your full name">
-                @error('p.certified_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-            </div>
+        <div class="mt-3">
             <button type="button" wire:click="certify" class="btn-primary">Certify and save</button>
         </div>
 

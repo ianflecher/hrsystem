@@ -368,6 +368,59 @@ new #[Layout('components.layouts.applicant')] class extends Component
         $this->step = max(1, min($step, count($this->steps)));
     }
 
+    /**
+     * The same fact, asked twice: step two asks for the number, the
+     * disclosures ask whether there is one. Typing a number answers both, and
+     * so does leaving it blank or writing N/A - so the answer follows the box
+     * rather than waiting to be clicked, and the two cannot contradict.
+     *
+     * Still a radio rather than a read-only line, because somebody who has an
+     * SSS number to hand but has not typed it in should be able to say so.
+     */
+    private const ID_ANSWERS = [
+        'sss_number'        => 'sss_on_file',
+        'pagibig_number'    => 'pagibig_on_file',
+        'philhealth_number' => 'philhealth_on_file',
+        'tin'               => 'tin_on_file',
+    ];
+
+    private function idIsGiven(string $numberColumn): bool
+    {
+        $value = $this->p[$numberColumn] ?? '';
+
+        return trim((string) $value) !== '' && ! $this->saysNothing($value);
+    }
+
+    /**
+     * updatedP only fires for a box somebody touches. One left blank from the
+     * start has still answered the question, so the answer is filled in here -
+     * but only where none was given, so a deliberate "yes, I have one, I just
+     * have not typed it in" is not overwritten.
+     */
+    private function answerIdQuestions(): void
+    {
+        foreach (self::ID_ANSWERS as $numberColumn => $answerColumn) {
+            $given = $this->d[$answerColumn] ?? null;
+
+            if ($given === null || $given === '') {
+                $this->d[$answerColumn] = $this->idIsGiven($numberColumn) ? '1' : '0';
+            }
+        }
+    }
+
+    /**
+     * Who is agreeing. Typing your own name into a box proves nothing that
+     * being signed in does not already say, so it is taken from the form -
+     * or from the account when the form has not been named yet - rather than
+     * asked for a third time.
+     */
+    private function signatory(): string
+    {
+        $fromForm = trim(($this->p['first_name'] ?? '').' '.($this->p['surname'] ?? ''));
+
+        return $fromForm !== '' ? $fromForm : (string) Auth::user()->full_name;
+    }
+
     /** Either parent, or a guardian in their place - but not nobody. */
     private function hasAParent(): bool
     {
@@ -460,6 +513,10 @@ new #[Layout('components.layouts.applicant')] class extends Component
             $this->resizeSiblings((int) $value);
         }
 
+        if (array_key_exists($key, self::ID_ANSWERS)) {
+            $this->d[self::ID_ANSWERS[$key]] = $this->idIsGiven($key) ? '1' : '0';
+        }
+
         if ($key === 'permanent_same_as_present' && $value) {
             $this->p['permanent_street']   = $this->p['present_street'] ?? '';
             $this->p['permanent_city']     = $this->p['present_city'] ?? '';
@@ -469,6 +526,8 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
     public function save(): void
     {
+        $this->answerIdQuestions();
+
         $this->validate([
             'p.surname'       => ['required', 'string', 'max:100'],
             'p.first_name'    => ['required', 'string', 'max:100'],
@@ -608,10 +667,13 @@ new #[Layout('components.layouts.applicant')] class extends Component
     /** Stamps the certification with the moment it was agreed to. */
     public function certify(): void
     {
-        $this->validate(['p.certified_name' => ['required', 'string', 'max:150']],
-            [], ['p.certified_name' => 'printed name']);
-
         $this->save();
+
+        if ($this->getErrorBag()->isNotEmpty()) {
+            return;
+        }
+
+        $this->p['certified_name'] = $this->signatory();
 
         DB::table('applicant_profiles')->where('user_id', Auth::id())
             ->update(['certified_name' => $this->p['certified_name'], 'certified_at' => now()]);
@@ -622,6 +684,11 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
     public function declare(): void
     {
+        // Before the check, not after: the four ID questions are answered by
+        // what was typed on the earlier step, and validating first would stop
+        // somebody on questions the form fills in for them.
+        $this->answerIdQuestions();
+
         // Every question answered before it is signed. An unanswered yes/no on
         // a declaration somebody puts their name to is not a blank that N/A
         // can cover - it is the difference between saying no and saying
@@ -642,8 +709,8 @@ new #[Layout('components.layouts.applicant')] class extends Component
             'tin_on_file'                  => 'whether you have a TIN',
         ];
 
-        $rules = ['d.declared_name' => ['required', 'string', 'max:150']];
-        $names = ['d.declared_name' => 'printed name'];
+        $rules = [];
+        $names = [];
 
         foreach ($questions as $field => $label) {
             $rules['d.'.$field] = ['required'];
@@ -653,6 +720,12 @@ new #[Layout('components.layouts.applicant')] class extends Component
         $this->validate($rules, [], $names);
 
         $this->save();
+
+        if ($this->getErrorBag()->isNotEmpty()) {
+            return;
+        }
+
+        $this->d['declared_name'] = $this->signatory();
 
         DB::table('applicant_disclosures')->where('user_id', Auth::id())
             ->update(['declared_name' => $this->d['declared_name'], 'declared_at' => now()]);

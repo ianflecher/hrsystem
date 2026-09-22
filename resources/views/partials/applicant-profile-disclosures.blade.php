@@ -180,7 +180,10 @@
     {{-- ----------------------------------------- 4. government IDs and benefits --}}
     <div class="px-6 py-3 border-b border-gray-200">
         <h3 class="font-medium text-gray-900 mb-1">4. Government mandated IDs and benefits</h3>
-        <p class="text-sm text-gray-600 mb-3">Which of these do you already have on file?</p>
+        <p class="text-sm text-gray-600 mb-3">
+            Which of these do you already have on file? Answered from the numbers you
+            gave earlier &mdash; change any that is wrong.
+        </p>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             @foreach ([
@@ -209,13 +212,9 @@
             discovered after hiring.
         </p>
 
-        <div class="mt-3 flex flex-wrap items-end gap-3">
-            <div class="flex-1 min-w-[16rem]">
-                <label class="form-label" for="declared_name">Signature over printed name</label>
-                <input id="declared_name" type="text" wire:model="d.declared_name" class="form-input"
-                       placeholder="Type your full name">
-                @error('d.declared_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-            </div>
+        {{-- No box to type your own name into: you are signed in, and the
+             record keeps the name and the time by itself. --}}
+        <div class="mt-3">
             <button type="button" wire:click="declare" class="btn-primary">Agree and save</button>
         </div>
 
