@@ -171,4 +171,12 @@ Route::post('/admin/logout', LogoutAdmin::class)->name('admin.logout');
 Route::post('/employee/logout', LogoutEmployee::class)->name('employee.logout');
 Route::post('/applicant/logout', LogoutApplicant::class)->name('applicant.logout');
 
-Route::fallback(fn () => redirect()->route('landing'));
+/*
+ * No fallback route.
+ *
+ * There used to be one sending every unmatched address to the careers page,
+ * which meant a mistyped URL quietly became a job advert - the visitor is told
+ * nothing, and a broken link inside the app looks like it worked. Unknown
+ * addresses now get the 404 page, which says what happened and offers the way
+ * back that suits whoever is reading it.
+ */

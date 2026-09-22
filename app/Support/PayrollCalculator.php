@@ -161,12 +161,21 @@ class PayrollCalculator
         return 0.0;
     }
 
+    /**
+     * What the figures do not already say.
+     *
+     * This used to restate SSS, PhilHealth, Pag-IBIG, tax, night differential
+     * and the holiday premium, every one of which is an itemised line on the
+     * payslip a few centimetres above. Repeating them made the note long
+     * enough to push the total off the screen while telling nobody anything.
+     *
+     * What is left is the part the figures cannot carry: how many days lie
+     * behind a deduction, how much paid leave was taken, and why a
+     * contribution is zero when it is.
+     */
     public static function note(array $c, array $time = []): string
     {
         $parts = [];
-        foreach ([['sss','SSS'],['philhealth','PhilHealth'],['pagibig','Pag-IBIG'],['tax','Tax'],['nsd','Night shift differential']] as [$key,$label]) {
-            if (($c[$key] ?? 0) > 0) $parts[] = $label.': PHP '.number_format($c[$key], 2);
-        }
         if (($c['late'] ?? 0) > 0) {
             $named = 0.0;
             foreach ([
@@ -179,9 +188,7 @@ class PayrollCalculator
             }
             if (round($named, 2) < $c['late']) $parts[] = 'Other time deductions: PHP '.number_format($c['late'] - round($named, 2), 2);
         }
-        if (($c['holiday'] ?? 0) > 0) $parts[] = 'Holiday premium: PHP '.number_format($c['holiday'], 2);
         if (($time['leaveDays'] ?? 0) > 0) $parts[] = 'Paid leave: '.$time['leaveDays'].' day'.($time['leaveDays'] === 1 ? '' : 's');
-        if (($c['other_taxable'] ?? 0) > 0) $parts[] = 'Other taxable compensation: PHP '.number_format($c['other_taxable'], 2);
         if (($c['sss'] ?? 0) == 0 && ($c['philhealth'] ?? 0) == 0 && ($c['pagibig'] ?? 0) == 0 && Statutory::timing() === 'second_cutoff') $parts[] = 'contributions fall on the second cutoff';
         return implode(' | ', $parts);
     }

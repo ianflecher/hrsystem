@@ -107,7 +107,17 @@ class HolidayAndThirteenthMonthTest extends TestCase
 
         $this->assertEquals($premium, (float) $payslip->holiday_pay);
         $this->assertEquals(round($this->salary / 2 + $premium, 2), (float) $payslip->gross_pay);
-        $this->assertStringContainsString('Holiday premium', $payslip->notes);
+
+        // Named on the payslip itself, where it is an earnings line of its
+        // own, rather than restated in the note underneath it.
+        $hr = \App\Models\User::where('role', 'admin')->first();
+
+        if ($hr) {
+            $this->actingAs($hr)
+                ->get(route('payslip.show', $payslip->payroll_id))
+                ->assertOk()
+                ->assertSee('Holiday premium');
+        }
     }
 
     // --------------------------------------------------------- 13th month pay

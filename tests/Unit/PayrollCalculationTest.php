@@ -201,16 +201,45 @@ class PayrollCalculationTest extends TestCase
         $this->assertSame(0.0, $c['taxable']);
     }
 
-    public function test_the_note_names_the_contributions_it_took(): void
+    /**
+     * The note carries what the figures cannot, and nothing they already say.
+     *
+     * It used to restate SSS, PhilHealth, Pag-IBIG, tax and the holiday
+     * premium, all of which are itemised lines on the payslip a few
+     * centimetres above - so the note grew long enough to push the total off
+     * a phone screen while telling nobody anything new.
+     */
+    public function test_the_note_does_not_restate_what_the_payslip_itemises(): void
     {
-        $this->assertStringContainsString('SSS', PayrollCalculator::note(PayrollCalculator::forCutoff(22000, 0, true)));
+        $note = PayrollCalculator::note(PayrollCalculator::forCutoff(22000, 0, true));
 
-        // And says so when a cutoff carries none, which it does under the
-        // other timing.
+        foreach (['SSS', 'PhilHealth', 'Pag-IBIG', 'Tax'] as $itemised) {
+            $this->assertStringNotContainsString($itemised, $note,
+                "{$itemised} has a line of its own; the note should not repeat it");
+        }
+    }
+
+    public function test_the_note_explains_a_contribution_that_is_absent(): void
+    {
+        // A zero needs explaining in a way a figure cannot: nothing was taken
+        // because of when contributions fall, not because none are owed.
         $this->withTiming('second_cutoff', function () {
             $first = PayrollCalculator::forCutoff(22000, 0, false);
             $this->assertStringContainsString('second cutoff', PayrollCalculator::note($first));
         });
+    }
+
+    public function test_the_note_gives_the_days_behind_a_deduction(): void
+    {
+        // The payslip shows one combined figure for lost time; only the note
+        // says how many days it was.
+        $c = PayrollCalculator::forCutoff(20000, 1363.64);
+        $note = PayrollCalculator::note($c, [
+            'absentDays' => 2, 'absence' => 1363.64,
+            'unpaidLeaveDays' => 0, 'lateDays' => 0, 'undertimeDays' => 0, 'leaveDays' => 0,
+        ]);
+
+        $this->assertStringContainsString('Absent (2 days)', $note);
     }
 
     /**
