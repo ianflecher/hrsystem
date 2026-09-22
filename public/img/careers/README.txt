@@ -166,6 +166,21 @@ one page. Across pages a photograph may reappear - the Inside page carries
 all 23 workstations, so anything using one would otherwise be off limits.
 
 -----------------------------------------------------------------------
+team-13, team-14 (the strip on /careers/our-people)
+
+The cafe's two staff, from the same 2026-09-21 shoot as the cafe tiles:
+
+  team-13  RTC00371  the barista, to camera
+  team-14  RTC00380  front of house, at the register
+
+One frame each, which is the rule the strip has always kept. RTC00366 and
+RTC00386 are the other frame of the same two people and are already the cafe
+tiles on the front page, so nobody appears twice within the strip itself.
+
+CareersTeam went from twelve slots to sixteen to fit them. Empty slots are
+skipped, so the ceiling costs nothing and the next shoot has somewhere to go.
+
+-----------------------------------------------------------------------
 cafe-1, cafe-2, cafe-3 (Imprint Cafe, on /careers/front)
 
 From the cafe shoot of 2026-09-21, exported by the client into the EDITED
