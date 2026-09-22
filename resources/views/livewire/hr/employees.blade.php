@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Services\DocumentVault;
 use App\Support\PeopleAccess;
+use App\Support\PersonName;
 use App\Services\SalaryHistory;
 use App\Support\WorkWeek;
 use Illuminate\Validation\Rule;
@@ -29,7 +30,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public bool $showModal = false;
     public ?int $editingId = null;
 
-    public string $full_name = '';
+    public string $first_name = '';
+    public string $middle_name = '';
+    public string $last_name = '';
     public string $username = '';
     public string $email = '';
     public string $job_title = '';
@@ -187,7 +190,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $row = DB::table('employees as e')
             ->join('users as u', 'e.user_id', '=', 'u.user_id')
             ->where('e.employee_id', $employeeId)
-            ->select('e.*', 'u.full_name', 'u.username', 'u.email', 'u.role')
+            ->select('e.*', 'u.full_name', 'u.first_name', 'u.middle_name', 'u.last_name', 'u.username', 'u.email', 'u.role')
             ->first();
 
         if (! $row) {
@@ -198,7 +201,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         }
 
         $this->editingId     = $row->employee_id;
-        $this->full_name     = $row->full_name;
+        // Records created before the name had parts carry only the whole
+        // thing. Splitting it on the last word fills the boxes so the record
+        // can be opened and corrected; leaving the surname empty would have
+        // made those people impossible to save at all.
+        $guess = PersonName::split($row->full_name);
+
+        $this->first_name    = $row->first_name ?: $guess['first'];
+        $this->middle_name   = $row->middle_name ?: $guess['middle'];
+        $this->last_name     = $row->last_name ?: $guess['last'];
         $this->username      = $row->username;
         $this->email         = $row->email;
         $this->job_title     = $row->job_title;
@@ -393,7 +404,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             : null;
 
         $data = $this->validate([
-            'full_name'     => ['required', 'string', 'max:150'],
+            'first_name'    => ['required', 'string', 'max:80'],
+            'middle_name'   => ['nullable', 'string', 'max:80'],
+            'last_name'     => ['required', 'string', 'max:80'],
             'username'      => ['required', 'string', 'max:100', Rule::unique('users', 'username')->ignore($userId, 'user_id')],
             'email'         => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($userId, 'user_id')],
             'job_title'     => ['required', 'string', 'max:100'],
@@ -437,7 +450,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         if ($this->editingId) {
             DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $userId) {
                 DB::table('users')->where('user_id', $userId)->update([
-                    'full_name'  => $data['full_name'],
+                    'full_name'  => PersonName::full($data['first_name'], $data['middle_name'] ?? '', $data['last_name']),
+                    'first_name' => PersonName::tidy($data['first_name']),
+                    'middle_name' => PersonName::tidy($data['middle_name'] ?? '') ?: null,
+                    'last_name'  => PersonName::tidy($data['last_name']),
                     'username'   => $data['username'],
                     'email'      => $data['email'],
                     'role'       => $data['role'],
@@ -479,7 +495,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 }
             });
 
-            session()->flash('success', $data['full_name'].' updated.');
+            session()->flash('success', PersonName::full($data['first_name'], $data['middle_name'] ?? '', $data['last_name']).' updated.');
             $this->showModal = false;
             $this->resetForm();
             $this->loadEmployees();
@@ -494,7 +510,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $password) {
             $newUserId = DB::table('users')->insertGetId([
-                'full_name'            => $data['full_name'],
+                'full_name'            => PersonName::full($data['first_name'], $data['middle_name'] ?? '', $data['last_name']),
+                'first_name'           => PersonName::tidy($data['first_name']),
+                'middle_name'          => PersonName::tidy($data['middle_name'] ?? '') ?: null,
+                'last_name'            => PersonName::tidy($data['last_name']),
                 'username'             => $data['username'],
                 'email'                => $data['email'],
                 'password'             => Hash::make($password),
@@ -537,7 +556,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         });
 
         $this->issuedPassword = $password;
-        $this->issuedFor      = $data['full_name'];
+        $this->issuedFor      = PersonName::full($data['first_name'], $data['middle_name'] ?? '', $data['last_name']);
         $this->showModal      = false;
         $this->resetForm();
         $this->loadEmployees();
@@ -681,7 +700,6 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     private function resetForm(): void
     {
         $this->editingId     = null;
-        $this->full_name     = '';
         $this->username      = '';
         $this->email         = '';
         $this->job_title     = '';
@@ -692,6 +710,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->biometric_id  = '';
         $this->department_id = '';
         $this->hire_date     = now()->toDateString();
+        $this->first_name    = '';
+        $this->middle_name   = '';
+        $this->last_name     = '';
         $this->salary        = '';
         $this->employment_type = 'Regular';
         $this->payChangeReason = '';
@@ -1008,9 +1029,20 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
                             <div>
-                                <label class="form-label" for="full_name">Full name</label>
-                                <input id="full_name" type="text" wire:model="full_name" class="form-input">
-                                @error('full_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                                <label class="form-label" for="first_name">First name</label>
+                                <input id="first_name" type="text" wire:model="first_name" class="form-input" maxlength="80">
+                                @error('first_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="middle_name">Middle name</label>
+                                <input id="middle_name" type="text" wire:model="middle_name" class="form-input" maxlength="80"
+                                       placeholder="Optional">
+                                @error('middle_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="last_name">Last name</label>
+                                <input id="last_name" type="text" wire:model="last_name" class="form-input" maxlength="80">
+                                @error('last_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
                             <div>
                                 <label class="form-label" for="job_title">Job title</label>

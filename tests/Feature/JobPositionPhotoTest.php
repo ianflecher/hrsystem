@@ -185,7 +185,8 @@ class JobPositionPhotoTest extends TestCase
     {
         $component = Volt::actingAs($this->hr())
             ->test('hr.employees')
-            ->set('full_name', 'Half Typed Person')
+            ->set('first_name', 'Half Typed')
+            ->set('last_name', 'Person')
             ->call('openDepartmentDialog')
             ->set('inlineDepartment', 'Invented From Employees')
             ->call('createDepartment')
@@ -196,7 +197,8 @@ class JobPositionPhotoTest extends TestCase
         $this->temporaryDepartmentIds[] = $id;
 
         $component->assertSet('department_id', $id)
-            ->assertSet('full_name', 'Half Typed Person');
+            ->assertSet('first_name', 'Half Typed')
+            ->assertSet('last_name', 'Person');
     }
 
     public function test_the_inline_form_refuses_a_name_already_taken(): void

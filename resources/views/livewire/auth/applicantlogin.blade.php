@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rules;
 use Illuminate\Support\Str;
+use App\Support\PersonName;
 use App\Models\User;
 
 new #[Layout('components.layouts.employee')] class extends Component
@@ -44,7 +45,9 @@ new #[Layout('components.layouts.employee')] class extends Component
     // application - everything else (contact details, address, experience)
     // is asked once, properly, on the applicant's own "My details" form
     // rather than a second time here.
-    public $full_name = '';
+    public $first_name = '';
+    public $middle_name = '';
+    public $last_name = '';
     public $password_confirmation = '';
     public $position = '';
     public $resume = null;
@@ -69,7 +72,7 @@ new #[Layout('components.layouts.employee')] class extends Component
     public function toggleForm()
     {
         $this->showLogin = !$this->showLogin;
-        $this->reset(['email', 'password', 'full_name', 'password_confirmation', 'position']);
+        $this->reset(['email', 'password', 'first_name', 'middle_name', 'last_name', 'password_confirmation', 'position']);
         $this->resetErrorBag();
     }
 
@@ -79,18 +82,6 @@ new #[Layout('components.layouts.employee')] class extends Component
      * and was never shown back to the applicant anywhere. Generated here
      * rather than asked for.
      */
-    private function generateUsername(string $fullName): string
-    {
-        $base = Str::slug($fullName, '.') ?: 'applicant';
-        $username = $base;
-        $suffix = 1;
-
-        while (DB::table('users')->where('username', $username)->exists()) {
-            $username = $base.'.'.(++$suffix);
-        }
-
-        return $username;
-    }
     
     public function login()
 {
@@ -119,7 +110,9 @@ new #[Layout('components.layouts.employee')] class extends Component
     public function register()
 {
     $this->validate([
-        'full_name' => ['required', 'string', 'max:150'],
+        'first_name' => ['required', 'string', 'max:80'],
+        'middle_name' => ['nullable', 'string', 'max:80'],
+        'last_name' => ['required', 'string', 'max:80'],
         'email' => ['required', 'string', 'email', 'max:150', 'unique:users'],
         'password' => ['required', 'confirmed', Rules\Password::defaults()],
         'position' => ['required', 'string', 'max:100'],
@@ -127,8 +120,13 @@ new #[Layout('components.layouts.employee')] class extends Component
 
     // Create user - role defaults to 'employee' according to your schema
     $user = User::create([
-        'full_name' => $this->full_name,
-        'username' => $this->generateUsername($this->full_name),
+        'full_name' => PersonName::full($this->first_name, $this->middle_name, $this->last_name),
+        'first_name' => PersonName::tidy($this->first_name),
+        'middle_name' => PersonName::tidy($this->middle_name) ?: null,
+        'last_name' => PersonName::tidy($this->last_name),
+        // The same rule HR's import uses, so a candidate who is later hired
+        // keeps the login they registered with instead of gaining a second.
+        'username' => PersonName::username($this->first_name, $this->last_name),
         'email' => $this->email,
         'password' => Hash::make($this->password),
         // role will default to 'employee' as per your DB schema
@@ -509,23 +507,47 @@ new #[Layout('components.layouts.employee')] class extends Component
                                  they are applying for, a password - everything else
                                  is asked once on the details form rather than twice. --}}
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <!-- Full Name -->
+                                {{-- In parts, the way every form they will
+                                     fill afterwards asks for it. A single box
+                                     could not be sorted by surname and left
+                                     the middle name unrecoverable. --}}
                                 <div>
-                                    <label for="full_name" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Full Name *
+                                    <label for="first_name" class="block text-sm font-medium text-gray-700 mb-2">
+                                        First Name *
                                     </label>
                                     <div class="relative">
                                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <i class="fas fa-user text-gray-400"></i>
                                         </div>
-                                        <input wire:model="full_name"
-                                               id="full_name"
-                                               type="text"
-                                               required
+                                        <input wire:model="first_name" id="first_name" type="text" required maxlength="80"
                                                class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                                               placeholder="Juan Dela Cruz">
+                                               placeholder="Juan">
                                     </div>
-                                    @error('full_name')
+                                    @error('first_name')
+                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                <div>
+                                    <label for="middle_name" class="block text-sm font-medium text-gray-700 mb-2">
+                                        Middle Name
+                                    </label>
+                                    <input wire:model="middle_name" id="middle_name" type="text" maxlength="80"
+                                           class="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                                           placeholder="Optional">
+                                    @error('middle_name')
+                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                <div>
+                                    <label for="last_name" class="block text-sm font-medium text-gray-700 mb-2">
+                                        Last Name *
+                                    </label>
+                                    <input wire:model="last_name" id="last_name" type="text" required maxlength="80"
+                                           class="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                                           placeholder="Dela Cruz">
+                                    @error('last_name')
                                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                                     @enderror
                                 </div>

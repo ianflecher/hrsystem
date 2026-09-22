@@ -41,7 +41,8 @@ class ApplicantPortalTest extends TestCase
         // Name, email, position, password. Contact details and history are
         // asked once on the applicant's own details form, not twice.
         Volt::test('auth.applicantlogin')
-            ->set('full_name', 'Test Applicant')
+            ->set('first_name', 'Test')
+            ->set('last_name', 'Applicant')
             ->set('email', "applicant{$n}@example.test")
             ->set('password', 'Password!2345')
             ->set('password_confirmation', 'Password!2345')
@@ -79,7 +80,8 @@ class ApplicantPortalTest extends TestCase
             $n = $this->uniqueSuffix();
 
             Volt::test('auth.applicantlogin')
-                ->set('full_name', 'Maria Santos')
+                ->set('first_name', 'Maria')
+                ->set('last_name', 'Santos')
                 ->set('email', "maria{$round}{$n}@example.test")
                 ->set('password', 'Password!2345')
                 ->set('password_confirmation', 'Password!2345')

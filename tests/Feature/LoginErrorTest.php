@@ -30,7 +30,8 @@ class LoginErrorTest extends TestCase
 
         $c = Volt::test('auth.applicantlogin')
             ->set('showLogin', false)
-            ->set('full_name', 'Someone Else')
+            ->set('first_name', 'Someone')
+            ->set('last_name', 'Else')
             ->set('email', $existing->email)
             ->set('position', 'Crew Member')
             ->set('password', 'Password!2345')
