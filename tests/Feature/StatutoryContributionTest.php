@@ -119,6 +119,65 @@ class StatutoryContributionTest extends TestCase
         $this->assertEquals(round(4270.70 + 1000 * 0.25, 2), P::tax(34333.0));
     }
 
+    // --------------------------------------------------- split across cutoffs
+
+    /**
+     * Every premium is split the same way, and the two cutoffs come to exactly
+     * what the monthly schedule says.
+     *
+     * A half-cutoff deduction read as a whole month's looks like an
+     * over-charge, and a premium split one way while another is not would
+     * either double-charge the month or swing the net between paydays. This
+     * asserts neither happens: the divisor is applied to all three, and
+     * nothing is left over.
+     */
+    public function test_the_two_cutoffs_come_to_the_monthly_schedule(): void
+    {
+        // 15,000 basic plus a 5,000 allowance: brackets are read against the
+        // whole 20,000 monthly compensation, then halved per cutoff.
+        $basic = 15000.0;
+        $base = 20000.0;
+        $allowance = 2500.0;   // half the monthly 5,000
+
+        $first  = P::forCutoff($basic, isSecondCutoff: false, allowance: $allowance, monthlyStatutoryBase: $base);
+        $second = P::forCutoff($basic, isSecondCutoff: true,  allowance: $allowance, monthlyStatutoryBase: $base);
+
+        foreach (['sss' => 1000.00, 'philhealth' => 500.00, 'pagibig' => 200.00] as $k => $monthly) {
+            $this->assertEquals($monthly, round($first[$k] + $second[$k], 2),
+                "{$k} over the month does not match the monthly schedule");
+
+            // Split evenly, so nobody's net swings between paydays.
+            $this->assertEquals($first[$k], $second[$k],
+                "{$k} is charged differently on the two cutoffs");
+
+            $this->assertEquals(round($monthly / 2, 2), $first[$k],
+                "{$k} was not halved like the others");
+        }
+
+        // And the month's pay is the monthly compensation, not more.
+        $this->assertEquals(20000.00, round($first['gross'] + $second['gross'], 2));
+    }
+
+    /**
+     * The brackets are read against the monthly compensation, never against
+     * one cutoff's gross. Reading a 10,000 cutoff instead of a 20,000 month
+     * would put somebody two MSC bands too low and under-remit their SSS.
+     */
+    public function test_the_brackets_are_read_monthly_not_per_cutoff(): void
+    {
+        $perMonth = P::forCutoff(15000, isSecondCutoff: true, allowance: 2500, monthlyStatutoryBase: 20000);
+
+        // Half of a 20,000 credit, not 5% of a 10,000 cutoff gross - which
+        // would also be 500, so the PhilHealth figure is what separates them.
+        $this->assertEquals(500.00, $perMonth['sss']);
+        $this->assertEquals(250.00, $perMonth['philhealth'], 'PhilHealth was read off one cutoff');
+
+        // Read per cutoff, a 10,000 base would give half of 10,000 x 2.5%.
+        $ifReadPerCutoff = round(P::philHealth(10000) / 2, 2);
+        $this->assertNotEquals($ifReadPerCutoff, $perMonth['philhealth'],
+            'the monthly base is being ignored');
+    }
+
     // ------------------------------------------------------ all together
 
     /**
