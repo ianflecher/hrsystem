@@ -962,7 +962,7 @@ public function updateApplicationStatus($applicationId, $status)
 <div @if (! $showApplicationModal && ! $showInterviewModal && ! $showDocumentsModal
           && ! $showInterviewResultModal && ! $showRoleChangeModal && ! $showSalaryModal
           && ! $showDepartmentModal && ! $showHireModal && ! $showResultsModal)
-        wire:poll.30s.visible
+        wire:poll.30s.visible="loadData"
      @endif>
     <!-- Page Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">

@@ -51,6 +51,19 @@ new #[Layout('components.layouts.applicant')] class extends Component
     
     public function mount()
     {
+        $this->load();
+    }
+
+    /**
+     * Read everything again.
+     *
+     * Separate from mount() because the poll needs something it can call, and
+     * mount() is a lifecycle hook that runs once - a plain wire:poll
+     * re-rendered this page without ever re-reading it, so an offer sent while
+     * it was open never appeared and the refresh looked broken because it was.
+     */
+    public function load(): void
+    {
         $user = Auth::user();
 
         $profile = DB::table('applicant_profiles')->where('user_id', $user->user_id)->first();
@@ -154,7 +167,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
         \App\Support\OfferAcceptance::hire($offer->offer_id);
 
-        $this->mount();
+        $this->load();
         session()->flash('success', 'Offer accepted. Welcome to Imprint Customs - HR will be in touch about your first day.');
     }
 
@@ -179,7 +192,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
         $this->confirmingDecline = false;
         $this->declineNote = '';
-        $this->mount();
+        $this->load();
         session()->flash('success', 'You have declined the offer. Thank you for letting us know.');
     }
 
@@ -271,7 +284,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
         }
         
         $this->newDocuments = [];
-        $this->mount(); // Refresh documents list
+        $this->load(); // Refresh documents list
     }
     
     public function deleteDocument($documentId)
@@ -294,7 +307,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
             // Delete the database record
             DB::table('application_documents')->where('id', $documentId)->delete();
             
-            $this->mount(); // Refresh documents list
+            $this->load(); // Refresh documents list
             session()->flash('success', 'Document deleted successfully!');
             
         } catch (\Exception $e) {
@@ -336,7 +349,15 @@ new #[Layout('components.layouts.applicant')] class extends Component
 }
 ?>
 
-<div>
+{{-- Picks up an offer, or an interview booked, while this page is already
+     open. The candidate is the one person here who cannot make anything
+     happen themselves - they are waiting on somebody else - so this is the
+     screen that most wants to refresh on its own.
+
+     Held while they are typing a reason for declining, and while files are
+     picked but not yet uploaded: wire:model is deferred, so a re-render in
+     the middle of either would take the typing or the selection with it. --}}
+<div @if (! $confirmingDecline && count($newDocuments) === 0) wire:poll.30s.visible="load" @endif>
     <!-- Flash Messages -->
     @if (session()->has('success'))
     <div class="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg" 
