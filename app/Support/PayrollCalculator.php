@@ -16,27 +16,35 @@ class PayrollCalculator
         bool $minimumWageEarner = false,
         float $otherTaxableCompensation = 0.0,
         float $allowance = 0.0,
+        ?float $monthlyStatutoryBase = null,
     ): array {
         $basic = round($monthlySalary / 2, 2);
+
+        // The contribution base is not always the basic salary. The allowance
+        // counts towards SSS, PhilHealth and Pag-IBIG, and those are monthly
+        // figures while this is one cutoff, so the caller passes the whole
+        // monthly compensation rather than us doubling the half we hold.
+        $monthlyStatutoryBase ??= $monthlySalary;
         $otherTaxableCompensation = round(max(0, $otherTaxableCompensation), 2);
 
-        // A de minimis allowance is paid in full: it counts towards gross and
-        // reaches net untouched, but it is not taxable income and it is not
-        // part of the SSS, PhilHealth or Pag-IBIG base. Those are worked out
-        // from $monthlySalary, which is basic pay, so they exclude it already.
+        // The allowance is ordinary compensation here: it counts towards
+        // gross, it is taxed, and it is part of the SSS, PhilHealth and
+        // Pag-IBIG base - the caller adds it to $monthlySalary before passing
+        // it in, because those are worked out monthly and this is one cutoff.
+        //
+        // It is still reported on its own line, so a payslip says how much of
+        // the pay is allowance even though nothing treats it differently.
         $allowance = round(max(0, $allowance), 2);
 
         $gross = round($basic + $overtimePay + $holidayPay + $nsdPay + $otherTaxableCompensation + $allowance, 2);
         $share = $statutory ? self::monthlyShare($isSecondCutoff, $ruleDate) : 0.0;
 
-        $sss = round(self::sss($monthlySalary, $ruleDate) * $share, 2);
-        $philhealth = round(self::philHealth($monthlySalary, $ruleDate) * $share, 2);
-        $pagibig = round(self::pagIbig($monthlySalary, $ruleDate) * $share, 2);
-        $employer = $statutory ? self::employerContributions($monthlySalary, $ruleDate, $share) : ['sss' => 0, 'ec' => 0, 'philhealth' => 0, 'pagibig' => 0];
+        $sss = round(self::sss($monthlyStatutoryBase, $ruleDate) * $share, 2);
+        $philhealth = round(self::philHealth($monthlyStatutoryBase, $ruleDate) * $share, 2);
+        $pagibig = round(self::pagIbig($monthlyStatutoryBase, $ruleDate) * $share, 2);
+        $employer = $statutory ? self::employerContributions($monthlyStatutoryBase, $ruleDate, $share) : ['sss' => 0, 'ec' => 0, 'philhealth' => 0, 'pagibig' => 0];
 
-        // Taken back out before tax: it is in gross because it is money the
-        // person receives, and out of here because it is not taxable.
-        $preTax = max(0, ($gross - $allowance) - ($sss + $philhealth + $pagibig) - $lateDeduction);
+        $preTax = max(0, $gross - ($sss + $philhealth + $pagibig) - $lateDeduction);
         $mweExempt = $minimumWageEarner ? round($basic + $overtimePay + $holidayPay + $nsdPay, 2) : 0.0;
         $taxable = max(0, $preTax - $mweExempt);
         if (! $minimumWageEarner) {
@@ -82,7 +90,7 @@ class PayrollCalculator
         $philhealth=round(self::philHealth($monthlyStatutoryBase,$ruleDate)*$share,2);
         $pagibig=round(self::pagIbig($monthlyStatutoryBase,$ruleDate)*$share,2);
         $employer=$statutory?self::employerContributions($monthlyStatutoryBase,$ruleDate,$share):['sss'=>0,'ec'=>0,'philhealth'=>0,'pagibig'=>0];
-        $preTax=max(0,($gross-$allowance)-($sss+$philhealth+$pagibig)-$lateDeduction);
+        $preTax=max(0,$gross-($sss+$philhealth+$pagibig)-$lateDeduction);
         $mweExempt=$minimumWageEarner?round($basicPay+$overtimePay+$holidayPay+$nsdPay,2):0.0;
         $taxable=$minimumWageEarner?max(0,$preTax-$mweExempt):$preTax;
         $tax=$statutory?self::tax($taxable,$ruleDate):0.0; $deductions=round($sss+$philhealth+$pagibig+$tax+$lateDeduction,2);

@@ -469,8 +469,9 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
                     @if ($allowance > 0)
                         <p class="text-xs text-gray-500 mt-2">
-                            The allowance is paid in full &mdash; no tax and no contributions are
-                            taken from it. Deductions apply to the basic pay only.
+                            Tax and contributions are worked out on the total, so the
+                            figure above is what you earn before deductions rather than
+                            what reaches you.
                         </p>
                     @endif
                 </div>

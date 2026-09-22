@@ -122,29 +122,35 @@ class StatutoryContributionTest extends TestCase
     // ------------------------------------------------------ all together
 
     /**
-     * Contributions come off before tax, and the allowance is outside every
-     * one of them: de minimis pay is not taxable and not part of the base.
+     * Contributions come off before tax, and the allowance is inside all of
+     * them: this company treats it as ordinary compensation, so it is charged
+     * on like any other pay.
      */
     public function test_a_whole_cutoff_hangs_together(): void
     {
-        $c = P::forCutoff(monthlySalary: 20000, isSecondCutoff: true, allowance: 2000);
+        // 20,000 basic plus a 4,000 monthly allowance: 2,000 this cutoff, and
+        // 24,000 is what the contributions are worked out on.
+        $c = P::forCutoff(monthlySalary: 20000, isSecondCutoff: true,
+            allowance: 2000, monthlyStatutoryBase: 24000);
 
         // Half the month's contributions, because the company splits them.
-        $this->assertEquals(500.00, $c['sss'], 'half of 1,000');
-        $this->assertEquals(250.00, $c['philhealth'], 'half of 500');
-        $this->assertEquals(100.00, $c['pagibig'], 'half of 200');
+        $this->assertEquals(600.00, $c['sss'], 'half of 1,200 on a 24,000 credit');
+        $this->assertEquals(300.00, $c['philhealth'], 'half of 600');
+        $this->assertEquals(100.00, $c['pagibig'], 'half of 200, capped at a 10,000 base');
 
         $this->assertEquals(10000.00, $c['basic']);
         $this->assertEquals(12000.00, $c['gross'], 'the allowance belongs in gross');
 
-        // Taxable is basic less contributions - the allowance is not in it.
-        $this->assertEquals(10000 - 850, $c['taxable'],
-            'the allowance was taxed, or contributions were not deducted first');
+        // Taxable is the whole gross less contributions.
+        $this->assertEquals(12000 - 1000, $c['taxable'],
+            'the allowance was left untaxed, or contributions were not deducted first');
 
-        // And that lands under the exemption, so nothing is withheld.
-        $this->assertEquals(0.0, $c['tax']);
+        // And because the allowance is in the taxable figure, this cutoff now
+        // clears the 10,417 exemption and tax is withheld on the excess. On
+        // basic alone it would not have been.
+        $this->assertEquals(round((11000 - 10417) * 0.15, 2), $c['tax']);
 
-        $this->assertEquals(850.00, $c['deductions']);
-        $this->assertEquals(11150.00, $c['net'], 'the allowance must reach net untouched');
+        $this->assertEquals(round(1000 + $c['tax'], 2), $c['deductions']);
+        $this->assertEquals(round(12000 - $c['deductions'], 2), $c['net']);
     }
 }

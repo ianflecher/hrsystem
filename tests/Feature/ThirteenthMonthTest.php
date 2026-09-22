@@ -10,9 +10,9 @@ use Tests\TestCase;
 /**
  * 13th month pay, against PD 851.
  *
- * One twelfth of the *basic salary earned* in the calendar year. Every word of
- * that is load-bearing: not the rate, not what was paid out, and not anything
- * that is not basic salary.
+ * One twelfth of the salary earned in the calendar year: not the rate, and not
+ * what was paid out. Overtime and the premiums are excluded; the allowance is
+ * not, because this company treats it as ordinary compensation.
  */
 class ThirteenthMonthTest extends TestCase
 {
@@ -96,18 +96,19 @@ class ThirteenthMonthTest extends TestCase
     }
 
     /**
-     * The allowance is in gross_pay because it is money the person receives,
-     * but it is not basic salary. Leaving it in paid a twelfth of it out again
-     * every December.
+     * The allowance counts, by the company's decision to treat it as ordinary
+     * compensation. PD 851 would let it be left out; including it pays more
+     * than the statutory minimum, which is the only direction that is allowed.
      */
-    public function test_the_allowance_is_not_part_of_the_base(): void
+    public function test_the_allowance_is_part_of_the_base(): void
     {
         $this->aFullYear(['allowance' => 2500]);
 
         $f = $this->figures();
 
-        $this->assertEquals(180000.00, $f['basic'], 'the allowance inflated the base');
-        $this->assertEquals(15000.00, $f['amount']);
+        // 24 cutoffs of 7,500 basic and 2,500 allowance.
+        $this->assertEquals(240000.00, $f['basic'], 'the allowance was left out');
+        $this->assertEquals(20000.00, $f['amount']);
     }
 
     public function test_overtime_the_holiday_premium_and_the_night_differential_are_excluded(): void
@@ -118,14 +119,16 @@ class ThirteenthMonthTest extends TestCase
             'premium pay was treated as basic salary');
     }
 
-    public function test_everything_excluded_at_once_still_leaves_only_the_basic(): void
+    public function test_premium_pay_is_excluded_even_when_an_allowance_is_paid(): void
     {
         $this->aFullYear([
             'allowance' => 2500, 'overtime_pay' => 900, 'holiday_pay' => 600,
             'nsd_pay' => 300, 'other_taxable_compensation' => 1000,
         ]);
 
-        $this->assertEquals(15000.00, $this->figures()['amount']);
+        // Basic and allowance count; overtime, the premiums and other taxable
+        // compensation do not.
+        $this->assertEquals(20000.00, $this->figures()['amount']);
     }
 
     /**
