@@ -289,31 +289,115 @@
         }
         
         /* Responsive Design */
+        /* ------------------------------------------------- the mobile drawer
+
+           Stacking the logo, three links and two buttons down the page cost a
+           third of a phone screen before any content began. On a phone the
+           header is one line with a button on it, and everything else waits
+           in a drawer. */
+        .drawer-toggle {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 42px;
+            height: 42px;
+            border: 1px solid rgba(255, 255, 255, .22);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, .08);
+            color: #fff;
+            font-size: 1.05rem;
+            cursor: pointer;
+        }
+
+        .drawer-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 190;
+            background: rgba(6, 12, 22, .55);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity .2s ease, visibility .2s ease;
+        }
+
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            gap: .35rem;
+            width: min(82vw, 320px);
+            height: 100%;
+            padding: 1rem;
+            background: linear-gradient(160deg, var(--career-dark-green) 0%, #0C1626 100%);
+            box-shadow: -14px 0 34px rgba(0, 0, 0, .35);
+            transform: translateX(100%);
+            transition: transform .24s ease;
+            overflow-y: auto;
+        }
+
+        body.drawer-open .drawer { transform: translateX(0); }
+        body.drawer-open .drawer-backdrop { opacity: 1; visibility: visible; }
+        body.drawer-open { overflow: hidden; }
+
+        .drawer__head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: .75rem;
+            margin-bottom: .5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, .14);
+        }
+
+        .drawer__who { color: #E6EBF2; font-weight: 600; font-size: .95rem; }
+
+        .drawer__close {
+            width: 36px;
+            height: 36px;
+            border: 0;
+            border-radius: 9px;
+            background: rgba(255, 255, 255, .08);
+            color: #fff;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        /* Touch targets, not the 0.35rem pills the top bar uses. */
+        .drawer .nav-link {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            padding: .8rem .9rem;
+            border-radius: 10px;
+            font-size: 1rem;
+        }
+
+        .drawer .logout-btn {
+            width: 100%;
+            justify-content: center;
+            margin-top: .5rem;
+            padding: .8rem;
+        }
+
         @media (max-width: 768px) {
             .applicant-header {
                 padding: 0.75rem 1rem;
             }
-            
+
+            /* One line: logo on the left, the drawer button on the right. */
             .header-content {
-                flex-direction: column;
-                gap: 1rem;
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+                gap: .75rem;
             }
-            
-            .applicant-nav {
-                width: 100%;
-                justify-content: center;
-                flex-wrap: wrap;
-                gap: 0.5rem;
-            }
-            
-            .nav-link {
-                padding: 0.4rem 0.8rem;
-                font-size: 0.9rem;
-            }
-            
-            .user-actions {
-                width: 100%;
-                justify-content: center;
+
+            .drawer-toggle { display: inline-flex; }
+
+            .applicant-header .applicant-nav,
+            .applicant-header .user-actions {
+                display: none;
             }
             
             .applicant-content {
@@ -325,6 +409,12 @@
             }
         }
         
+        @media (min-width: 769px) {
+            .drawer,
+            .drawer-backdrop,
+            .drawer-toggle { display: none; }
+        }
+
         @media (max-width: 480px) {
             .company-name {
                 font-size: 1.2rem;
@@ -397,6 +487,14 @@
             </nav>
         @endauth
 
+        {{-- Phone only; the bar has room for the real thing above 768px. --}}
+        @auth
+            <button type="button" class="drawer-toggle" data-drawer-open
+                    aria-label="Open menu" aria-controls="applicantDrawer" aria-expanded="false">
+                <i class="fas fa-bars"></i>
+            </button>
+        @endauth
+
         <!-- User Actions -->
         <div class="user-actions">
             @auth
@@ -421,6 +519,44 @@
         </div>
     </div>
 </header>
+
+@auth
+    {{-- The same links as the bar, at a size a thumb can hit. Kept as its own
+         markup rather than moved, because the two are laid out nothing alike
+         and sharing one list would compromise both. --}}
+    <div class="drawer-backdrop" data-drawer-close aria-hidden="true"></div>
+
+    <aside class="drawer" id="applicantDrawer" aria-label="Menu">
+        <div class="drawer__head">
+            <span class="drawer__who">
+                <i class="fas fa-user-circle mr-2"></i>{{ Auth::user()->full_name ?? 'Applicant' }}
+            </span>
+            <button type="button" class="drawer__close" data-drawer-close aria-label="Close menu">
+                <i class="fas fa-xmark"></i>
+            </button>
+        </div>
+
+        <a href="{{ route('applicant.index') }}"
+           class="nav-link {{ request()->routeIs('applicant.index') ? 'active' : '' }}">
+            <i class="fas fa-file-lines mr-3"></i>My application
+        </a>
+        <a href="{{ route('applicant.profile') }}"
+           class="nav-link {{ request()->routeIs('applicant.profile') ? 'active' : '' }}">
+            <i class="fas fa-id-card mr-3"></i>My details
+        </a>
+        <a href="{{ route('applicant.inside') }}"
+           class="nav-link {{ request()->routeIs('applicant.inside') ? 'active' : '' }}">
+            <i class="fas fa-building mr-3"></i>About the company
+        </a>
+
+        <form method="POST" action="{{ route('applicant.logout') }}" class="mt-auto">
+            @csrf
+            <button type="submit" class="logout-btn">
+                <i class="fas fa-sign-out-alt mr-2"></i>Logout
+            </button>
+        </form>
+    </aside>
+@endauth
 
 <!-- Main Content Area -->
 <main class="applicant-content">
@@ -471,13 +607,37 @@
             }
         });
         
-        // Mobile menu toggle (if needed in future)
-        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-        const mobileMenu = document.getElementById('mobileMenu');
-        
-        if (mobileMenuBtn && mobileMenu) {
-            mobileMenuBtn.addEventListener('click', function() {
-                mobileMenu.classList.toggle('hidden');
+        // The drawer. Open and close hang off the body class, so the panel,
+        // the backdrop and the page scroll lock all follow one state.
+        const drawer = document.getElementById('applicantDrawer');
+        const opener = document.querySelector('[data-drawer-open]');
+
+        const setDrawer = (open) => {
+            document.body.classList.toggle('drawer-open', open);
+            if (opener) {
+                opener.setAttribute('aria-expanded', open ? 'true' : 'false');
+            }
+        };
+
+        if (drawer) {
+            document.querySelectorAll('[data-drawer-open]').forEach(
+                el => el.addEventListener('click', () => setDrawer(true)));
+
+            document.querySelectorAll('[data-drawer-close]').forEach(
+                el => el.addEventListener('click', () => setDrawer(false)));
+
+            // Escape closes it, and so does following a link out of it.
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape') setDrawer(false);
+            });
+
+            drawer.querySelectorAll('a').forEach(
+                a => a.addEventListener('click', () => setDrawer(false)));
+
+            // Left open, then the phone is turned sideways into a layout that
+            // has the bar back: close it rather than leave a panel over it.
+            window.addEventListener('resize', () => {
+                if (window.innerWidth > 768) setDrawer(false);
             });
         }
     });
