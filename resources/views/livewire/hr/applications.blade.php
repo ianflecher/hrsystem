@@ -1119,6 +1119,7 @@ public function updateApplicationStatus($applicationId, $status)
                         <th>Experience</th>
                         <th>Status</th>
                         <th>Interview Date</th>
+                        <th>Recommendation</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -1198,6 +1199,35 @@ public function updateApplicationStatus($applicationId, $status)
                                         <span class="text-gray-400">Not scheduled</span>
                                     @endif
                                 </td>
+
+                                {{-- The interviewer's verdict on the latest round. It lived
+                                     only inside the dialog, so the one thing HR is waiting
+                                     to know took a click per applicant to find out. --}}
+                                <td>
+                                    @php
+                                        $verdicts = [
+                                            'recommend'     => ['Recommends', 'bg-green-100 text-green-800', 'fa-thumbs-up'],
+                                            'not_recommend' => ['Not recommended', 'bg-red-100 text-red-800', 'fa-thumbs-down'],
+                                            'undecided'     => ['Undecided', 'bg-gray-100 text-gray-700', 'fa-circle-question'],
+                                        ];
+                                        $verdict = $application->interviewer_recommendation ?? null;
+                                    @endphp
+
+                                    @if ($verdict)
+                                        @php [$vLabel, $vTone, $vIcon] = $verdicts[$verdict]; @endphp
+                                        <span class="px-2 py-1 rounded-full text-xs font-medium {{ $vTone }}">
+                                            <i class="fas {{ $vIcon }} mr-1"></i>{{ $vLabel }}
+                                        </span>
+                                        @if (($application->interview_round ?? 1) > 1)
+                                            <div class="text-xs text-gray-500 mt-1">after round {{ $application->interview_round }}</div>
+                                        @endif
+                                    @elseif ($application->interview_date ?? false)
+                                        <span class="text-xs text-gray-400">Waiting on the interviewer</span>
+                                    @else
+                                        <span class="text-xs text-gray-300">&mdash;</span>
+                                    @endif
+                                </td>
+
                                 <td>
                                     <div class="flex gap-2">
                                         <button wire:click="viewApplication('{{ $application->application_id }}')" 
@@ -1268,7 +1298,7 @@ public function updateApplicationStatus($applicationId, $status)
                         @endforeach
                     @else
                         <tr>
-                            <td colspan="7" class="text-center py-8 text-gray-500">
+                            <td colspan="8" class="text-center py-8 text-gray-500">
                                 <div class="flex flex-col items-center">
                                     <i class="fas fa-file-alt text-4xl text-gray-300 mb-3"></i>
                                     <p class="text-lg">No applications found</p>

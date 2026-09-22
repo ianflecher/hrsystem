@@ -138,19 +138,31 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->get();
     }
     
+    /**
+     * What this period comes to.
+     *
+     * The totals used to be joined on status = 'paid', so the cards read
+     * PHP 0.00 for the whole life of a payroll run while the rows beneath
+     * them listed real figures - the screen contradicted itself from
+     * generation until the money went out, which is exactly when somebody is
+     * looking at it.
+     *
+     * The sums now cover the period. Only the headcount is about payment, and
+     * it says so.
+     */
     public function getPayrollStatsProperty()
     {
         return DB::table('employees')
-            ->join('hr_payroll', function($join) {
+            ->join('hr_payroll', function ($join) {
                 $join->on('employees.employee_id', '=', 'hr_payroll.employee_id')
-                    ->where('hr_payroll.period_start', '=', $this->payPeriod)
-                    ->where('hr_payroll.status', 'paid');
+                    ->where('hr_payroll.period_start', '=', $this->payPeriod);
             })
             ->select(
-                DB::raw('COUNT(DISTINCT employees.employee_id) as total_paid'),
-                DB::raw('SUM(hr_payroll.gross_pay) as total_gross'),
-                DB::raw('SUM(hr_payroll.deductions) as total_deductions'),
-                DB::raw('SUM(hr_payroll.net_pay) as total_net')
+                DB::raw('COUNT(DISTINCT employees.employee_id) as total_employees'),
+                DB::raw('COUNT(DISTINCT CASE WHEN hr_payroll.status = "paid" THEN employees.employee_id END) as total_paid'),
+                DB::raw('COALESCE(SUM(hr_payroll.gross_pay), 0) as total_gross'),
+                DB::raw('COALESCE(SUM(hr_payroll.deductions), 0) as total_deductions'),
+                DB::raw('COALESCE(SUM(hr_payroll.net_pay), 0) as total_net')
             )
             ->first();
     }
@@ -1104,7 +1116,91 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         <!-- Payroll Table -->
         <div class="bg-white shadow overflow-hidden sm:rounded-lg">
-            <div class="overflow-x-auto">
+            {{-- On a phone this table is 984px of columns in a 247px column,
+                 so it wanted four screens of sideways scrolling to read one
+                 person's pay. A table that wide cannot be made to fit; below
+                 md it stops being a table and each person becomes a card. --}}
+            <div class="md:hidden divide-y divide-gray-200">
+                @forelse($this->employees as $employee)
+                    @php
+                        $statusColors = [
+                            'draft' => 'bg-gray-100 text-gray-800',
+                            'calculated' => 'bg-blue-100 text-blue-800',
+                            'approved' => 'bg-yellow-100 text-yellow-800',
+                            'paid' => 'bg-green-100 text-green-800',
+                            'cancelled' => 'bg-gray-100 text-gray-700',
+                            'not_processed' => 'bg-gray-100 text-gray-800',
+                        ];
+                        $payrollStatus = $employee->payroll_status;
+                        $colorClass = $statusColors[$payrollStatus] ?? 'bg-gray-100 text-gray-800';
+                        $statusText = $payrollStatus === 'not_processed' ? 'Not Processed' : ucfirst($payrollStatus);
+                    @endphp
+
+                    <div class="p-4" wire:key="pay-card-{{ $employee->employee_id }}">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex items-center min-w-0">
+                                <div class="h-9 w-9 shrink-0 rounded-full bg-blue-100 flex items-center justify-center">
+                                    <span class="text-blue-600 font-medium">{{ substr($employee->full_name, 0, 1) }}</span>
+                                </div>
+                                <div class="ml-3 min-w-0">
+                                    <p class="font-medium text-gray-900 truncate">{{ $employee->full_name }}</p>
+                                    <p class="text-xs text-gray-500 truncate">
+                                        {{ $employee->job_title }}@if($employee->department_name) &middot; {{ $employee->department_name }}@endif
+                                    </p>
+                                </div>
+                            </div>
+                            <span class="shrink-0 px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $colorClass }}">
+                                {{ $statusText }}
+                            </span>
+                        </div>
+
+                        {{-- Net pay is what anybody actually looks for, so it is the
+                             one given room; the other two sit under it. --}}
+                        <div class="mt-3 flex items-end justify-between gap-3">
+                            <div>
+                                <p class="text-xs text-gray-500">Net pay</p>
+                                <p class="text-lg font-semibold text-gray-900">
+                                    &#8369;{{ number_format($employee->net_pay ?? 0, 2) }}
+                                </p>
+                            </div>
+                            <div class="text-right text-xs text-gray-500 leading-5">
+                                <p>Gross &#8369;{{ number_format($employee->gross_pay ?? 0, 2) }}</p>
+                                <p class="text-red-600">Less &#8369;{{ number_format($employee->deductions ?? 0, 2) }}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <button wire:click="viewPayrollDetails({{ $employee->employee_id }})"
+                                    class="px-3 py-1.5 text-sm rounded-lg bg-blue-50 text-blue-700">
+                                View
+                            </button>
+
+                            @if($employee->payroll_status === 'not_processed')
+                                <button wire:click="processPayroll({{ $employee->employee_id }})"
+                                        class="px-3 py-1.5 text-sm rounded-lg bg-green-50 text-green-700">
+                                    Process
+                                </button>
+                            @elseif($employee->payroll_status === 'calculated')
+                                <button wire:click="approvePayroll({{ $employee->employee_id }})"
+                                        class="px-3 py-1.5 text-sm rounded-lg bg-yellow-50 text-yellow-700">
+                                    Approve
+                                </button>
+                            @elseif($employee->payroll_status === 'approved')
+                                <button wire:click="markAsPaid({{ $employee->employee_id }})"
+                                        class="px-3 py-1.5 text-sm rounded-lg bg-green-50 text-green-700">
+                                    Mark Paid
+                                </button>
+                            @endif
+                        </div>
+                    </div>
+                @empty
+                    <div class="p-6 text-center text-gray-500">
+                        No employees found matching your criteria.
+                    </div>
+                @endforelse
+            </div>
+
+            <div class="hidden md:block overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
@@ -1241,7 +1337,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     <div class="text-2xl font-bold text-blue-600">
                         {{ $this->payrollStats?->total_paid ?? 0 }}
                     </div>
-                    <div class="text-sm text-gray-600">Employees Paid</div>
+                    <div class="text-sm text-gray-600">
+                        Paid of {{ $this->payrollStats?->total_employees ?? 0 }}
+                    </div>
                 </div>
                 <div class="text-center p-3 bg-white rounded shadow">
                     <div class="text-2xl font-bold text-green-600">
@@ -1267,12 +1365,20 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     <!-- Payroll Details Modal -->
     @if($showPayrollDetails && $selectedEmployee)
         <div class="fixed z-10 inset-0 overflow-y-auto">
-            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="flex items-end justify-center min-h-screen text-center sm:block sm:p-0">
                 <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
-                
+
                 <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-                
-                <div class="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full sm:p-6">
+
+                {{-- A payslip is two columns of figures, and on a phone it had
+                     32px of wrapper padding and 32px of its own before one was
+                     drawn. Below sm it takes the whole screen - edge to edge,
+                     no rounded corners to waste the sides - and above it goes
+                     wider than the 3xl it used to sit in. --}}
+                <div class="inline-block align-bottom bg-white text-left shadow-xl transform transition-all
+                            w-full min-h-screen px-3 pt-5 pb-10 overflow-y-auto
+                            sm:min-h-0 sm:max-h-[92vh] sm:rounded-lg sm:my-8 sm:align-middle
+                            sm:max-w-6xl sm:w-full sm:px-8 sm:py-6">
                     <!-- Modal Header -->
                     <div class="flex justify-between items-start mb-4">
                         <div>
@@ -1292,7 +1398,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     </div>
                     
                     <!-- Employee Information -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6">
                         <div>
                             <h4 class="text-sm font-medium text-gray-500 mb-2">Employee Information</h4>
                             <div class="space-y-2">
@@ -1405,19 +1511,19 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     @if(($this->payrollBreakdown['time'] ?? 0) > 0)
                                         <div class="flex justify-between">
                                             <span class="text-sm">Late, undertime and absence:</span>
-                                            <span class="text-sm">-PHP {{ number_format($this->payrollBreakdown['time'], 2) }}</span>
+                                            <span class="text-sm">-₱{{ number_format($this->payrollBreakdown['time'], 2) }}</span>
                                         </div>
                                     @endif
                                     @if(($this->payrollBreakdown['loan'] ?? 0) > 0)
                                         <div class="flex justify-between">
                                             <span class="text-sm">Loan repayment:</span>
-                                            <span class="text-sm">-PHP {{ number_format($this->payrollBreakdown['loan'], 2) }}</span>
+                                            <span class="text-sm">-₱{{ number_format($this->payrollBreakdown['loan'], 2) }}</span>
                                         </div>
                                     @endif
                                     @if($this->payrollBreakdown['other_deductions'] != 0)
                                         <div class="flex justify-between">
                                             <span class="text-sm">Unaccounted for:</span>
-                                            <span class="text-sm">-PHP {{ number_format($this->payrollBreakdown['other_deductions'], 2) }}</span>
+                                            <span class="text-sm">-₱{{ number_format($this->payrollBreakdown['other_deductions'], 2) }}</span>
                                         </div>
                                     @endif
                                 </div>
