@@ -212,9 +212,25 @@ class ApplicantProfileTest extends TestCase
             ->call('back')
             ->assertSet('step', 1)
             ->call('goToStep', 99)
-            ->assertSet('step', 4)
+            ->assertSet('step', 5)
             ->call('goToStep', -3)
             ->assertSet('step', 1);
+    }
+
+    public function test_government_numbers_are_their_own_step(): void
+    {
+        $html = $this->actingAs($this->applicant())->get('/applicant/profile')->getContent();
+
+        // Step 1 should not carry government numbers or emergency contact any more -
+        // those moved to their own step so personal details is not the longest one.
+        $this->assertStringNotContainsString('Government numbers', $html);
+        $this->assertStringNotContainsString('In case of emergency', $html);
+
+        Volt::actingAs($this->applicant())
+            ->test('applicant.profile')
+            ->call('goToStep', 2)
+            ->assertSee('Government numbers')
+            ->assertSee('In case of emergency');
     }
 
     public function test_certifying_stamps_the_time(): void

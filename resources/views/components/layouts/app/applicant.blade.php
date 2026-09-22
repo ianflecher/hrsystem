@@ -195,7 +195,7 @@
         /* Main Content */
         .applicant-content {
             max-width: 1400px;
-            margin: 2rem auto;
+            margin: 0.75rem auto 2rem;
             padding: 0 2rem;
         }
         

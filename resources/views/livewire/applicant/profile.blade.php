@@ -31,9 +31,10 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
     public array $steps = [
         1 => 'Personal details',
-        2 => 'Education',
-        3 => 'Employment',
-        4 => 'Disclosures',
+        2 => 'Government IDs',
+        3 => 'Education',
+        4 => 'Employment',
+        5 => 'Disclosures',
     ];
 
     public array $civilStatuses = [
@@ -333,8 +334,8 @@ new #[Layout('components.layouts.applicant')] class extends Component
     }
 }; ?>
 
-<div class="p-6 md:p-8 max-w-[100rem] mx-auto">
-    <div class="mb-6">
+<div class="px-6 md:px-8 pt-2 pb-6 md:pb-8 max-w-[100rem] mx-auto">
+    <div class="mb-3">
         <h1 class="text-2xl font-semibold text-gray-900">Application details</h1>
         <p class="text-sm text-gray-600 mt-1">
             Filled in once. It stays with your account, so you will not be asked for it again
@@ -351,7 +352,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
     {{-- Where they are, and how much is left. Steps already passed can be
          clicked back to; ones ahead cannot, because they have not been saved. --}}
-    <nav class="mb-6 flex flex-wrap items-center gap-2" aria-label="Form steps">
+    <nav class="mb-4 flex flex-wrap items-center gap-2" aria-label="Form steps">
         @foreach ($steps as $number => $label)
             @php $state = $number === $step ? 'current' : ($number < $step ? 'done' : 'ahead'); @endphp
             <button type="button"
@@ -375,8 +376,10 @@ new #[Layout('components.layouts.applicant')] class extends Component
     @if ($step === 1)
         @include('partials.applicant-profile-personal')
     @elseif ($step === 2)
-        @include('partials.applicant-profile-education')
+        @include('partials.applicant-profile-government')
     @elseif ($step === 3)
+        @include('partials.applicant-profile-education')
+    @elseif ($step === 4)
         @include('partials.applicant-profile-employment')
     @else
         @include('partials.applicant-profile-disclosures')
