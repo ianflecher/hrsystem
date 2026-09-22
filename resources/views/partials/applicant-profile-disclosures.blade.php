@@ -77,7 +77,7 @@
                 </div>
 
                 @forelse ($relatives as $i => $rel)
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3" wire:key="rel-{{ $i }}">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3" wire:key="rel-{{ $i }}">
                         <input type="text" wire:model="relatives.{{ $i }}.name" class="form-input" placeholder="Name">
                         <input type="text" wire:model="relatives.{{ $i }}.relationship" class="form-input" placeholder="Relationship">
                         <div class="flex gap-2">
@@ -160,7 +160,7 @@
                     <label class="flex items-center gap-2 text-sm"><input type="radio" value="0" wire:model.live="d.can_start_immediately"> No</label>
                 </div>
                 @if ((string) ($d['can_start_immediately'] ?? '') === '0')
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                         <div>
                             <label class="form-label">Days you have to render</label>
                             <input type="number" min="0" max="365" wire:model="d.days_to_render" class="form-input">
@@ -182,7 +182,7 @@
         <h3 class="font-medium text-gray-900 mb-1">4. Government mandated IDs and benefits</h3>
         <p class="text-sm text-gray-600 mb-3">Which of these do you already have on file?</p>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             @foreach ([
                 'sss_on_file'        => 'SSS number',
                 'pagibig_on_file'    => 'Pag-IBIG (HDMF) MID number',

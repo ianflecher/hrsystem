@@ -21,8 +21,8 @@
                     @endif
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div class="lg:col-span-2">
+                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <div class="md:col-span-3 lg:col-span-2">
                         <label class="form-label">Company name</label>
                         <input type="text" wire:model="jobs.{{ $i }}.company_name" class="form-input">
                         @error('jobs.'.$i.'.company_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
@@ -44,11 +44,11 @@
                         <input type="number" step="0.01" min="0" wire:model="jobs.{{ $i }}.daily_salary" class="form-input" placeholder="0.00">
                         @error('jobs.'.$i.'.daily_salary') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                     </div>
-                    <div class="lg:col-span-3">
+                    <div class="md:col-span-3 lg:col-span-6">
                         <label class="form-label">Company address</label>
                         <textarea wire:model="jobs.{{ $i }}.company_address" rows="2" class="form-input"></textarea>
                     </div>
-                    <div class="lg:col-span-3">
+                    <div class="md:col-span-3 lg:col-span-6">
                         <label class="form-label">Reason for leaving</label>
                         <textarea wire:model="jobs.{{ $i }}.reason_for_leaving" rows="2" class="form-input"></textarea>
                     </div>
@@ -70,7 +70,7 @@
         </div>
 
         @forelse ($refs as $i => $ref)
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3 items-start" wire:key="ref-{{ $i }}">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3 items-start" wire:key="ref-{{ $i }}">
                 <input type="text" wire:model="refs.{{ $i }}.name" class="form-input" placeholder="Name">
                 <input type="text" wire:model="refs.{{ $i }}.contact_no" class="form-input" placeholder="Contact no.">
                 <div class="flex gap-2">
