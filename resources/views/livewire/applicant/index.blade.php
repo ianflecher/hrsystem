@@ -17,6 +17,18 @@ new #[Layout('components.layouts.applicant')] class extends Component
     public $interviewDetails = null;
 
     /**
+     * Every round, oldest first, for the timeline.
+     *
+     * The page only ever loaded one, so somebody called back twice saw a
+     * single "Interview Scheduled" and no sign of the others.
+     *
+     * Named columns, never ai.* - this is a public Livewire property and its
+     * contents are serialised into the page, where the candidate can read
+     * them. The verdict on them is not theirs to see.
+     */
+    public array $interviewRounds = [];
+
+    /**
      * Where the applicant has got to with their own details form - 'none',
      * 'started' or 'done'. Signing it (certifying the record and agreeing to
      * the disclosures) is what counts as finished; a saved row on its own
@@ -83,6 +95,23 @@ new #[Layout('components.layouts.applicant')] class extends Component
                 ->orderByRaw('ai.scheduled_at >= NOW() DESC')
                 ->orderBy('ai.scheduled_at')
                 ->first();
+
+            $this->interviewRounds = DB::table('application_interviews as ai')
+                ->select(
+                    'ai.interview_id',
+                    'ai.round',
+                    'ai.scheduled_at',
+                    'ai.type',
+                    'ai.status',
+                    'interviewer.full_name as interviewer_name'
+                )
+                ->leftJoin('users as interviewer', 'ai.interviewer_id', '=', 'interviewer.user_id')
+                ->where('ai.application_id', $this->application->application_id)
+                ->where('ai.status', '!=', 'cancelled')
+                ->orderBy('ai.round')
+                ->orderBy('ai.scheduled_at')
+                ->get()
+                ->all();
         }
     }
     
@@ -538,31 +567,43 @@ new #[Layout('components.layouts.applicant')] class extends Component
                                 </div>
                             </div>
                             
-                            <!-- Step 3: Interview Status (if scheduled) -->
-                            @if($interviewDetails)
-                            <div class="flex items-start">
-                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center">
-                                    <i class="fas fa-calendar-check text-white text-sm"></i>
+                            {{-- One entry per round. The page used to load a single
+                                 interview, so somebody called back twice saw one
+                                 "Interview Scheduled" and no sign of the rest. --}}
+                            @foreach($interviewRounds as $round)
+                                @php
+                                    $when = \Carbon\Carbon::parse($round->scheduled_at);
+                                    $done = $round->status === 'completed' || $when->isPast();
+                                    $kind = match ($round->type) {
+                                        'video'     => 'Video interview',
+                                        'phone'     => 'Phone interview',
+                                        'in_person' => 'In-person interview',
+                                        'technical' => 'Technical interview',
+                                        'hr'        => 'Interview with HR',
+                                        default     => 'Interview',
+                                    };
+                                @endphp
+                                <div class="flex items-start" wire:key="tl-iv-{{ $round->interview_id }}">
+                                    <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
+                                        {{ $done ? 'bg-career-500' : 'bg-purple-500' }}">
+                                        <i class="fas {{ $done ? 'fa-check' : 'fa-calendar-check' }} text-white text-sm"></i>
+                                    </div>
+                                    <div class="ml-6">
+                                        <h4 class="font-medium text-gray-800">
+                                            {{ count($interviewRounds) > 1 ? 'Interview '.$round->round : 'Interview' }}
+                                            @if ($done)
+                                                <span class="text-sm font-normal text-gray-500">&mdash; done</span>
+                                            @endif
+                                        </h4>
+                                        <p class="text-sm text-gray-600">{{ $when->format('F j, Y \a\t g:i A') }}</p>
+                                        <p class="text-sm mt-1 font-medium {{ $done ? 'text-career-600' : 'text-purple-600' }}">
+                                            <i class="fas fa-user-tie mr-1"></i>
+                                            {{ $kind }}@if ($round->interviewer_name) with {{ $round->interviewer_name }}@endif
+                                        </p>
+                                    </div>
                                 </div>
-                                <div class="ml-6">
-                                    <h4 class="font-medium text-gray-800">Interview Scheduled</h4>
-                                    <p class="text-sm text-gray-600">{{ \Carbon\Carbon::parse($interviewDetails->interview_date)->format('F j, Y \a\t g:i A') }}</p>
-                                    <p class="text-sm text-purple-600 mt-1 font-medium">
-                                        <i class="fas fa-video mr-1"></i> 
-                                        @if($interviewDetails->interview_type === 'video')
-                                            Virtual interview scheduled
-                                        @elseif($interviewDetails->interview_type === 'phone')
-                                            Phone interview scheduled
-                                        @elseif($interviewDetails->interview_type === 'in_person')
-                                            In-person interview scheduled
-                                        @else
-                                            Interview scheduled
-                                        @endif
-                                    </p>
-                                </div>
-                            </div>
-                            @endif
-                            
+                            @endforeach
+
                             <!-- Step 4: Shortlisted Status -->
                             @if($application->status === 'shortlisted' || $application->status === 'hired')
                             <div class="flex items-start">

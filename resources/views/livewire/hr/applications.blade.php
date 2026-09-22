@@ -7,6 +7,23 @@ use Illuminate\Support\Facades\DB;
 new #[Layout('components.layouts.humanresource')] class extends Component
 {
     public $applications = [];
+
+    /**
+     * Every round, keyed by application, for the list.
+     *
+     * The list joins only the latest interview, so a candidate recommended
+     * twice and then turned down showed just the last verdict - and somebody
+     * scanning the list could not see they had been through three rounds at
+     * all. One query for the page rather than one per row.
+     *
+     * @var array<int, list<object>>
+     */
+    public array $roundsByApplication = [];
+
+    /** The interview results panel: which application, and its rounds. */
+    public bool $showResultsModal = false;
+    public $resultsApplication = null;
+    public array $resultsRounds = [];
     public $employees = [];
     public $departments = [];
     public $users = [];
@@ -173,6 +190,18 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         }
 
         $this->applications = $query->get();
+
+        $this->roundsByApplication = DB::table('application_interviews as ai')
+            ->select('ai.application_id', 'ai.round', 'ai.status', 'ai.recommendation',
+                'ai.recommendation_notes', 'u.full_name as interviewer_name')
+            ->leftJoin('users as u', 'ai.interviewer_id', '=', 'u.user_id')
+            ->whereIn('ai.application_id', $this->applications->pluck('application_id'))
+            ->where('ai.status', '!=', 'cancelled')
+            ->orderBy('ai.round')
+            ->get()
+            ->groupBy('application_id')
+            ->map(fn ($rows) => $rows->values()->all())
+            ->all();
     }
 
   public function loadEmployees()
@@ -449,6 +478,25 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'updated_at' => now(),
             ]);
         });
+    }
+
+    /**
+     * What the interviewers made of somebody, on its own.
+     *
+     * It is all in the application dialog too, but that is the whole 201 file
+     * and somebody deciding whether to hire wants the verdicts and the reasons
+     * without scrolling past a birthplace to reach them.
+     */
+    public function openResults($applicationId)
+    {
+        $this->resultsApplication = DB::table('job_applications as ja')
+            ->select('ja.application_id', 'ja.position_applied', 'ja.status', 'u.full_name')
+            ->join('users as u', 'ja.user_id', '=', 'u.user_id')
+            ->where('ja.application_id', $applicationId)
+            ->first();
+
+        $this->resultsRounds = $this->roundsFor((int) $applicationId);
+        $this->showResultsModal = true;
     }
 
     public function viewDocuments($applicationId)
@@ -907,7 +955,7 @@ public function updateApplicationStatus($applicationId, $status)
      form both carry typed values that a re-render would discard. --}}
 <div @if (! $showApplicationModal && ! $showInterviewModal && ! $showDocumentsModal
           && ! $showInterviewResultModal && ! $showRoleChangeModal && ! $showSalaryModal
-          && ! $showDepartmentModal && ! $showHireModal)
+          && ! $showDepartmentModal && ! $showHireModal && ! $showResultsModal)
         wire:poll.30s.visible
      @endif>
     <!-- Page Header -->
@@ -1218,18 +1266,51 @@ public function updateApplicationStatus($applicationId, $status)
                                         $verdict = $application->interviewer_recommendation ?? null;
                                     @endphp
 
-                                    @if ($verdict)
-                                        @php [$vLabel, $vTone, $vIcon] = $verdicts[$verdict]; @endphp
-                                        <span class="px-2 py-1 rounded-full text-xs font-medium {{ $vTone }}">
-                                            <i class="fas {{ $vIcon }} mr-1"></i>{{ $vLabel }}
-                                        </span>
-                                        @if (($application->interview_round ?? 1) > 1)
-                                            <div class="text-xs text-gray-500 mt-1">after round {{ $application->interview_round }}</div>
-                                        @endif
-                                    @elseif ($application->interview_date ?? false)
-                                        <span class="text-xs text-gray-400">Waiting on the interviewer</span>
-                                    @else
+                                    {{-- Deliberately not $rounds: that is the component
+                                         property the dialog further down this same template
+                                         reads, and assigning to it here quietly replaced it
+                                         with whichever row happened to be rendered last. --}}
+                                    @php $rowRounds = $roundsByApplication[$application->application_id] ?? []; @endphp
+
+                                    @if (count($rowRounds) === 0)
                                         <span class="text-xs text-gray-300">&mdash;</span>
+                                    @else
+                                        {{-- One mark per round, in order. Only the latest used to
+                                             show, so somebody recommended twice and then turned
+                                             down looked the same as somebody turned down once. --}}
+                                        <div class="flex flex-col gap-1">
+                                            @foreach ($rowRounds as $r)
+                                                @php
+                                                    [$rLabel, $rTone, $rIcon] = $r->recommendation
+                                                        ? $verdicts[$r->recommendation]
+                                                        : ['Not yet given', 'bg-gray-100 text-gray-500', 'fa-hourglass-half'];
+                                                @endphp
+                                                {{-- The note lives on the hover: it is a sentence or
+                                                     three, which would wreck a table row, but it is
+                                                     the reason behind the verdict and worth reaching
+                                                     without opening the application. It is in full in
+                                                     the dialog. --}}
+                                                @php
+                                                    $tip = 'Round '.$r->round
+                                                        .($r->interviewer_name ? ' - '.$r->interviewer_name : '')
+                                                        .': '.$rLabel
+                                                        .(trim((string) $r->recommendation_notes) !== ''
+                                                            ? "\n\n".$r->recommendation_notes : '');
+                                                @endphp
+                                                <span class="inline-flex items-center gap-1.5 text-xs {{ trim((string) $r->recommendation_notes) !== '' ? 'cursor-help' : '' }}"
+                                                      title="{{ $tip }}">
+                                                    @if (count($rowRounds) > 1)
+                                                        <span class="text-gray-400 w-3 shrink-0">{{ $r->round }}</span>
+                                                    @endif
+                                                    <span class="px-2 py-0.5 rounded-full font-medium {{ $rTone }}">
+                                                        <i class="fas {{ $rIcon }} mr-1"></i>{{ $rLabel }}
+                                                    </span>
+                                                    @if (trim((string) $r->recommendation_notes) !== '')
+                                                        <i class="fas fa-comment-dots text-gray-400" aria-hidden="true"></i>
+                                                    @endif
+                                                </span>
+                                            @endforeach
+                                        </div>
                                     @endif
                                 </td>
 
@@ -1244,6 +1325,13 @@ public function updateApplicationStatus($applicationId, $status)
                                                 class="px-3 py-1 text-xs bg-gray-50 text-gray-600 rounded hover:bg-gray-100">
                                             <i class="fas fa-file-alt mr-1"></i>Documents
                                         </button>
+
+                                        @if (count($rowRounds) > 0)
+                                            <button wire:click="openResults('{{ $application->application_id }}')"
+                                                    class="px-3 py-1 text-xs bg-purple-50 text-purple-700 rounded hover:bg-purple-100">
+                                                <i class="fas fa-clipboard-check mr-1"></i>Result
+                                            </button>
+                                        @endif
                                         
                                         @if(($application->status ?? '') === 'pending')
                                             <button wire:click="markAsReviewed('{{ $application->application_id }}')" 
@@ -1520,6 +1608,112 @@ public function updateApplicationStatus($applicationId, $status)
                     <button wire:click="$set('showHireModal', false)"
                             class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
                         Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    {{-- Interview results on their own. The same rounds appear in the
+         application dialog, but that is the whole 201 file, and somebody
+         deciding whether to hire wants the verdicts and the reasons without
+         scrolling past a birthplace to reach them. --}}
+    @if ($showResultsModal && $resultsApplication)
+    <div class="fixed inset-0 z-[70] overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+                 wire:click="$set('showResultsModal', false)"></div>
+
+            <div class="inline-block align-bottom bg-white rounded-lg text-left shadow-xl transform transition-all
+                        w-full max-h-[90vh] overflow-y-auto
+                        sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+                <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-start">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900">Interview results</h3>
+                        <p class="text-sm text-gray-500">
+                            {{ $resultsApplication->full_name }} &middot; {{ $resultsApplication->position_applied }}
+                        </p>
+                    </div>
+                    <button wire:click="$set('showResultsModal', false)" class="text-gray-400 hover:text-gray-500">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="px-5 py-4 space-y-3">
+                    @php
+                        $verdicts = [
+                            'recommend'     => ['Recommends', 'bg-green-100 text-green-800', 'fa-thumbs-up'],
+                            'not_recommend' => ['Does not recommend', 'bg-red-100 text-red-800', 'fa-thumbs-down'],
+                            'undecided'     => ['Undecided', 'bg-gray-100 text-gray-700', 'fa-circle-question'],
+                        ];
+                    @endphp
+
+                    @forelse ($resultsRounds as $round)
+                        <div class="rounded-lg border p-4 {{ $round->status === 'cancelled' ? 'border-gray-200 bg-gray-50 opacity-70' : 'border-gray-200' }}"
+                             wire:key="res-{{ $round->interview_id }}">
+                            <div class="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                                            Round {{ $round->round }}
+                                        </span>
+                                        <span class="font-medium text-gray-900">
+                                            {{ $round->interviewer_name ?? 'Interviewer removed' }}
+                                        </span>
+                                    </div>
+                                    <p class="text-sm text-gray-600 mt-0.5">
+                                        {{ \Illuminate\Support\Carbon::parse($round->scheduled_at)->format('D j M Y, g:ia') }}
+                                        &middot; {{ ucfirst(str_replace('_', ' ', $round->type)) }}
+                                        &middot; {{ ucfirst(str_replace('_', ' ', $round->status)) }}
+                                    </p>
+                                </div>
+
+                                @if ($round->recommendation)
+                                    @php [$label, $tone, $icon] = $verdicts[$round->recommendation]; @endphp
+                                    <span class="px-3 py-1 rounded-full text-sm font-medium {{ $tone }}">
+                                        <i class="fas {{ $icon }} mr-1"></i>{{ $label }}
+                                    </span>
+                                @else
+                                    <span class="text-xs text-gray-500">No verdict yet</span>
+                                @endif
+                            </div>
+
+                            @if (trim((string) $round->hr_notes) !== '')
+                                <p class="text-sm text-gray-600 mt-2">
+                                    <span class="text-gray-400">Brief given:</span> {{ $round->hr_notes }}
+                                </p>
+                            @endif
+
+                            @if (trim((string) $round->recommendation_notes) !== '')
+                                <div class="mt-2 rounded bg-gray-50 p-3 text-sm text-gray-700">
+                                    {{ $round->recommendation_notes }}
+                                    @if ($round->recommended_at)
+                                        <span class="block text-xs text-gray-500 mt-1">
+                                            {{ $round->interviewer_name }},
+                                            {{ \Illuminate\Support\Carbon::parse($round->recommended_at)->format('j M Y, g:ia') }}
+                                        </span>
+                                    @endif
+                                </div>
+                            @else
+                                @if ($round->recommendation)
+                                    <p class="mt-2 text-sm text-gray-400">No notes written.</p>
+                                @endif
+                            @endif
+                        </div>
+                    @empty
+                        <p class="text-sm text-gray-500 py-6 text-center">No interviews have been held.</p>
+                    @endforelse
+                </div>
+
+                <div class="bg-gray-50 px-5 py-3 flex flex-wrap justify-end gap-2">
+                    <button wire:click="viewApplication({{ $resultsApplication->application_id }})"
+                            class="px-3 py-2 text-sm rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
+                        Open full application
+                    </button>
+                    <button wire:click="$set('showResultsModal', false)"
+                            class="px-3 py-2 text-sm rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
+                        Close
                     </button>
                 </div>
             </div>
@@ -2176,6 +2370,7 @@ public function updateApplicationStatus($applicationId, $status)
         document.addEventListener('keydown', function(event) {
             if (event.key === 'Escape') {
                 @this.set('showApplicationModal', false);
+                @this.set('showResultsModal', false);
                 @this.set('showDocumentsModal', false);
                 @this.set('showInterviewModal', false);
                 @this.set('showInterviewResultModal', false);
