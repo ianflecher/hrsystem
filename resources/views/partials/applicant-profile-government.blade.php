@@ -7,7 +7,8 @@
 
     {{-- ------------------------------------------------------ government IDs --}}
     <div class="px-6 py-4">
-        <h3 class="font-medium text-gray-900 mb-3">Government numbers</h3>
+        <h3 class="font-medium text-gray-900">Government numbers</h3>
+        <p class="text-sm text-gray-600 mb-3">Leave any you do not have yet blank &mdash; they will be recorded as N/A.</p>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
                 <label class="form-label" for="sss_number">SSS no.</label>
@@ -33,21 +34,25 @@
         <h3 class="font-medium text-gray-900">In case of emergency, please contact</h3>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
             <div>
-                <label class="form-label" for="emergency_name">Name</label>
+                <label class="form-label" for="emergency_name">Name <span class="text-red-600">*</span></label>
                 <input id="emergency_name" type="text" wire:model="p.emergency_name" class="form-input">
+                @error('p.emergency_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
             <div>
-                <label class="form-label" for="emergency_contact_no">Contact no.</label>
+                <label class="form-label" for="emergency_contact_no">Contact no. <span class="text-red-600">*</span></label>
                 <input id="emergency_contact_no" type="text" wire:model="p.emergency_contact_no" class="form-input">
+                @error('p.emergency_contact_no') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
             <div>
-                <label class="form-label" for="emergency_relationship">Relationship</label>
+                <label class="form-label" for="emergency_relationship">Relationship <span class="text-red-600">*</span></label>
                 <input id="emergency_relationship" type="text" wire:model="p.emergency_relationship" class="form-input">
+                @error('p.emergency_relationship') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
         </div>
         <div class="mt-4">
-            <label class="form-label" for="emergency_address">Address</label>
+            <label class="form-label" for="emergency_address">Address <span class="text-red-600">*</span></label>
             <textarea id="emergency_address" wire:model="p.emergency_address" rows="2" class="form-input"></textarea>
+            @error('p.emergency_address') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
         </div>
     </div>
 </section>

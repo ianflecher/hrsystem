@@ -8,12 +8,12 @@
     <div class="px-6 py-4 space-y-3">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-                <label class="form-label" for="surname">Surname</label>
+                <label class="form-label" for="surname">Surname <span class="text-red-600">*</span></label>
                 <input id="surname" type="text" wire:model="p.surname" class="form-input">
                 @error('p.surname') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
             <div>
-                <label class="form-label" for="first_name">First name</label>
+                <label class="form-label" for="first_name">First name <span class="text-red-600">*</span></label>
                 <input id="first_name" type="text" wire:model="p.first_name" class="form-input">
                 @error('p.first_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
@@ -24,17 +24,20 @@
         </div>
 
         <div>
-            <span class="form-label">Present address</span>
+            <span class="form-label">Present address <span class="text-red-600">*</span></span>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-1">
                 <input id="present_street" type="text" wire:model="p.present_street" class="form-input" placeholder="House/unit no., street, barangay">
                 <input type="text" wire:model="p.present_city" class="form-input" placeholder="City/municipality">
                 <input type="text" wire:model="p.present_province" class="form-input" placeholder="Province">
             </div>
+            @error('p.present_street') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+            @error('p.present_city') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+            @error('p.present_province') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
         </div>
 
         <div>
             <div class="flex items-center justify-between">
-                <span class="form-label mb-0">Permanent address</span>
+                <span class="form-label mb-0">Permanent address <span class="text-red-600">*</span></span>
                 <label class="flex items-center gap-2 text-sm text-gray-700">
                     <input type="checkbox" wire:model.live="p.permanent_same_as_present"
                            class="rounded border-gray-300 text-red-600">
@@ -49,15 +52,19 @@
                 <input type="text" wire:model="p.permanent_province" class="form-input" placeholder="Province"
                        @if ($p['permanent_same_as_present'] ?? false) readonly @endif>
             </div>
+            @error('p.permanent_street') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+            @error('p.permanent_city') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+            @error('p.permanent_province') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-                <label class="form-label" for="cellphone">Cellphone no.</label>
+                <label class="form-label" for="cellphone">Cellphone no. <span class="text-red-600">*</span></label>
                 <input id="cellphone" type="text" wire:model="p.cellphone" class="form-input" placeholder="09XX XXX XXXX">
+                @error('p.cellphone') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
             <div>
-                <label class="form-label" for="email_address">Email address</label>
+                <label class="form-label" for="email_address">Email address <span class="text-red-600">*</span></label>
                 <input id="email_address" type="email" wire:model="p.email_address" class="form-input">
                 @error('p.email_address') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
@@ -70,22 +77,24 @@
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-                <label class="form-label" for="date_of_birth">Date of birth</label>
+                <label class="form-label" for="date_of_birth">Date of birth <span class="text-red-600">*</span></label>
                 <input id="date_of_birth" type="date" wire:model="p.date_of_birth" class="form-input">
                 @error('p.date_of_birth') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
             <div>
-                <label class="form-label" for="birthplace">Birthplace</label>
+                <label class="form-label" for="birthplace">Birthplace <span class="text-red-600">*</span></label>
                 <input id="birthplace" type="text" wire:model="p.birthplace" class="form-input">
+                @error('p.birthplace') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
             <div>
-                <label class="form-label" for="civil_status">Civil status</label>
+                <label class="form-label" for="civil_status">Civil status <span class="text-red-600">*</span></label>
                 <select id="civil_status" wire:model.live="p.civil_status" class="form-input">
                     <option value="">Not specified</option>
                     @foreach ($civilStatuses as $value => $label)
                         <option value="{{ $value }}">{{ $label }}</option>
                     @endforeach
                 </select>
+                @error('p.civil_status') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
         </div>
 
@@ -107,8 +116,9 @@
                 <input id="fathers_name" type="text" wire:model="p.fathers_name" class="form-input" placeholder="N/A if none">
             </div>
             <div>
-                <label class="form-label" for="mothers_maiden_name">Mother's maiden name</label>
-                <input id="mothers_maiden_name" type="text" wire:model="p.mothers_maiden_name" class="form-input" placeholder="N/A if none">
+                <label class="form-label" for="mothers_maiden_name">Mother's maiden name <span class="text-red-600">*</span></label>
+                <input id="mothers_maiden_name" type="text" wire:model="p.mothers_maiden_name" class="form-input">
+                @error('p.mothers_maiden_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
         </div>
 

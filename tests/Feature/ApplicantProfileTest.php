@@ -47,6 +47,24 @@ class ApplicantProfileTest extends TestCase
         return $user;
     }
 
+    /** Everything step one will not let through, so a test can get past it. */
+    private function fillStepOne($component)
+    {
+        return $component
+            ->set('p.surname', 'Cruz')
+            ->set('p.first_name', 'Ana')
+            ->set('p.present_street', '12 Rizal St')
+            ->set('p.present_city', 'Naga City')
+            ->set('p.present_province', 'Camarines Sur')
+            ->set('p.permanent_same_as_present', true)
+            ->set('p.cellphone', '09171234567')
+            ->set('p.email_address', 'ana@example.test')
+            ->set('p.date_of_birth', '1998-04-12')
+            ->set('p.birthplace', 'Naga City')
+            ->set('p.civil_status', 'single')
+            ->set('p.mothers_maiden_name', 'Reyes');
+    }
+
     public function test_the_form_renders(): void
     {
         $this->actingAs($this->applicant())->get('/applicant/profile')->assertOk();
@@ -134,9 +152,19 @@ class ApplicantProfileTest extends TestCase
             ->set('p.first_name', 'Pedro')
             ->set('d.has_medical_condition', '1')
             ->set('d.medical_condition_details', 'Asthma')
+            ->set('d.takes_maintenance_medication', '0')
+            ->set('d.has_relative_employed', '0')
+            ->set('d.ever_terminated', '0')
             ->set('d.ever_convicted', '0')
+            ->set('d.employed_elsewhere', '0')
+            ->set('d.has_employment_bond', '0')
+            ->set('d.was_union_member', '0')
             ->set('d.can_start_immediately', '0')
             ->set('d.days_to_render', '30')
+            ->set('d.sss_on_file', '1')
+            ->set('d.pagibig_on_file', '1')
+            ->set('d.philhealth_on_file', '1')
+            ->set('d.tin_on_file', '0')
             ->set('d.declared_name', 'Pedro Reyes')
             ->call('declare')
             ->assertHasNoErrors();
@@ -163,11 +191,9 @@ class ApplicantProfileTest extends TestCase
     {
         $user = $this->applicant();
 
-        Volt::actingAs($user)
-            ->test('applicant.profile')
-            ->assertSet('step', 1)
-            ->set('p.surname', 'Cruz')
-            ->set('p.first_name', 'Ana')
+        $this->fillStepOne(
+            Volt::actingAs($user)->test('applicant.profile')->assertSet('step', 1)
+        )
             ->call('next')
             ->assertHasNoErrors()
             ->assertSet('step', 2);
@@ -195,10 +221,7 @@ class ApplicantProfileTest extends TestCase
      */
     public function test_back_is_never_blocked(): void
     {
-        Volt::actingAs($this->applicant())
-            ->test('applicant.profile')
-            ->set('p.surname', 'Cruz')
-            ->set('p.first_name', 'Ana')
+        $this->fillStepOne(Volt::actingAs($this->applicant())->test('applicant.profile'))
             ->call('next')
             ->assertSet('step', 2)
             ->set('p.surname', '')
@@ -268,6 +291,199 @@ class ApplicantProfileTest extends TestCase
 
         $this->assertSame(['Jose Cruz', 'Rosa Cruz'], $names);
         $this->assertEquals(2, DB::table('applicant_profiles')->where('user_id', $user->user_id)->value('sibling_count'));
+    }
+
+    public function test_zero_siblings_is_recorded_as_na(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Cruz')
+            ->set('p.first_name', 'Ana')
+            ->set('p.sibling_count', 0)
+            ->assertCount('siblings', 0)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame(['N/A'],
+            DB::table('applicant_siblings')->where('user_id', $user->user_id)->pluck('name')->all());
+        $this->assertEquals(0,
+            DB::table('applicant_profiles')->where('user_id', $user->user_id)->value('sibling_count'));
+    }
+
+    /**
+     * Answering nothing is not answering zero. Somebody who never reached the
+     * field must not be recorded as having said they have no siblings.
+     */
+    public function test_an_unanswered_sibling_count_is_not_na(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Cruz')
+            ->set('p.first_name', 'Ana')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame([],
+            DB::table('applicant_siblings')->where('user_id', $user->user_id)->pluck('name')->all());
+        $this->assertNull(
+            DB::table('applicant_profiles')->where('user_id', $user->user_id)->value('sibling_count'));
+    }
+    /**
+     * Blank means "does not apply to me" on this form, which is what N/A
+     * means, so it is stored rather than left as nothing.
+     */
+    public function test_blank_text_fields_are_stored_as_na(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Cruz')
+            ->set('p.first_name', 'Ana')
+            ->set('p.middle_name', '')
+            ->set('p.bank_account_number', '')
+            ->set('p.sss_number', '')
+            ->set('p.fathers_name', '')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $profile = DB::table('applicant_profiles')->where('user_id', $user->user_id)->first();
+        $this->assertSame('N/A', $profile->middle_name);
+        $this->assertSame('N/A', $profile->bank_account_number);
+        $this->assertSame('N/A', $profile->sss_number);
+        $this->assertSame('N/A', $profile->fathers_name);
+
+        // A required field is never papered over with N/A - it stays empty and
+        // the step it belongs to refuses to move on.
+        $this->assertNull($profile->present_street);
+        $this->assertNull($profile->emergency_name);
+    }
+
+    /**
+     * N/A is a word, and a date or a number column cannot hold one. Those stay
+     * null instead of failing the insert.
+     */
+    public function test_blank_dates_and_numbers_stay_null(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Cruz')
+            ->set('p.first_name', 'Ana')
+            ->set('p.date_of_birth', '')
+            ->set('p.civil_status', '')
+            ->set('jobs.0.company_name', 'Some Shop')
+            ->set('jobs.0.daily_salary', '')
+            ->set('jobs.0.position', '')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $profile = DB::table('applicant_profiles')->where('user_id', $user->user_id)->first();
+        $this->assertNull($profile->date_of_birth);
+        $this->assertNull($profile->civil_status);
+
+        $job = DB::table('applicant_employment')->where('user_id', $user->user_id)->first();
+        $this->assertNull($job->daily_salary, 'a decimal column cannot hold N/A');
+        $this->assertSame('N/A', $job->position, 'but the text beside it can');
+    }
+
+    /**
+     * The one place blank must not become N/A: an unanswered yes/no is not the
+     * same as an answered one, and the disclosures are signed.
+     */
+    public function test_unanswered_disclosures_stay_unanswered(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->set('p.surname', 'Cruz')
+            ->set('p.first_name', 'Ana')
+            ->set('d.ever_convicted', '0')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $d = DB::table('applicant_disclosures')->where('user_id', $user->user_id)->first();
+        $this->assertEquals(0, $d->ever_convicted, 'answered no');
+        $this->assertNull($d->has_medical_condition, 'never answered - must not read as an answer');
+        $this->assertNull($d->days_to_render);
+        $this->assertNull($d->available_start_date);
+    }
+
+    /**
+     * The form used to walk all the way to the end untouched, because surname
+     * and first name are filled in from the account and nothing else was
+     * asked for. With blanks recording N/A that produced a form that looked
+     * answered and said nothing.
+     */
+    public function test_an_empty_step_one_does_not_go_through(): void
+    {
+        Volt::actingAs($this->applicant())
+            ->test('applicant.profile')
+            ->call('next')
+            ->assertHasErrors(['p.present_street', 'p.cellphone', 'p.date_of_birth', 'p.civil_status'])
+            ->assertSet('step', 1);
+    }
+
+    public function test_the_emergency_contact_is_required_to_leave_step_two(): void
+    {
+        $c = $this->fillStepOne(Volt::actingAs($this->applicant())->test('applicant.profile'))
+            ->call('next')
+            ->assertSet('step', 2);
+
+        $c->call('next')
+            ->assertHasErrors(['p.emergency_name', 'p.emergency_contact_no'])
+            ->assertSet('step', 2);
+
+        // Government numbers stay optional - a first job may have none of them.
+        $c->set('p.emergency_name', 'Maria Cruz')
+            ->set('p.emergency_contact_no', '09171234567')
+            ->set('p.emergency_relationship', 'Mother')
+            ->set('p.emergency_address', '12 Rizal St, Naga City')
+            ->call('next')
+            ->assertHasNoErrors()
+            ->assertSet('step', 3);
+    }
+
+    public function test_at_least_one_level_of_schooling_is_required(): void
+    {
+        $c = $this->fillStepOne(Volt::actingAs($this->applicant())->test('applicant.profile'))
+            ->call('next')
+            ->set('p.emergency_name', 'Maria Cruz')
+            ->set('p.emergency_contact_no', '09171234567')
+            ->set('p.emergency_relationship', 'Mother')
+            ->set('p.emergency_address', '12 Rizal St')
+            ->call('next')
+            ->assertSet('step', 3);
+
+        $c->call('next')->assertHasErrors('edu')->assertSet('step', 3);
+
+        // Which level is theirs to say; any one of the six will do.
+        $c->set('edu.high_school.school_name', 'Naga High School')
+            ->call('next')
+            ->assertHasNoErrors()
+            ->assertSet('step', 4);
+    }
+
+    /** A declaration signed with questions left blank is not a declaration. */
+    public function test_every_disclosure_must_be_answered_before_declaring(): void
+    {
+        Volt::actingAs($this->applicant())
+            ->test('applicant.profile')
+            ->set('p.surname', 'Cruz')
+            ->set('p.first_name', 'Ana')
+            ->set('d.declared_name', 'Ana Cruz')
+            ->call('declare')
+            ->assertHasErrors(['d.has_medical_condition', 'd.ever_convicted', 'd.tin_on_file']);
+
+        $this->assertNull(
+            DB::table('applicant_disclosures')->where('user_id', $this->userId)->value('declared_at'),
+            'it was signed with questions unanswered');
     }
 
     /** A typo in a number field must not ask the browser to draw thousands of boxes. */

@@ -30,6 +30,94 @@ new #[Layout('components.layouts.applicant')] class extends Component
     /** Nobody has more than this many, and a number field invites typos. */
     private const MAX_SIBLINGS = 20;
 
+    /**
+     * Columns that cannot hold the word "N/A": dates, numbers, enums and
+     * yes/no flags. A blank one of these stays null.
+     *
+     * The yes/no disclosures are on this list for a second reason as well -
+     * on a form somebody signs, "not answered" and "answered no" are
+     * different things, and writing N/A over the difference would lose it.
+     */
+    private const NOT_TEXT = [
+        'date_of_birth', 'civil_status', 'sibling_count', 'permanent_same_as_present',
+        'certified_at', 'daily_salary', 'level', 'days_to_render', 'available_start_date',
+        'declared_at', 'has_medical_condition', 'takes_maintenance_medication',
+        'has_relative_employed', 'ever_terminated', 'ever_convicted', 'employed_elsewhere',
+        'has_employment_bond', 'was_union_member', 'can_start_immediately',
+        'sss_on_file', 'pagibig_on_file', 'philhealth_on_file', 'tin_on_file',
+    ];
+
+    /**
+     * What everybody has, and must therefore give.
+     *
+     * These are not N/A-able: a person has a name, an address, a birthday and
+     * somebody to ring if something happens to them at work. Leaving one of
+     * these blank is an unfinished form, not an answer, so Next stops on it
+     * rather than writing N/A over the gap.
+     *
+     * Everything absent from this list can genuinely not apply - no middle
+     * name, no bank account yet, no SSS number for a first job - and those
+     * are the ones a blank turns into N/A.
+     */
+    private const REQUIRED = [
+        1 => [
+            'surname'           => 'surname',
+            'first_name'        => 'first name',
+            'present_street'    => 'present address',
+            'present_city'      => 'city',
+            'present_province'  => 'province',
+            'permanent_street'  => 'permanent address',
+            'permanent_city'    => 'permanent city',
+            'permanent_province' => 'permanent province',
+            'cellphone'         => 'cellphone number',
+            'email_address'     => 'email address',
+            'date_of_birth'     => 'date of birth',
+            'birthplace'        => 'birthplace',
+            'civil_status'      => 'civil status',
+            'mothers_maiden_name' => "mother's maiden name",
+        ],
+        2 => [
+            'emergency_name'         => 'emergency contact name',
+            'emergency_contact_no'   => 'emergency contact number',
+            'emergency_relationship' => 'relationship to that person',
+            'emergency_address'      => 'their address',
+        ],
+    ];
+
+    /**
+     * The form tells people to write N/A where something does not apply to
+     * them. Most leave the box empty instead and mean the same thing, so a
+     * blank optional column is stored as N/A - it reads back as an answer
+     * given, which is what it was.
+     *
+     * Required columns are never treated this way. N/A is not an answer to
+     * "what is your date of birth", and writing it would turn an unfinished
+     * form into one that looks complete.
+     */
+    private function naIfBlank(mixed $value, string $column): mixed
+    {
+        if ($value !== '' && $value !== null) {
+            return $value;
+        }
+
+        if (in_array($column, self::NOT_TEXT, true) || $this->isRequired($column)) {
+            return null;
+        }
+
+        return 'N/A';
+    }
+
+    private function isRequired(string $column): bool
+    {
+        foreach (self::REQUIRED as $fields) {
+            if (array_key_exists($column, $fields)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** Which of the four steps is on screen. */
     public int $step = 1;
 
@@ -144,13 +232,45 @@ new #[Layout('components.layouts.applicant')] class extends Component
      */
     public function next(): void
     {
+        $this->validateStep($this->step);
+
         $this->save();
 
         if ($this->getErrorBag()->isNotEmpty()) {
             return;
         }
 
+        // Checked after the save rather than before it: save() validates, and
+        // validating empties the error bag, so an error added earlier would be
+        // wiped on the way past. Saving anyway is harmless - the step is kept,
+        // it just does not advance.
+        if ($this->step === 3 && ! $this->hasSchooling()) {
+            $this->addError('edu', 'Please fill in at least one level of schooling.');
+
+            return;
+        }
+
         $this->step = min($this->step + 1, count($this->steps));
+    }
+
+    /**
+     * What this step will not let through. Save is deliberately not held to
+     * it - somebody stopping half way should keep what they have typed - but
+     * moving on means this step is done.
+     */
+    private function validateStep(int $step): void
+    {
+        $rules = [];
+        $names = [];
+
+        foreach (self::REQUIRED[$step] ?? [] as $column => $label) {
+            $rules['p.'.$column] = ['required'];
+            $names['p.'.$column] = $label;
+        }
+
+        if ($rules) {
+            $this->validate($rules, [], $names);
+        }
     }
 
     /** Back never validates - correcting an earlier typo must not be blocked. */
@@ -162,6 +282,12 @@ new #[Layout('components.layouts.applicant')] class extends Component
     public function goToStep(int $step): void
     {
         $this->step = max(1, min($step, count($this->steps)));
+    }
+
+    /** Everybody went to school somewhere; which level is theirs to say. */
+    private function hasSchooling(): bool
+    {
+        return collect($this->edu)->contains(fn ($e) => trim((string) ($e['school_name'] ?? '')) !== '');
     }
 
     public function addJob(): void
@@ -272,7 +398,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
         DB::transaction(function () use ($id) {
             $profile = collect($this->p)
                 ->only(array_keys($this->blankProfile()))
-                ->map(fn ($v) => $v === '' ? null : $v)
+                ->map(fn ($v, $k) => $this->naIfBlank($v, $k))
                 ->all();
             $profile['permanent_same_as_present'] = (bool) ($this->p['permanent_same_as_present'] ?? false);
             $profile['updated_at'] = now();
@@ -293,9 +419,16 @@ new #[Layout('components.layouts.applicant')] class extends Component
                     continue;
                 }
 
+                // A level somebody did attend but left a box of blank reads as
+                // N/A, the same as everywhere else on the form.
+                $row = [];
+                foreach ($e as $column => $value) {
+                    $row[$column] = $this->naIfBlank($value, $column);
+                }
+
                 DB::table('applicant_education')->updateOrInsert(
                     ['user_id' => $id, 'level' => $level],
-                    $e + ['updated_at' => now(), 'created_at' => now()]
+                    $row + ['updated_at' => now(), 'created_at' => now()]
                 );
             }
 
@@ -311,9 +444,26 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
             $this->rewrite('applicant_siblings', $id, $this->siblings, ['name'], 'name');
 
+            // Zero is an answer. The form tells people to write N/A where
+            // something does not apply to them, and this is the one question
+            // answered with a number instead of typed into, so it records the
+            // same thing rather than leaving a gap that reads as unanswered.
+            // An untouched field stays empty: "none" and "not said" differ.
+            $said = $this->p['sibling_count'] ?? '';
+
+            if ($said !== '' && $said !== null && (int) $said === 0) {
+                DB::table('applicant_siblings')->insert([
+                    'user_id'    => $id,
+                    'name'       => 'N/A',
+                    'sort_order' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
             $dis = collect($this->d)
                 ->only(array_keys($this->blankDisclosures()))
-                ->map(fn ($v) => $v === '' ? null : $v)
+                ->map(fn ($v, $k) => $this->naIfBlank($v, $k))
                 ->all();
             $dis['updated_at'] = now();
 
@@ -348,7 +498,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
             $insert = [];
             foreach ($columns as $c) {
-                $insert[$c] = ($row[$c] ?? '') === '' ? null : $row[$c];
+                $insert[$c] = $this->naIfBlank($row[$c] ?? '', $c);
             }
 
             if ($ordered) {
@@ -376,8 +526,35 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
     public function declare(): void
     {
-        $this->validate(['d.declared_name' => ['required', 'string', 'max:150']],
-            [], ['d.declared_name' => 'printed name']);
+        // Every question answered before it is signed. An unanswered yes/no on
+        // a declaration somebody puts their name to is not a blank that N/A
+        // can cover - it is the difference between saying no and saying
+        // nothing, and this is the moment that difference is claimed.
+        $questions = [
+            'has_medical_condition'        => 'the question about a medical condition',
+            'takes_maintenance_medication' => 'the question about maintenance medication',
+            'has_relative_employed'        => 'the question about relatives employed here',
+            'ever_terminated'              => 'the question about being terminated',
+            'ever_convicted'               => 'the question about convictions',
+            'employed_elsewhere'           => 'the question about being employed elsewhere',
+            'has_employment_bond'          => 'the question about an employment bond',
+            'was_union_member'             => 'the question about union membership',
+            'can_start_immediately'        => 'the question about starting immediately',
+            'sss_on_file'                  => 'whether you have an SSS number',
+            'pagibig_on_file'              => 'whether you have a Pag-IBIG number',
+            'philhealth_on_file'           => 'whether you have a PhilHealth number',
+            'tin_on_file'                  => 'whether you have a TIN',
+        ];
+
+        $rules = ['d.declared_name' => ['required', 'string', 'max:150']];
+        $names = ['d.declared_name' => 'printed name'];
+
+        foreach ($questions as $field => $label) {
+            $rules['d.'.$field] = ['required'];
+            $names['d.'.$field] = $label;
+        }
+
+        $this->validate($rules, [], $names);
 
         $this->save();
 
