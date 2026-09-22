@@ -26,6 +26,21 @@ class HrListShowsVerdictTest extends TestCase
         parent::tearDown();
     }
 
+    /**
+     * Its own interviewer, rather than reaching for a seeded account. A test
+     * that depends on a particular person existing in the database fails the
+     * day somebody tidies the staff list, and says nothing useful when it does.
+     */
+    private function supervisor(string $name = 'Interviewing Supervisor'): User
+    {
+        $n = random_int(100000, 999999);
+        $u = User::create(['full_name' => $name, 'username' => "sup{$n}",
+            'email' => "sup{$n}@example.test", 'password' => 'x', 'role' => 'supervisor']);
+        $this->made[] = $u->user_id;
+
+        return $u;
+    }
+
     private function applicant(string $name): int
     {
         $n = random_int(100000, 999999);
@@ -49,7 +64,7 @@ class HrListShowsVerdictTest extends TestCase
     public function test_every_round_is_marked_not_just_the_last(): void
     {
         $hr = User::where('username', 'hr')->first();
-        $sup = User::where('username', 'carla')->first();
+        $sup = $this->supervisor();
 
         $appId = $this->applicant('Three Rounds');
 
@@ -82,7 +97,7 @@ class HrListShowsVerdictTest extends TestCase
     public function test_the_note_is_reachable_from_the_list(): void
     {
         $hr = User::where('username', 'hr')->first();
-        $sup = User::where('username', 'carla')->first();
+        $sup = $this->supervisor();
 
         $appId = $this->applicant('Noted Person');
         $note = 'Steady on the press and asked good questions about the night shift.';
@@ -112,8 +127,8 @@ class HrListShowsVerdictTest extends TestCase
     public function test_the_result_button_opens_every_round_with_its_reasons(): void
     {
         $hr = User::where('username', 'hr')->first();
-        $carla = User::where('username', 'carla')->first();
-        $boying = User::where('username', 'boying')->first();
+        $carla = $this->supervisor('First Round Supervisor');
+        $boying = $this->supervisor('Second Round Supervisor');
 
         $appId = $this->applicant('Result Person');
 
@@ -164,7 +179,7 @@ class HrListShowsVerdictTest extends TestCase
     public function test_the_list_shows_the_verdict_without_opening_anything(): void
     {
         $hr = User::where('username', 'hr')->first();
-        $sup = User::where('username', 'carla')->first();
+        $sup = $this->supervisor();
 
         $yes = $this->applicant('Verdict Yes');
         $no = $this->applicant('Verdict No');

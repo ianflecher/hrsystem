@@ -34,6 +34,21 @@ class LiveRefreshTest extends TestCase
         parent::tearDown();
     }
 
+    /**
+     * Its own interviewer, rather than reaching for a seeded account. A test
+     * that depends on a particular person existing in the database fails the
+     * day somebody tidies the staff list, and says nothing useful when it does.
+     */
+    private function supervisor(string $name = 'Interviewing Supervisor'): User
+    {
+        $n = random_int(100000, 999999);
+        $u = User::create(['full_name' => $name, 'username' => "sup{$n}",
+            'email' => "sup{$n}@example.test", 'password' => 'x', 'role' => 'supervisor']);
+        $this->made[] = $u->user_id;
+
+        return $u;
+    }
+
     /** @return array{0: User, 1: int} */
     private function candidate(): array
     {
@@ -117,7 +132,7 @@ class LiveRefreshTest extends TestCase
     public function test_the_supervisor_screen_picks_up_a_newly_assigned_interview(): void
     {
         $hr = User::where('username', 'hr')->first();
-        $carla = User::where('username', 'carla')->first();
+        $carla = $this->supervisor();
         [$u, $appId] = $this->candidate();
 
         DB::table('job_applications')->where('application_id', $appId)->update(['status' => 'reviewed']);
