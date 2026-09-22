@@ -91,7 +91,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
     {
         return array_fill_keys([
             'surname', 'first_name', 'middle_name', 'present_address', 'permanent_address',
-            'cellphone', 'email_address', 'bank_name', 'bank_account_number', 'date_of_birth',
+            'cellphone', 'email_address', 'bank_account_number', 'date_of_birth',
             'birthplace', 'civil_status', 'spouse_surname', 'spouse_first_name', 'spouse_middle_name',
             'fathers_name', 'mothers_maiden_name', 'siblings', 'sss_number', 'pagibig_number',
             'philhealth_number', 'tin', 'emergency_name', 'emergency_contact_no',

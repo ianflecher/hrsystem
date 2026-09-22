@@ -51,13 +51,10 @@
                 <input id="email_address" type="email" wire:model="p.email_address" class="form-input">
                 @error('p.email_address') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
-            <div>
-                <label class="form-label" for="bank_name">Bank</label>
-                <input id="bank_name" type="text" wire:model="p.bank_name" class="form-input">
-            </div>
-            <div>
-                <label class="form-label" for="bank_account_number">Account number</label>
-                <input id="bank_account_number" type="text" wire:model="p.bank_account_number" class="form-input">
+            <div class="sm:col-span-2">
+                <label class="form-label" for="bank_account_number">Account number (bank)</label>
+                <input id="bank_account_number" type="text" wire:model="p.bank_account_number"
+                       class="form-input" placeholder="e.g. BDO 1234567890 &mdash; N/A if none">
             </div>
         </div>
 
