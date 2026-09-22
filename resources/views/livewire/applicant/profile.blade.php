@@ -26,6 +26,16 @@ new #[Layout('components.layouts.applicant')] class extends Component
     public array $relatives = [];  // relatives working here
     public array $d = [];          // the disclosures
 
+    /** Which of the four steps is on screen. */
+    public int $step = 1;
+
+    public array $steps = [
+        1 => 'Personal details',
+        2 => 'Education',
+        3 => 'Employment',
+        4 => 'Disclosures',
+    ];
+
     public array $civilStatuses = [
         'single'    => 'Single',
         'married'   => 'Married',
@@ -111,6 +121,32 @@ new #[Layout('components.layouts.applicant')] class extends Component
             'ever_convicted_details', 'employment_bond_details', 'union_position',
             'days_to_render', 'available_start_date', 'declared_name',
         ], '');
+    }
+
+    /**
+     * Forward saves first, so a completed step is a kept step. If the save
+     * fails validation the person stays where they are and sees why.
+     */
+    public function next(): void
+    {
+        $this->save();
+
+        if ($this->getErrorBag()->isNotEmpty()) {
+            return;
+        }
+
+        $this->step = min($this->step + 1, count($this->steps));
+    }
+
+    /** Back never validates - correcting an earlier typo must not be blocked. */
+    public function back(): void
+    {
+        $this->step = max($this->step - 1, 1);
+    }
+
+    public function goToStep(int $step): void
+    {
+        $this->step = max(1, min($step, count($this->steps)));
     }
 
     public function addJob(): void
@@ -313,12 +349,62 @@ new #[Layout('components.layouts.applicant')] class extends Component
         </div>
     @endif
 
-    @include('partials.applicant-profile-personal')
-    @include('partials.applicant-profile-education')
-    @include('partials.applicant-profile-employment')
-    @include('partials.applicant-profile-disclosures')
+    {{-- Where they are, and how much is left. Steps already passed can be
+         clicked back to; ones ahead cannot, because they have not been saved. --}}
+    <nav class="mb-6 flex flex-wrap items-center gap-2" aria-label="Form steps">
+        @foreach ($steps as $number => $label)
+            @php $state = $number === $step ? 'current' : ($number < $step ? 'done' : 'ahead'); @endphp
+            <button type="button"
+                    @if ($state === 'ahead') disabled @else wire:click="goToStep({{ $number }})" @endif
+                    @if ($state === 'current') aria-current="step" @endif
+                    class="flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors
+                        @if ($state === 'current') border-red-600 bg-red-600 text-white
+                        @elseif ($state === 'done') border-gray-300 bg-white text-gray-700 hover:border-red-300
+                        @else border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed @endif">
+                <span class="flex h-5 w-5 items-center justify-center rounded-full text-xs
+                    @if ($state === 'current') bg-white/20
+                    @elseif ($state === 'done') bg-green-100 text-green-700
+                    @else bg-gray-200 @endif">
+                    @if ($state === 'done') <i class="fas fa-check"></i> @else {{ $number }} @endif
+                </span>
+                {{ $label }}
+            </button>
+        @endforeach
+    </nav>
 
-    <div class="mt-8 flex justify-end">
-        <button wire:click="save" class="btn-primary">Save everything</button>
+    @if ($step === 1)
+        @include('partials.applicant-profile-personal')
+    @elseif ($step === 2)
+        @include('partials.applicant-profile-education')
+    @elseif ($step === 3)
+        @include('partials.applicant-profile-employment')
+    @else
+        @include('partials.applicant-profile-disclosures')
+    @endif
+
+    <div class="mt-6 flex items-center justify-between gap-3">
+        <div>
+            @if ($step > 1)
+                <button type="button" wire:click="back" class="btn-secondary">
+                    <i class="fas fa-arrow-left mr-2"></i>Back
+                </button>
+            @endif
+        </div>
+
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-500">Step {{ $step }} of {{ count($steps) }}</span>
+
+            {{-- Save on its own, so somebody can stop half way and come back
+                 without being made to walk to the end of the form first. --}}
+            <button type="button" wire:click="save" class="btn-secondary">
+                <i class="fas fa-floppy-disk mr-2"></i>Save
+            </button>
+
+            @if ($step < count($steps))
+                <button type="button" wire:click="next" class="btn-primary">
+                    Next<i class="fas fa-arrow-right ml-2"></i>
+                </button>
+            @endif
+        </div>
     </div>
 </div>

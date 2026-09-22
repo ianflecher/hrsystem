@@ -148,6 +148,75 @@ class ApplicantProfileTest extends TestCase
         $this->assertNotNull($d->declared_at, 'the declaration was not stamped');
     }
 
+    public function test_it_opens_on_the_first_step_and_shows_only_that_one(): void
+    {
+        $html = $this->actingAs($this->applicant())->get('/applicant/profile')->getContent();
+
+        $this->assertStringContainsString('Personal details', $html);
+        $this->assertStringNotContainsString('Educational background', $html,
+            'every step rendered at once - the form is not stepped');
+        $this->assertStringNotContainsString('Applicant disclosures', $html);
+    }
+
+    public function test_next_saves_and_moves_on(): void
+    {
+        $user = $this->applicant();
+
+        Volt::actingAs($user)
+            ->test('applicant.profile')
+            ->assertSet('step', 1)
+            ->set('p.surname', 'Cruz')
+            ->set('p.first_name', 'Ana')
+            ->call('next')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        // Moving on saved, rather than leaving the step behind unrecorded.
+        $this->assertSame('Cruz',
+            DB::table('applicant_profiles')->where('user_id', $user->user_id)->value('surname'));
+    }
+
+    /** A step that will not save must not be walked away from. */
+    public function test_next_will_not_move_past_a_validation_failure(): void
+    {
+        Volt::actingAs($this->applicant())
+            ->test('applicant.profile')
+            ->set('p.surname', '')
+            ->set('p.first_name', '')
+            ->call('next')
+            ->assertHasErrors('p.surname')
+            ->assertSet('step', 1);
+    }
+
+    /**
+     * Back never validates. Somebody correcting a typo on step one should not
+     * be stopped by a field on step four they have not reached yet.
+     */
+    public function test_back_is_never_blocked(): void
+    {
+        Volt::actingAs($this->applicant())
+            ->test('applicant.profile')
+            ->set('p.surname', 'Cruz')
+            ->set('p.first_name', 'Ana')
+            ->call('next')
+            ->assertSet('step', 2)
+            ->set('p.surname', '')
+            ->call('back')
+            ->assertSet('step', 1);
+    }
+
+    public function test_steps_cannot_run_off_either_end(): void
+    {
+        Volt::actingAs($this->applicant())
+            ->test('applicant.profile')
+            ->call('back')
+            ->assertSet('step', 1)
+            ->call('goToStep', 99)
+            ->assertSet('step', 4)
+            ->call('goToStep', -3)
+            ->assertSet('step', 1);
+    }
+
     public function test_certifying_stamps_the_time(): void
     {
         $user = $this->applicant();
