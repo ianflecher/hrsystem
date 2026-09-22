@@ -333,7 +333,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
     }
 }; ?>
 
-<div class="p-6 md:p-8 max-w-5xl mx-auto">
+<div class="p-6 md:p-8 max-w-7xl mx-auto">
     <div class="mb-6">
         <h1 class="text-2xl font-semibold text-gray-900">Application details</h1>
         <p class="text-sm text-gray-600 mt-1">
