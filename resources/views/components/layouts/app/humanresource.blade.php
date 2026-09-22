@@ -144,12 +144,22 @@
         }
         
         .nav-badge {
+            margin-left: auto;
+            min-width: 1.25rem;
+            padding: 0.05rem 0.35rem;
+            border-radius: 999px;
             background: var(--hr-purple);
-            color: white;
-            padding: 0.1rem 0.4rem;
-            border-radius: 10px;
+            color: #fff;
             font-size: 0.7rem;
-            font-weight: bold;
+            font-weight: 700;
+            line-height: 1.5;
+            text-align: center;
+        }
+
+        /* On the line you are already looking at, the purple disappears into
+           the active state, so it borrows the text colour instead. */
+        .nav-link.active .nav-badge {
+            background: rgba(255, 255, 255, .22);
         }
         
         /* User Actions */
@@ -646,6 +656,7 @@
 
         @php
             $moduleLabels = \App\Http\Controllers\PeopleController::MODULES;
+            $badges = \App\Support\NavBadges::hr();
             $navigationGroups = [
                 'Overview' => [
                     ['route' => 'hr.home', 'label' => 'Dashboard', 'icon' => 'gauge-high'],
@@ -683,9 +694,17 @@
                             $active = request()->routeIs($item['route']) && (!isset($item['module']) || request()->route('module') === $item['module']);
                             $label = $item['label'] ?? $moduleLabels[$item['module']];
                         @endphp
+                        @php
+                            // Keyed by route, or by module for the shared screens.
+                            $count = $badges[$item['module'] ?? $item['route']] ?? 0;
+                        @endphp
                         <a href="{{ route($item['route'], isset($item['module']) ? ['module' => $item['module']] : []) }}"
                            class="nav-link {{ $active ? 'active' : '' }}" @if($active) aria-current="page" @endif>
                             <i class="fas fa-{{ $item['icon'] }}" aria-hidden="true"></i><span>{{ $label }}</span>
+                            @if ($count > 0)
+                                <span class="nav-badge"
+                                      aria-label="{{ $count }} waiting">{{ $count > 99 ? '99+' : $count }}</span>
+                            @endif
                         </a>
                     @endforeach
                 </div>
