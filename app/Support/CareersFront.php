@@ -39,7 +39,9 @@ class CareersFront
     ];
 
     private const CAFE_CAPTIONS = [
-        1 => 'The counter',
+        1 => 'Pulling a shot',
+        2 => 'Behind the counter',
+        3 => 'Its own door, beside the shop',
     ];
 
     /** @return list<array{src: string, caption: string}> */

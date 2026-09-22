@@ -166,6 +166,24 @@ one page. Across pages a photograph may reappear - the Inside page carries
 all 23 workstations, so anything using one would otherwise be off limits.
 
 -----------------------------------------------------------------------
+cafe-1, cafe-2, cafe-3 (Imprint Cafe, on /careers/front)
+
+From the cafe shoot of 2026-09-21, exported by the client into the EDITED
+folder as RTC00366-RTC00392. Cut 3:4 at 900x1200, which is what .face draws.
+
+  cafe-1  RTC00366  at the espresso machine - the work
+  cafe-2  RTC00386  behind the counter, looking at the camera
+  cafe-3  RTC00373  the door and the lit sign, so the place is placeable
+
+cafe-1 was DSC02347 before this: a coffee counter from the production shoot
+that nobody could confirm was actually this cafe, and landscape in a 3:4 slot,
+so object-fit was cropping it hard. The sign in cafe-3 settles the question.
+
+Seven of the ten edited frames are unused - RTC00371, 00372, 00374, 00376,
+00380, 00388, 00390 - and three of those are interiors and frontage if the
+section ever wants a fourth and fifth tile. CareersFront::SLOTS caps it at 3.
+
+-----------------------------------------------------------------------
 founder.jpg (Who we are)
 
   Gian Karlo Lasam, supplied by the client 2026-09-21. Resized to 900x1125,
