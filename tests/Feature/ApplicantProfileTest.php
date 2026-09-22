@@ -18,15 +18,22 @@ class ApplicantProfileTest extends TestCase
 {
     private ?int $userId = null;
 
+    /**
+     * Every account a test made, not just the last one. Several tests call
+     * applicant() more than once, and tracking a single id left the earlier
+     * ones behind in the database for good.
+     */
+    private array $userIds = [];
+
     protected function tearDown(): void
     {
-        if ($this->userId) {
+        foreach ($this->userIds as $id) {
             foreach (['applicant_disclosures', 'applicant_relatives', 'applicant_references',
                       'applicant_siblings', 'applicant_employment', 'applicant_education',
                       'applicant_profiles'] as $t) {
-                DB::table($t)->where('user_id', $this->userId)->delete();
+                DB::table($t)->where('user_id', $id)->delete();
             }
-            DB::table('users')->where('user_id', $this->userId)->delete();
+            DB::table('users')->where('user_id', $id)->delete();
         }
 
         parent::tearDown();
@@ -43,6 +50,7 @@ class ApplicantProfileTest extends TestCase
             'role'      => 'employee',
         ]);
         $this->userId = $user->user_id;
+        $this->userIds[] = $user->user_id;
 
         return $user;
     }
