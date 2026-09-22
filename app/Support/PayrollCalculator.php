@@ -106,12 +106,35 @@ class PayrollCalculator
         return $isSecondCutoff ? 1.0 : 0.0;
     }
 
-    public static function sss(float $monthlySalary, ?string $ruleDate = null): float
+    /**
+     * The monthly salary credit a salary falls into.
+     *
+     * The SSS schedule is a table of ranges, and each range sits *around* its
+     * credit rather than below it: ₱19,750 to ₱20,249.99 is all MSC ₱20,000,
+     * which is why the floor applies below ₱5,250 and the ceiling from
+     * ₱34,750 rather than at the credits themselves. Rounding up instead put
+     * everybody in the lower half of a range into the next bracket up and took
+     * ₱25 a month too much off them - and ₱50 too much from the employer.
+     */
+    public static function msc(float $monthlySalary, ?string $ruleDate = null): float
     {
         $c = Statutory::tableForDate('sss', $ruleDate);
         $credit = min(max($monthlySalary, $c['msc_floor']), $c['msc_ceiling']);
-        if (($c['step'] ?? 0) > 0) $credit = min(ceil($credit / $c['step']) * $c['step'], $c['msc_ceiling']);
-        return round($credit * $c['employee_rate'], 2);
+
+        if (($c['step'] ?? 0) > 0) {
+            $step = (float) $c['step'];
+            $credit = floor(($credit + $step / 2) / $step) * $step;
+            $credit = min(max($credit, $c['msc_floor']), $c['msc_ceiling']);
+        }
+
+        return (float) $credit;
+    }
+
+    public static function sss(float $monthlySalary, ?string $ruleDate = null): float
+    {
+        $c = Statutory::tableForDate('sss', $ruleDate);
+
+        return round(self::msc($monthlySalary, $ruleDate) * $c['employee_rate'], 2);
     }
 
     public static function philHealth(float $monthlySalary, ?string $ruleDate = null): float
@@ -131,8 +154,7 @@ class PayrollCalculator
     public static function employerContributions(float $monthlySalary, ?string $ruleDate = null, float $share = 1.0): array
     {
         $sssTable = Statutory::tableForDate('sss', $ruleDate);
-        $credit = min(max($monthlySalary, $sssTable['msc_floor']), $sssTable['msc_ceiling']);
-        if (($sssTable['step'] ?? 0) > 0) $credit = min(ceil($credit / $sssTable['step']) * $sssTable['step'], $sssTable['msc_ceiling']);
+        $credit = self::msc($monthlySalary, $ruleDate);
         $share = min(1.0, max(0.0, $share));
         $sss = round($credit * $sssTable['employer_rate'] * $share, 2);
         $ec = ($credit >= 15000 ? $sssTable['ec_15000_and_above'] : $sssTable['ec_below_15000']) * $share;
