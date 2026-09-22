@@ -141,8 +141,13 @@ class ImportMasterlist extends Command
         // somebody can have one without the other.
         $employee = DB::table('employees')->where('employee_no', $p['employee_no'])->first();
 
+        // The name is kept in parts as well as whole: a staff list is read by
+        // surname, and the surname cannot be recovered from the full name
+        // afterwards - suffixes and multi-word middle names both defeat it.
         $userFields = [
             'full_name'  => $p['full_name'],
+            'first_name' => $p['first_name_display'] ?? null,
+            'last_name'  => $p['last_name_display'] ?? null,
             'email'      => $p['email'],
             'role'       => 'employee',
             'updated_at' => now(),

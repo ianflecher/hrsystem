@@ -929,21 +929,6 @@ public function updateApplicationStatus($applicationId, $status)
      * not have been uploaded.
      */
 
-    public function deleteDepartment($departmentId)
-    {
-        if (confirm('Are you sure you want to delete this department? This will remove the department assignment from all employees.')) {
-            // First, remove department from all employees
-            DB::table('employees')
-                ->where('department_id', $departmentId)
-                ->update(['department_id' => null]);
-            
-            // Then delete the department
-            DB::table('departments')->where('department_id', $departmentId)->delete();
-            
-            $this->loadData();
-            session()->flash('success', 'Department deleted successfully!');
-        }
-    }
 
     public function formatFileSize($bytes)
     {
@@ -1056,52 +1041,6 @@ public function updateApplicationStatus($applicationId, $status)
             <div class="card-title">Hired</div>
             <div class="card-subtitle">Successfully hired</div>
         </div>
-    </div>
-
-    <!-- Department List Section -->
-    <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
-        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-            <div>
-                <h2 class="text-lg font-semibold text-gray-800">Departments</h2>
-                <p class="text-sm text-gray-600">Manage company departments</p>
-            </div>
-            <div class="text-sm text-gray-600">
-                {{ count($departments) }} Departments
-            </div>
-        </div>
-        
-        @if(count($departments) > 0)
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-6">
-                @foreach($departments as $department)
-                    @php
-                        // Count employees in this department
-                        $employeeCount = DB::table('employees')
-                            ->where('department_id', $department->department_id)
-                            ->count();
-                    @endphp
-                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition">
-                        <div class="flex justify-between items-start mb-3">
-                            <h3 class="font-medium text-gray-900">{{ $department->department_name }}</h3>
-                            <button wire:click="deleteDepartment('{{ $department->department_id }}')" 
-                                    onclick="return confirm('Delete {{ $department->department_name }} department?')"
-                                    class="text-red-400 hover:text-blue-600">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                        <div class="flex items-center text-sm text-gray-500 mb-3">
-                            <i class="fas fa-users mr-2"></i>
-                            <span>{{ $employeeCount }} {{ Str::plural('employee', $employeeCount) }}</span>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        @else
-            <div class="text-center py-8">
-                <i class="fas fa-building text-4xl text-gray-300 mb-3"></i>
-                <p class="text-lg text-gray-500">No departments created yet</p>
-                <p class="text-sm text-gray-400 mt-1">Create your first department using the button above.</p>
-            </div>
-        @endif
     </div>
 
     <!-- Filters -->

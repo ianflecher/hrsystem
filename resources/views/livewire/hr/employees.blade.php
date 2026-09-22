@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Services\DocumentVault;
+use App\Support\PeopleAccess;
 use App\Services\SalaryHistory;
 use App\Support\WorkWeek;
 use Illuminate\Validation\Rule;
@@ -46,6 +47,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     /** What they were on when the form opened, to spot a change. */
     public $payWas = null;
     public string $status = 'active';
+    public string $employment_type = 'Regular';
     public string $role = 'employee';
 
     /**
@@ -65,6 +67,26 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         'inactive'   => 'Inactive',
         'on_leave'   => 'On leave',
         'terminated' => 'Terminated',
+        'awol'       => 'AWOL',
+    ];
+
+    /**
+     * What somebody is engaged as, which is not the same question as whether
+     * they still work here. A regular employee can be AWOL; an OJT is still an
+     * OJT on the day they leave.
+     *
+     * Not to be confused with the employment type on a job posting, which uses
+     * full-time/part-time/contract and describes a vacancy rather than a
+     * person.
+     */
+    public array $employmentTypes = [
+        'Regular'       => 'Regular',
+        'Probation'     => 'Probation',
+        'Immersion'     => 'Immersion',
+        'Seasonal'      => 'Seasonal',
+        'Project-Based' => 'Project-Based',
+        'Part-Timers'   => 'Part-Timers',
+        'OJT'           => 'OJT',
     ];
 
     public array $roles = [
@@ -102,6 +124,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->whereNull('u.deleted_at')
             ->select(
                 'e.employee_id', 'e.job_title', 'e.status', 'e.hire_date', 'e.salary', 'e.allowance',
+                'e.employment_type',
                 'u.user_id', 'u.full_name', 'u.username', 'u.email', 'u.role',
                 'u.must_change_password',
                 'd.department_name'
@@ -121,7 +144,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             });
         }
 
-        return $query->orderBy('u.full_name');
+        // By surname, the way a staff list is read. Anyone without their name
+        // in parts - the two admin accounts - falls back to the whole thing
+        // rather than sorting to the top under an empty string.
+        return $query
+            ->orderByRaw("COALESCE(NULLIF(u.last_name, ''), u.full_name)")
+            ->orderByRaw("COALESCE(NULLIF(u.first_name, ''), u.full_name)");
     }
 
     public function with(): array
@@ -182,11 +210,142 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->department_id = $row->department_id ?? '';
         $this->hire_date     = $row->hire_date;
         $this->salary        = $row->salary;
+        $this->employment_type = $this->knownEmploymentType($row->employment_type);
         $this->payWas        = ['salary' => (float) $row->salary, 'allowance' => (float) ($row->allowance ?? 0)];
         $this->allowance     = $row->allowance;
         $this->status        = $row->status;
         $this->role          = $row->role;
         $this->showModal     = true;
+    }
+
+    /* ------------------------------------------------ managing departments */
+
+    public bool $showDepartments = false;
+    public string $newDepartment = '';
+    public ?int $renamingDepartment = null;
+    public string $renameDepartmentTo = '';
+
+    /** Departments with how many people are in each, for the panel. */
+    public function departmentRoll(): \Illuminate\Support\Collection
+    {
+        return DB::table('departments as d')
+            ->leftJoin('employees as e', 'e.department_id', '=', 'd.department_id')
+            ->groupBy('d.department_id', 'd.department_name')
+            ->orderBy('d.department_name')
+            ->selectRaw('d.department_id, d.department_name, COUNT(e.employee_id) as headcount')
+            ->get();
+    }
+
+    public function toggleDepartments(): void
+    {
+        $this->showDepartments = ! $this->showDepartments;
+        $this->renamingDepartment = null;
+        $this->newDepartment = '';
+        $this->resetValidation();
+    }
+
+    public function addDepartment(): void
+    {
+        PeopleAccess::hr();
+
+        $this->validate(
+            ['newDepartment' => ['required', 'string', 'max:100', Rule::unique('departments', 'department_name')]],
+            [],
+            ['newDepartment' => 'department name'],
+        );
+
+        DB::table('departments')->insert([
+            'department_name' => trim($this->newDepartment),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        session()->flash('success', trim($this->newDepartment).' added.');
+        $this->newDepartment = '';
+        $this->loadDepartments();
+    }
+
+    public function startRename(int $id, string $current): void
+    {
+        $this->renamingDepartment = $id;
+        $this->renameDepartmentTo = $current;
+        $this->resetValidation();
+    }
+
+    public function saveRename(): void
+    {
+        PeopleAccess::hr();
+
+        if (! $this->renamingDepartment) {
+            return;
+        }
+
+        $this->validate(
+            ['renameDepartmentTo' => ['required', 'string', 'max:100',
+                Rule::unique('departments', 'department_name')->ignore($this->renamingDepartment, 'department_id')]],
+            [],
+            ['renameDepartmentTo' => 'department name'],
+        );
+
+        DB::table('departments')->where('department_id', $this->renamingDepartment)
+            ->update(['department_name' => trim($this->renameDepartmentTo), 'updated_at' => now()]);
+
+        session()->flash('success', 'Renamed to '.trim($this->renameDepartmentTo).'.');
+        $this->renamingDepartment = null;
+        $this->loadDepartments();
+    }
+
+    /**
+     * A department with people in it is not deleted.
+     *
+     * The version this replaced emptied it first - it set department_id to
+     * null for everybody in it and then deleted the row - so one click on a
+     * trash icon could quietly unassign thirty-one people, and nothing on the
+     * screen said so beforehand. Moving them somewhere is a decision, not a
+     * side effect of tidying a list.
+     */
+    public function deleteDepartment(int $id): void
+    {
+        PeopleAccess::hr();
+
+        $name = DB::table('departments')->where('department_id', $id)->value('department_name');
+
+        if ($name === null) {
+            return;
+        }
+
+        $headcount = DB::table('employees')->where('department_id', $id)->count();
+
+        if ($headcount > 0) {
+            session()->flash('error', $name.' still has '.$headcount.' '
+                .Str::plural('person', $headcount).' in it. Move them to another department first.');
+
+            return;
+        }
+
+        DB::table('departments')->where('department_id', $id)->delete();
+        session()->flash('success', $name.' deleted.');
+        $this->loadDepartments();
+    }
+
+    /**
+     * The stored value, matched to one we offer.
+     *
+     * The column default is a lowercase 'regular' and rows created before the
+     * list existed carry it, so a strict comparison would refuse to save
+     * anybody who had never been edited - the form would reject a value it had
+     * just loaded itself.
+     */
+    private function knownEmploymentType(?string $stored): string
+    {
+        $stored = trim((string) $stored);
+
+        foreach (array_keys($this->employmentTypes) as $known) {
+            if (strcasecmp($known, $stored) === 0) {
+                return $known;
+            }
+        }
+
+        return 'Regular';
     }
 
     public function openDepartmentDialog(): void
@@ -250,6 +409,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'salary'        => ['nullable', 'numeric', 'min:0'],
             'allowance'     => ['nullable', 'numeric', 'min:0'],
             'status'        => ['required', Rule::in(array_keys($this->statuses))],
+            'employment_type' => ['required', Rule::in(array_keys($this->employmentTypes))],
             'role'          => ['required', Rule::in(array_keys($this->roles))],
         ]);
 
@@ -296,6 +456,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     'salary'        => $salary,
                     'allowance'     => $allowance,
                     'status'        => $data['status'],
+                    'employment_type' => $data['employment_type'],
                     'updated_at'    => now(),
                 ]);
 
@@ -355,6 +516,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'salary'        => $salary,
                 'allowance'     => $allowance,
                 'status'        => $data['status'],
+                'employment_type' => $data['employment_type'],
                 'created_at'    => now(),
                 'updated_at'    => now(),
             ]);
@@ -531,6 +693,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->department_id = '';
         $this->hire_date     = now()->toDateString();
         $this->salary        = '';
+        $this->employment_type = 'Regular';
         $this->payChangeReason = '';
         $this->payWas        = null;
         $this->allowance     = '';
@@ -548,10 +711,88 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 Everyone on the payroll, and the accounts they sign in with.
             </p>
         </div>
-        <button wire:click="openCreate" class="btn-primary">
-            <i class="fas fa-user-plus"></i> Add employee
-        </button>
+        <div class="flex flex-wrap gap-2">
+            {{-- Departments belong here, beside the people in them, rather
+                 than on the applications screen where they used to live. --}}
+            <button wire:click="toggleDepartments" class="btn-secondary">
+                <i class="fas fa-sitemap"></i> Departments
+            </button>
+            <button wire:click="openCreate" class="btn-primary">
+                <i class="fas fa-user-plus"></i> Add employee
+            </button>
+        </div>
     </div>
+
+    @if ($showDepartments)
+        @php $roll = $this->departmentRoll(); @endphp
+        <div class="mb-6 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="font-semibold text-gray-800">Departments</h2>
+                    <p class="text-sm text-gray-600">{{ $roll->count() }} in all, {{ $roll->sum('headcount') }} people assigned</p>
+                </div>
+                <button wire:click="toggleDepartments" class="text-gray-400 hover:text-gray-600" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="p-5">
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <input type="text" wire:model="newDepartment" wire:keydown.enter="addDepartment"
+                           class="form-input flex-1 min-w-[14rem]" maxlength="100"
+                           placeholder="New department name">
+                    <button wire:click="addDepartment" class="btn-primary">
+                        <i class="fas fa-plus"></i> Add
+                    </button>
+                </div>
+                @error('newDepartment') <p class="-mt-2 mb-3 text-sm text-red-600">{{ $message }}</p> @enderror
+
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    @foreach ($roll as $d)
+                        <div class="border border-gray-200 rounded-lg p-3">
+                            @if ($renamingDepartment === (int) $d->department_id)
+                                <input type="text" wire:model="renameDepartmentTo" wire:keydown.enter="saveRename"
+                                       class="form-input text-sm" maxlength="100">
+                                @error('renameDepartmentTo') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                <div class="flex gap-2 mt-2">
+                                    <button wire:click="saveRename" class="text-sm text-career-700 font-medium">Save</button>
+                                    <button wire:click="$set('renamingDepartment', null)" class="text-sm text-gray-500">Cancel</button>
+                                </div>
+                            @else
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <p class="font-medium text-gray-900 truncate">{{ $d->department_name }}</p>
+                                        <p class="text-sm text-gray-500 mt-0.5">
+                                            <i class="fas fa-users mr-1 text-gray-400"></i>{{ $d->headcount }}
+                                            {{ Str::plural('person', $d->headcount) }}
+                                        </p>
+                                    </div>
+                                    <div class="flex gap-2 shrink-0">
+                                        <button wire:click="startRename({{ $d->department_id }}, '{{ addslashes($d->department_name) }}')"
+                                                class="text-gray-400 hover:text-gray-700" title="Rename">
+                                            <i class="fas fa-pen text-sm"></i>
+                                        </button>
+                                        {{-- Only offered when it would not strand anybody. --}}
+                                        @if ($d->headcount === 0)
+                                            <button wire:click="deleteDepartment({{ $d->department_id }})"
+                                                    wire:confirm="Delete {{ $d->department_name }}?"
+                                                    class="text-gray-400 hover:text-red-600" title="Delete">
+                                                <i class="fas fa-trash text-sm"></i>
+                                            </button>
+                                        @else
+                                            <span class="text-gray-300 cursor-not-allowed" title="Has people in it">
+                                                <i class="fas fa-trash text-sm"></i>
+                                            </span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+    @endif
 
     @if ($issuedPassword)
         <div class="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4">
@@ -632,6 +873,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             <th>Job title</th>
                             <th>Department</th>
                             <th>Role</th>
+                            <th>Type</th>
                             <th>Status</th>
                             <th class="text-right">Actions</th>
                         </tr>
@@ -651,6 +893,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <td class="text-gray-700">{{ $employee->job_title }}</td>
                                 <td class="text-gray-600">{{ $employee->department_name ?? '—' }}</td>
                                 <td class="text-gray-600">{{ $roles[$employee->role] ?? $employee->role }}</td>
+                                <td>
+                                    <span class="text-sm text-gray-700">{{ $employee->employment_type ?: '-' }}</span>
+                                </td>
                                 <td>
                                     <span class="status-badge
                                         @if ($employee->status === 'active') status-active
@@ -903,6 +1148,19 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                            placeholder="Annual increase, promotion, correction...">
                                 </div>
                             @endif
+                            <div>
+                                {{-- What they are engaged as, which is a
+                                     different question from whether they are
+                                     still here. A regular employee can be
+                                     AWOL; an OJT is an OJT until they leave. --}}
+                                <label class="form-label" for="employment_type">Employment type</label>
+                                <select id="employment_type" wire:model="employment_type" class="form-input">
+                                    @foreach ($employmentTypes as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                @error('employment_type') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
                             <div>
                                 <label class="form-label" for="status">Status</label>
                                 <select id="status" wire:model="status" class="form-input">
