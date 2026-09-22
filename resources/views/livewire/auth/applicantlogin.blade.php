@@ -266,6 +266,31 @@ new #[Layout('components.layouts.employee')] class extends Component
                 .careers-page .panel p,
                 .careers-page .panel span:not([class*="bg-"]) { color: #C6CFDC; }
 
+                /* Field errors were losing to the rule above - one class less
+                   specific - so every "incorrect credentials" and "already
+                   taken" rendered in the same pale grey as the help text and
+                   read as nothing at all. Light red, because text-red-600 is
+                   too dark to see against this panel. */
+                .careers-page .panel .text-red-600 { color: #FCA5A9; }
+
+                /* And the field itself, so the eye lands on which one. */
+                .careers-page .panel input.is-wrong,
+                .careers-page .panel select.is-wrong {
+                    border-color: rgba(252, 165, 169, .85) !important;
+                    background: rgba(227, 27, 35, .10) !important;
+                }
+
+                .careers-page .panel .form-alert {
+                    display: flex;
+                    gap: .625rem;
+                    padding: .75rem .875rem;
+                    border-radius: 10px;
+                    background: rgba(227, 27, 35, .16);
+                    border: 1px solid rgba(252, 165, 169, .45);
+                }
+
+                .careers-page .panel .form-alert p { color: #FCD5D7; margin: 0; }
+
                 .careers-page .panel input,
                 .careers-page .panel select,
                 .careers-page .panel textarea {
@@ -390,6 +415,20 @@ new #[Layout('components.layouts.employee')] class extends Component
                         @endif
 
                         <form wire:submit="login" class="space-y-6">
+                            {{-- A wrong password only marked the email field, which put the
+                                 one thing somebody needs to read at the bottom of a group.
+                                 Said once, at the top, where it is looked for. --}}
+                            @if ($errors->any())
+                                <div class="form-alert" role="alert" aria-live="polite">
+                                    <i class="fas fa-circle-exclamation mt-0.5" style="color: #FCA5A9"></i>
+                                    <div>
+                                        @foreach ($errors->all() as $message)
+                                            <p class="text-sm">{{ $message }}</p>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+
                             <!-- Email -->
                             <div>
                                 <label for="login-email" class="block text-sm font-medium text-gray-700 mb-2">
@@ -399,11 +438,11 @@ new #[Layout('components.layouts.employee')] class extends Component
                                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                         <i class="fas fa-envelope text-gray-400"></i>
                                     </div>
-                                    <input wire:model="email" 
+                                    <input wire:model="email"
                                            id="login-email"
-                                           type="email" 
+                                           type="email"
                                            required
-                                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('email') is-wrong @enderror"
                                            placeholder="you@example.com">
                                 </div>
                                 @error('email')
@@ -425,11 +464,11 @@ new #[Layout('components.layouts.employee')] class extends Component
                                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                         <i class="fas fa-lock text-gray-400"></i>
                                     </div>
-                                    <input wire:model="password" 
+                                    <input wire:model="password"
                                            id="login-password"
-                                           type="password" 
+                                           type="password"
                                            required
-                                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('email') is-wrong @enderror @error('password') is-wrong @enderror"
                                            placeholder="••••••••">
                                 </div>
                                 @error('password')
@@ -452,6 +491,20 @@ new #[Layout('components.layouts.employee')] class extends Component
                         <h2 class="text-2xl font-bold text-gray-900 mb-6">Create Applicant Account</h2>
                         
                         <form wire:submit="register" class="space-y-6">
+                            {{-- Same as the sign-in form: what went wrong, said once, at
+                                 the top, rather than only beside whichever field it
+                                 belongs to. --}}
+                            @if ($errors->any())
+                                <div class="form-alert" role="alert" aria-live="polite">
+                                    <i class="fas fa-circle-exclamation mt-0.5" style="color: #FCA5A9"></i>
+                                    <div>
+                                        @foreach ($errors->all() as $message)
+                                            <p class="text-sm">{{ $message }}</p>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+
                             {{-- Deliberately short. Name, where to reach them, what
                                  they are applying for, a password - everything else
                                  is asked once on the details form rather than twice. --}}
