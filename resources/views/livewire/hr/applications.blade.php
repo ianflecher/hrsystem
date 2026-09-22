@@ -99,6 +99,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public $hireDailyRate = '';
     public $hireDepartmentId = '';
     public $hireJobTitle = '';
+    public $hireResponsibilities = '';
+    public $hireStartsOn = '';
     public $interviewType = 'in_person';
     
     // Interview results
@@ -386,10 +388,22 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->hireDailyRate = ($existing && $existing->daily_rate > 0) ? $existing->daily_rate : '';
         $this->hireDepartmentId = $existing->department_id ?? '';
 
+        // A previous offer is the best draft of the next one.
+        $previous = DB::table('job_offers')->where('application_id', $applicationId)
+            ->orderByDesc('offer_id')->first();
+
+        $this->hireResponsibilities = $previous->responsibilities ?? $this->responsibilitiesFor($application->position_applied);
+        $this->hireStartsOn = $previous->starts_on ?? now()->addWeek()->toDateString();
+
         $this->resetValidation();
         $this->showHireModal = true;
     }
 
+    /**
+     * Send the offer. It does not hire anybody - the candidate does that by
+     * accepting it, which is the point: the system used to record a decision
+     * it had never been given.
+     */
     public function confirmHire()
     {
         $this->validate([
@@ -400,18 +414,57 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'hireDailyRate' => [$this->hirePayBasis === 'monthly' ? 'nullable' : 'required', 'numeric', 'min:1'],
             // Optional: plenty of roles carry none.
             'hireAllowance' => ['nullable', 'numeric', 'min:0'],
+            // Somebody is agreeing to this, so it cannot be blank.
+            'hireResponsibilities' => ['required', 'string', 'min:20', 'max:4000'],
+            'hireStartsOn'  => ['nullable', 'date'],
         ], [], [
             'hireJobTitle'  => 'job title',
             'hireSalary'    => 'monthly salary',
             'hireDailyRate' => 'daily rate',
+            'hireResponsibilities' => 'responsibilities',
+            'hireStartsOn'  => 'start date',
         ]);
 
-        $this->completeHire((int) $this->hiringApplicationId);
+        $applicationId = (int) $this->hiringApplicationId;
+
+        DB::transaction(function () use ($applicationId) {
+            // Any offer still outstanding is superseded, not deleted: what was
+            // offered before is part of the history.
+            DB::table('job_offers')->where('application_id', $applicationId)
+                ->where('status', 'sent')
+                ->update(['status' => 'withdrawn', 'updated_at' => now()]);
+
+            DB::table('job_offers')->insert([
+                'application_id'   => $applicationId,
+                'job_title'        => $this->hireJobTitle,
+                'pay_basis'        => $this->hirePayBasis,
+                'basic_salary'     => $this->hirePayBasis === 'monthly' ? (float) $this->hireSalary : 0,
+                'daily_rate'       => $this->hirePayBasis === 'monthly' ? 0 : (float) $this->hireDailyRate,
+                'allowance'        => (float) ($this->hireAllowance ?: 0),
+                'department_id'    => $this->hireDepartmentId ?: null,
+                'responsibilities' => $this->hireResponsibilities,
+                'starts_on'        => $this->hireStartsOn ?: null,
+                'status'           => 'sent',
+                'sent_by'          => auth()->id(),
+                'sent_at'          => now(),
+                'created_at'       => now(),
+                'updated_at'       => now(),
+            ]);
+
+            DB::table('job_applications')->where('application_id', $applicationId)
+                ->update(['status' => 'offered', 'updated_at' => now()]);
+        });
 
         $this->showHireModal = false;
         $this->hiringApplicationId = null;
         $this->loadData();
-        session()->flash('success', 'Hired, and their pay is set - payroll will not be held up by this one.');
+        session()->flash('success', 'Offer sent. They will see it on their application, and hiring completes when they accept.');
+    }
+
+    /** A starting point for the responsibilities, from the opening itself. */
+    private function responsibilitiesFor(?string $position): string
+    {
+        return (string) DB::table('job_positions')->where('title', $position)->value('description');
     }
 
     /**
@@ -421,71 +474,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
      * link, a direct call - it refuses rather than falling back to zero,
      * because a zero here stops everybody's payslips.
      */
-    private function completeHire(int $applicationId): void
-    {
-        $application = DB::table('job_applications')->where('application_id', $applicationId)->first();
-
-        if (! $application) {
-            return;
-        }
-
-        $monthly = $this->hirePayBasis === 'monthly';
-        $salary  = $monthly ? (float) $this->hireSalary : 0.0;
-        $daily   = $monthly ? 0.0 : (float) $this->hireDailyRate;
-
-        if (($monthly && $salary <= 0) || (! $monthly && $daily <= 0)) {
-            session()->flash('error', 'Set their pay before hiring them, or payroll cannot be approved for anybody.');
-
-            return;
-        }
-
-        DB::transaction(function () use ($application, $applicationId, $salary, $daily) {
-            DB::table('users')->where('user_id', $application->user_id)->update(['role' => 'employee']);
-
-            $existing = DB::table('employees')->where('user_id', $application->user_id)->first();
-
-            $fields = [
-                'job_title'     => $this->hireJobTitle ?: $application->position_applied,
-                'hire_date'     => date('Y-m-d'),
-                'salary'        => $salary,
-                'allowance'     => (float) ($this->hireAllowance ?: 0),
-                'daily_rate'    => $daily,
-                'pay_basis'     => $this->hirePayBasis,
-                'department_id' => $this->hireDepartmentId ?: null,
-                'status'        => 'active',
-                'updated_at'    => now(),
-            ];
-
-            if ($existing) {
-                DB::table('employees')->where('user_id', $application->user_id)->update($fields);
-            } else {
-                DB::table('employees')->insert($fields + [
-                    'user_id'    => $application->user_id,
-                    'created_at' => now(),
-                ]);
-            }
-
-            $note = ($application->notes ?? '')
-                ."\n\n--- HIRED ---\n"
-                ."Hired as: ".$fields['job_title']."\n"
-                ."Hire date: ".$fields['hire_date']."\n"
-                ."Pay: ".($salary > 0 ? number_format($salary, 2).' monthly' : number_format($daily, 2).' daily')."\n"
-                ."Employee record ".($existing ? 'updated' : 'created');
-
-            DB::table('job_applications')->where('application_id', $applicationId)->update([
-                'status'     => 'hired',
-                'notes'      => $note,
-                'updated_at' => now(),
-            ]);
-        });
-    }
-
     /**
      * What the interviewers made of somebody, on its own.
      *
-     * It is all in the application dialog too, but that is the whole 201 file
-     * and somebody deciding whether to hire wants the verdicts and the reasons
-     * without scrolling past a birthplace to reach them.
+     * It is all in the application dialog too, but that is the whole 201 file,
+     * and somebody deciding whether to make an offer wants the verdicts and
+     * the reasons without scrolling past a birthplace to reach them.
      */
     public function openResults($applicationId)
     {
@@ -517,6 +511,22 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
 public function updateApplicationStatus($applicationId, $status)
 {
+    // Checked first, before anything is written. Nobody is hired on terms
+    // they were never shown, and "hired" is reached by the candidate
+    // accepting an offer rather than by anybody setting a status.
+    $accepted = null;
+
+    if ($status === 'hired') {
+        $accepted = DB::table('job_offers')->where('application_id', $applicationId)
+            ->where('status', 'accepted')->orderByDesc('offer_id')->first();
+
+        if (! $accepted) {
+            session()->flash('error', 'Send them an offer first. Somebody is hired when they accept one, not before.');
+
+            return;
+        }
+    }
+
     $updates = [
         'status' => $status,
         'updated_at' => now()
@@ -535,12 +545,8 @@ public function updateApplicationStatus($applicationId, $status)
         ->where('application_id', $applicationId)
         ->update($updates);
 
-    // Hiring goes through completeHire(), which is reached from the dialog
-    // that asks for the pay. Nothing here creates an employee any more: it
-    // used to write salary 0.00 and status active, which blocked payroll
-    // approval for the whole company until somebody found the cause.
-    if ($status === 'hired') {
-        $this->completeHire($applicationId);
+    if ($accepted) {
+        \App\Support\OfferAcceptance::hire((int) $accepted->offer_id);
     }
 
     if ($this->showApplicationModal) {
@@ -1369,7 +1375,7 @@ public function updateApplicationStatus($applicationId, $status)
                                             @if($application->interview_status === 'completed' || $application->status === 'shortlisted')
                                                 <button wire:click="openHireModal('{{ $application->application_id }}')" 
                                                         class="px-3 py-1 text-xs bg-teal-50 text-teal-600 rounded hover:bg-teal-100">
-                                                    <i class="fas fa-user-tie mr-1"></i>Hire
+                                                    <i class="fas fa-paper-plane mr-1"></i>Offer
                                                 </button>
                                                 <button wire:click="updateApplicationStatus('{{ $application->application_id }}', 'rejected')" 
                                                         class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100"
@@ -1517,8 +1523,8 @@ public function updateApplicationStatus($applicationId, $status)
                 <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <div class="flex justify-between items-start mb-4">
                         <div>
-                            <h3 class="text-lg font-medium text-gray-900">Hire this applicant</h3>
-                            <p class="text-sm text-gray-500">Their pay is set now, not later.</p>
+                            <h3 class="text-lg font-medium text-gray-900">Send a job offer</h3>
+                            <p class="text-sm text-gray-500">They accept it before anybody is hired.</p>
                         </div>
                         <button wire:click="$set('showHireModal', false)" class="text-gray-400 hover:text-gray-500">
                             <i class="fas fa-times"></i>
@@ -1592,10 +1598,28 @@ public function updateApplicationStatus($applicationId, $status)
                             </select>
                         </div>
 
+                        <div>
+                            <label class="form-label">Start date</label>
+                            <input type="date" wire:model="hireStartsOn" class="form-input">
+                            @error('hireStartsOn') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        </div>
+
+                        {{-- Part of the offer, not a note beside it: this is what
+                             the person is agreeing to do. --}}
+                        <div>
+                            <label class="form-label">What the job involves</label>
+                            <textarea wire:model="hireResponsibilities" rows="5" class="form-input"
+                                      placeholder="The duties this role carries, in plain terms."></textarea>
+                            @error('hireResponsibilities') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                            <p class="mt-1 text-xs text-gray-500">
+                                Prefilled from the opening where there is one. They read this before accepting.
+                            </p>
+                        </div>
+
                         <div class="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
                             <i class="fas fa-info-circle mr-2"></i>
-                            An active employee with no pay set stops payroll being approved for
-                            everybody, so this cannot be left blank.
+                            Sending this does not hire anybody. They see the offer on their
+                            application, and it completes when they accept.
                         </div>
                     </div>
                 </div>
@@ -1603,7 +1627,7 @@ public function updateApplicationStatus($applicationId, $status)
                 <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                     <button wire:click="confirmHire"
                             class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-teal-600 text-base font-medium text-white hover:bg-teal-700 sm:ml-3 sm:w-auto sm:text-sm">
-                        <i class="fas fa-user-tie mr-2"></i>Hire
+                        <i class="fas fa-paper-plane mr-2"></i>Send offer
                     </button>
                     <button wire:click="$set('showHireModal', false)"
                             class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">

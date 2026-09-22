@@ -21,6 +21,8 @@ class HrApplicationWorkflowTest extends TestCase
             // Interviews cascade with the application, but one where this
             // person was the interviewer hangs off somebody else's.
             DB::table('application_interviews')->where('interviewer_id', $id)->delete();
+            DB::table('job_offers')->whereIn('application_id',
+                DB::table('job_applications')->where('user_id', $id)->pluck('application_id'))->delete();
             DB::table('application_documents')->where('user_id', $id)->delete();
             DB::table('job_applications')->where('user_id', $id)->delete();
             DB::table('employees')->where('user_id', $id)->delete();
@@ -60,23 +62,42 @@ class HrApplicationWorkflowTest extends TestCase
         $this->assertStringContainsString('14:30', $row->scheduled_at);
     }
 
-    public function test_hiring_an_applicant_promotes_them_to_employee(): void
+    /**
+     * Hiring is the candidate's move, not HR's: an offer is sent, and accepting
+     * it is what promotes them. HR marking the status by hand is refused,
+     * because nobody should be hired on terms they were never shown.
+     */
+    public function test_accepting_an_offer_promotes_the_applicant_to_employee(): void
     {
         [$hr, $applicant, $applicationId] = $this->scenario();
 
-        Volt::actingAs($hr)
-            ->test('hr.applications')
+        // By hand, with no offer on the table: refused.
+        Volt::actingAs($hr)->test('hr.applications')
             ->call('updateApplicationStatus', $applicationId, 'hired');
 
-        $this->assertSame(
-            'hired',
-            DB::table('job_applications')->where('application_id', $applicationId)->value('status')
-        );
+        $this->assertNotSame('hired',
+            DB::table('job_applications')->where('application_id', $applicationId)->value('status'),
+            'hired without an offer anybody had accepted');
 
-        $this->assertSame(
-            'employee',
-            DB::table('users')->where('user_id', $applicant->user_id)->value('role')
-        );
+        // Through an offer, which they then accept.
+        Volt::actingAs($hr)->test('hr.applications')
+            ->call('openHireModal', $applicationId)
+            ->set('hireSalary', '19000')
+            ->set('hireResponsibilities', 'Run the press and check every batch before it leaves.')
+            ->set('hireStartsOn', now()->addWeek()->toDateString())
+            ->call('confirmHire')
+            ->assertHasNoErrors();
+
+        Volt::actingAs($applicant)->test('applicant.index')->call('acceptOffer')->assertHasNoErrors();
+
+        $this->assertSame('hired',
+            DB::table('job_applications')->where('application_id', $applicationId)->value('status'));
+
+        $this->assertSame('employee',
+            DB::table('users')->where('user_id', $applicant->user_id)->value('role'));
+
+        $this->assertEquals(19000,
+            DB::table('employees')->where('user_id', $applicant->user_id)->value('salary'));
     }
 
     public function test_a_role_outside_the_allowed_set_is_rejected(): void

@@ -20,6 +20,7 @@ class HiringSetsPayTest extends TestCase
 
     protected function tearDown(): void
     {
+        DB::table('job_offers')->whereIn('application_id', $this->apps)->delete();
         DB::table('job_applications')->whereIn('application_id', $this->apps)->delete();
         foreach ($this->made as $id) {
             DB::table('employees')->where('user_id', $id)->delete();
@@ -52,7 +53,7 @@ class HiringSetsPayTest extends TestCase
         })->count();
     }
 
-    public function test_hiring_refuses_without_a_salary(): void
+    public function test_an_offer_refuses_without_a_salary(): void
     {
         $hr = User::where('username', 'hr')->first();
         [$u, $id] = $this->shortlisted();
@@ -60,18 +61,20 @@ class HiringSetsPayTest extends TestCase
         Volt::actingAs($hr)->test('hr.applications')
             ->call('openHireModal', $id)
             ->set('hireSalary', '')
+            ->set('hireResponsibilities', 'Run the press and check every batch before it leaves.')
+            ->set('hireStartsOn', now()->addWeek()->toDateString())
             ->call('confirmHire')
             ->assertHasErrors('hireSalary');
 
         $this->assertSame('shortlisted',
             DB::table('job_applications')->where('application_id', $id)->value('status'),
-            'it hired them anyway');
+            'it offered anyway');
 
         $this->assertNull(DB::table('employees')->where('user_id', $u->user_id)->first(),
             'an employee record was created without pay');
     }
 
-    public function test_hiring_with_a_salary_does_not_block_payroll(): void
+    public function test_an_accepted_offer_does_not_block_payroll(): void
     {
         $hr = User::where('username', 'hr')->first();
         [$u, $id] = $this->shortlisted();
@@ -81,8 +84,12 @@ class HiringSetsPayTest extends TestCase
         Volt::actingAs($hr)->test('hr.applications')
             ->call('openHireModal', $id)
             ->set('hireSalary', '18500')
+            ->set('hireResponsibilities', 'Run the press and check every batch before it leaves.')
+            ->set('hireStartsOn', now()->addWeek()->toDateString())
             ->call('confirmHire')
             ->assertHasNoErrors();
+
+        Volt::actingAs($u)->test('applicant.index')->call('acceptOffer')->assertHasNoErrors();
 
         $employee = DB::table('employees')->where('user_id', $u->user_id)->first();
         $this->assertNotNull($employee, 'nobody was hired');
@@ -94,7 +101,7 @@ class HiringSetsPayTest extends TestCase
             'the new hire is blocking payroll approval for everybody');
     }
 
-    public function test_a_daily_paid_hire_needs_a_daily_rate(): void
+    public function test_a_daily_paid_offer_needs_a_daily_rate(): void
     {
         $hr = User::where('username', 'hr')->first();
         [$u, $id] = $this->shortlisted();
@@ -103,11 +110,15 @@ class HiringSetsPayTest extends TestCase
             ->call('openHireModal', $id)
             ->set('hirePayBasis', 'daily')
             ->set('hireSalary', '')
-            ->set('hireDailyRate', '');
+            ->set('hireDailyRate', '')
+            ->set('hireResponsibilities', 'Run the press and check every batch before it leaves.')
+            ->set('hireStartsOn', now()->addWeek()->toDateString());
 
         $c->call('confirmHire')->assertHasErrors('hireDailyRate');
 
         $c->set('hireDailyRate', '650')->call('confirmHire')->assertHasNoErrors();
+
+        Volt::actingAs($u)->test('applicant.index')->call('acceptOffer')->assertHasNoErrors();
 
         $employee = DB::table('employees')->where('user_id', $u->user_id)->first();
         $this->assertEquals(650, $employee->daily_rate);

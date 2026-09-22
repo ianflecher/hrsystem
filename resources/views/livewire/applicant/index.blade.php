@@ -28,6 +28,13 @@ new #[Layout('components.layouts.applicant')] class extends Component
      */
     public array $interviewRounds = [];
 
+    /** The offer waiting on them, if there is one. */
+    public $offer = null;
+
+    /** Their answer, when they decline: useful to whoever reads it after. */
+    public string $declineNote = '';
+    public bool $confirmingDecline = false;
+
     /**
      * Where the applicant has got to with their own details form - 'none',
      * 'started' or 'done'. Signing it (certifying the record and agreeing to
@@ -96,6 +103,21 @@ new #[Layout('components.layouts.applicant')] class extends Component
                 ->orderBy('ai.scheduled_at')
                 ->first();
 
+            // The live offer. Named columns: this is a public property and it
+            // is serialised into the page, so nothing internal goes on it.
+            $this->offer = DB::table('job_offers as o')
+                ->select(
+                    'o.offer_id', 'o.job_title', 'o.pay_basis', 'o.basic_salary', 'o.daily_rate',
+                    'o.allowance', 'o.responsibilities', 'o.starts_on', 'o.status',
+                    'o.sent_at', 'o.responded_at',
+                    'd.department_name'
+                )
+                ->leftJoin('departments as d', 'o.department_id', '=', 'd.department_id')
+                ->where('o.application_id', $this->application->application_id)
+                ->whereIn('o.status', ['sent', 'accepted'])
+                ->orderByDesc('o.offer_id')
+                ->first();
+
             $this->interviewRounds = DB::table('application_interviews as ai')
                 ->select(
                     'ai.interview_id',
@@ -115,6 +137,71 @@ new #[Layout('components.layouts.applicant')] class extends Component
         }
     }
     
+    /**
+     * Accept it.
+     *
+     * The offer is read from the database rather than from anything the
+     * browser sent, and hiring is done from that row - so what is agreed to
+     * and what is recorded are the same thing by construction.
+     */
+    public function acceptOffer(): void
+    {
+        $offer = $this->liveOffer();
+
+        DB::table('job_offers')->where('offer_id', $offer->offer_id)->update([
+            'status' => 'accepted', 'responded_at' => now(), 'updated_at' => now(),
+        ]);
+
+        \App\Support\OfferAcceptance::hire($offer->offer_id);
+
+        $this->mount();
+        session()->flash('success', 'Offer accepted. Welcome to Imprint Customs - HR will be in touch about your first day.');
+    }
+
+    public function declineOffer(): void
+    {
+        $this->validate(['declineNote' => ['nullable', 'string', 'max:1000']]);
+
+        $offer = $this->liveOffer();
+
+        DB::table('job_offers')->where('offer_id', $offer->offer_id)->update([
+            'status'        => 'declined',
+            'responded_at'  => now(),
+            'response_note' => $this->declineNote ?: null,
+            'updated_at'    => now(),
+        ]);
+
+        // The application goes back to where it was before the offer, so HR
+        // can make another one rather than the record reading as a rejection
+        // by the company.
+        DB::table('job_applications')->where('application_id', $offer->application_id)
+            ->update(['status' => 'shortlisted', 'updated_at' => now()]);
+
+        $this->confirmingDecline = false;
+        $this->declineNote = '';
+        $this->mount();
+        session()->flash('success', 'You have declined the offer. Thank you for letting us know.');
+    }
+
+    /**
+     * The offer on the table, and only if it is this person's and still open.
+     * Every answer goes through here rather than trusting an id from the page.
+     */
+    private function liveOffer(): object
+    {
+        $offer = DB::table('job_offers as o')
+            ->select('o.*')
+            ->join('job_applications as ja', 'o.application_id', '=', 'ja.application_id')
+            ->where('ja.user_id', Auth::id())
+            ->where('o.status', 'sent')
+            ->orderByDesc('o.offer_id')
+            ->first();
+
+        abort_unless($offer, 403);
+
+        return $offer;
+    }
+
     public function uploadDocuments()
     {
         try {
@@ -301,6 +388,125 @@ new #[Layout('components.layouts.applicant')] class extends Component
         <p class="text-lg opacity-90">Track your application and manage your documents</p>
     </div>
 
+        {{-- The offer. Everything somebody needs to answer it: what the job
+             is, what it pays broken into basic and allowance, what it involves,
+             and when it starts. Hiring used to happen without any of this - HR
+             pressed a button and the person became an employee. --}}
+        @if ($offer)
+            @php
+                $monthly = $offer->pay_basis === 'monthly';
+                $basic = (float) ($monthly ? $offer->basic_salary : $offer->daily_rate);
+                $allowance = (float) $offer->allowance;
+                $period = $monthly ? 'a month' : 'a day';
+            @endphp
+
+            <div class="page-card border-2 {{ $offer->status === 'accepted' ? 'border-green-200' : 'border-career-500' }}">
+                <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">
+                            {{ $offer->status === 'accepted' ? 'Your offer' : 'You have a job offer' }}
+                        </h2>
+                        <p class="text-sm text-gray-600 mt-1">
+                            {{ $offer->job_title }}@if ($offer->department_name) &middot; {{ $offer->department_name }}@endif
+                        </p>
+                    </div>
+
+                    @if ($offer->status === 'accepted')
+                        <span class="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                            <i class="fas fa-check-circle mr-1"></i>Accepted
+                            @if ($offer->responded_at)
+                                {{ \Carbon\Carbon::parse($offer->responded_at)->format('j M Y') }}
+                            @endif
+                        </span>
+                    @endif
+                </div>
+
+                {{-- The pay, split the way it is actually paid. --}}
+                <div class="rounded-xl bg-gray-50 p-4">
+                    <div class="flex items-center justify-between py-1">
+                        <span class="text-gray-600">Basic pay</span>
+                        <span class="font-medium text-gray-900">&#8369;{{ number_format($basic, 2) }}</span>
+                    </div>
+
+                    <div class="flex items-center justify-between py-1">
+                        <span class="text-gray-600">Allowance</span>
+                        <span class="font-medium text-gray-900">
+                            @if ($allowance > 0)
+                                &#8369;{{ number_format($allowance, 2) }}
+                            @else
+                                <span class="text-gray-400">None</span>
+                            @endif
+                        </span>
+                    </div>
+
+                    <div class="flex items-center justify-between border-t border-gray-200 mt-2 pt-2">
+                        <span class="font-medium text-gray-900">Total {{ $period }}</span>
+                        <span class="text-xl font-bold text-career-700">
+                            &#8369;{{ number_format($basic + $allowance, 2) }}
+                        </span>
+                    </div>
+
+                    @if ($allowance > 0)
+                        <p class="text-xs text-gray-500 mt-2">
+                            The allowance is paid in full &mdash; no tax and no contributions are
+                            taken from it. Deductions apply to the basic pay only.
+                        </p>
+                    @endif
+                </div>
+
+                @if ($offer->starts_on)
+                    <p class="mt-4 text-sm text-gray-700">
+                        <i class="fas fa-calendar-day text-gray-400 mr-2"></i>
+                        Starting <strong>{{ \Carbon\Carbon::parse($offer->starts_on)->format('l, j F Y') }}</strong>
+                    </p>
+                @endif
+
+                @if (trim((string) $offer->responsibilities) !== '')
+                    <div class="mt-4">
+                        <h3 class="font-semibold text-gray-800 mb-2">What the job involves</h3>
+                        <div class="text-sm text-gray-700 whitespace-pre-line rounded-lg border border-gray-200 p-4">{{ $offer->responsibilities }}</div>
+                    </div>
+                @endif
+
+                @if ($offer->status === 'sent')
+                    <div class="mt-5 pt-5 border-t border-gray-200">
+                        @if ($confirmingDecline)
+                            <p class="text-sm text-gray-700">
+                                Declining closes this offer. HR can send another one, so if it is the
+                                terms rather than the job, say so below.
+                            </p>
+                            <textarea wire:model="declineNote" rows="3" class="form-input mt-2"
+                                      placeholder="Anything you would like them to know (optional)."></textarea>
+                            <div class="flex flex-wrap gap-2 mt-3">
+                                <button type="button" wire:click="declineOffer"
+                                        class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium">
+                                    Yes, decline it
+                                </button>
+                                <button type="button" wire:click="$set('confirmingDecline', false)"
+                                        class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm">
+                                    Keep thinking
+                                </button>
+                            </div>
+                        @else
+                            <p class="text-sm text-gray-600 mb-3">
+                                Accepting confirms the role, the pay above and the start date.
+                            </p>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" wire:click="acceptOffer"
+                                        class="px-5 py-2.5 rounded-lg bg-career-600 text-white font-medium">
+                                    <i class="fas fa-check mr-2"></i>Accept this offer
+                                </button>
+                                <button type="button" wire:click="$set('confirmingDecline', true)"
+                                        class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700">
+                                    Decline
+                                </button>
+                            </div>
+                        @endif
+                    </div>
+                @endif
+            </div>
+        @endif
+
     <!-- Application Status Card -->
     <div class="page-card mb-8">
         <div class="flex justify-between items-center mb-6">
@@ -336,23 +542,12 @@ new #[Layout('components.layouts.applicant')] class extends Component
                     @endif
                 </div>
                 
-                <!-- Notes Section -->
-                @if($application->notes)
-                <div class="mt-6">
-                    <h3 class="font-semibold text-gray-700 mb-3">Application Notes</h3>
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <div class="flex">
-                            <div class="flex-shrink-0">
-                                <i class="fas fa-sticky-note text-blue-500"></i>
-                            </div>
-                            <div class="ml-3">
-                                <p class="text-sm text-blue-800">{{ $application->notes }}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                @endif
-                
+                {{-- The notes column is HR's own working record - it accumulated
+                     lines like "--- HIRED --- Employee record updated" - and it was
+                     being printed to the candidate under a heading that made it look
+                     written for them. The offer now carries what they are entitled to
+                     know: the terms, the responsibilities and when it starts. --}}
+
                 <!-- Interview Details Section -->
                 @if($interviewDetails)
                 <div class="mt-6">

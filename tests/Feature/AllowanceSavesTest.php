@@ -18,7 +18,11 @@ class AllowanceSavesTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_hiring_records_basic_and_allowance_separately(): void
+    /**
+     * An offer carries the two figures apart, and accepting it hires them on
+     * exactly those. Nobody is hired without accepting.
+     */
+    public function test_an_accepted_offer_records_basic_and_allowance_separately(): void
     {
         $hr = User::where('username','hr')->first();
         $n = random_int(100000,999999);
@@ -35,15 +39,29 @@ class AllowanceSavesTest extends TestCase
             ->call('openHireModal', $appId)
             ->set('hireSalary', '18000')
             ->set('hireAllowance', '2000')
+            ->set('hireResponsibilities', 'Run the press and check every batch before it leaves.')
+            ->set('hireStartsOn', now()->addWeek()->toDateString())
             ->call('confirmHire')
             ->assertHasNoErrors();
 
+        // The offer carries them apart...
+        $offer = DB::table('job_offers')->where('application_id', $appId)->first();
+        $this->assertEquals(18000, $offer->basic_salary);
+        $this->assertEquals(2000, $offer->allowance);
+
+        // ...and only accepting it makes an employee.
+        $this->assertNull(DB::table('employees')->where('user_id', $u->user_id)->first(),
+            'an offer on its own hired them');
+
+        Volt::actingAs($u)->test('applicant.index')->call('acceptOffer')->assertHasNoErrors();
+
         $e = DB::table('employees')->where('user_id',$u->user_id)->first();
-        fwrite(STDERR, sprintf("\n  hired on basic %s + allowance %s = %s total", $e->salary, $e->allowance, $e->salary + $e->allowance));
+        fwrite(STDERR, sprintf("\n  accepted on basic %s + allowance %s = %s total", $e->salary, $e->allowance, $e->salary + $e->allowance));
 
         $this->assertEquals(18000, $e->salary, 'the allowance was folded into basic');
         $this->assertEquals(2000, $e->allowance);
 
+        DB::table('job_offers')->where('application_id',$appId)->delete();
         DB::table('job_applications')->where('application_id',$appId)->delete();
         fwrite(STDERR, "\n\n");
     }
