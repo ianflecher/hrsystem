@@ -24,7 +24,7 @@
     </div>
 
     {{-- ----------------------------------------------------------- 1. health --}}
-    <div class="px-6 py-5 border-b border-gray-200">
+    <div class="px-6 py-3 border-b border-gray-200">
         <h3 class="font-medium text-gray-900 mb-3">1. Health disclosure</h3>
 
         <div class="space-y-4">
@@ -57,7 +57,7 @@
     </div>
 
     {{-- -------------------------------------------------------- 2. relatives --}}
-    <div class="px-6 py-5 border-b border-gray-200">
+    <div class="px-6 py-3 border-b border-gray-200">
         <h3 class="font-medium text-gray-900 mb-3">2. Relatives employed at the company</h3>
 
         <p class="text-sm text-gray-800">
@@ -94,7 +94,7 @@
     </div>
 
     {{-- ------------------------------------------- 3. prior employment / legal --}}
-    <div class="px-6 py-5 border-b border-gray-200">
+    <div class="px-6 py-3 border-b border-gray-200">
         <h3 class="font-medium text-gray-900 mb-3">3. Prior employment and legal disclosure</h3>
 
         <div class="space-y-4">
@@ -178,7 +178,7 @@
     </div>
 
     {{-- ----------------------------------------- 4. government IDs and benefits --}}
-    <div class="px-6 py-5 border-b border-gray-200">
+    <div class="px-6 py-3 border-b border-gray-200">
         <h3 class="font-medium text-gray-900 mb-1">4. Government mandated IDs and benefits</h3>
         <p class="text-sm text-gray-600 mb-3">Which of these do you already have on file?</p>
 
@@ -191,7 +191,7 @@
             ] as $field => $label)
                 <div class="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2" wire:key="gov-{{ $field }}">
                     <span class="text-sm text-gray-800">{{ $label }}</span>
-                    <div class="flex gap-4">
+                    <div class="flex gap-3">
                         <label class="flex items-center gap-1.5 text-sm"><input type="radio" value="1" wire:model="d.{{ $field }}"> Yes</label>
                         <label class="flex items-center gap-1.5 text-sm"><input type="radio" value="0" wire:model="d.{{ $field }}"> No</label>
                     </div>

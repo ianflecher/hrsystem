@@ -21,7 +21,7 @@
                     @endif
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     <div class="lg:col-span-2">
                         <label class="form-label">Company name</label>
                         <input type="text" wire:model="jobs.{{ $i }}.company_name" class="form-input">
@@ -60,7 +60,7 @@
     </div>
 
     {{-- ------------------------------------------------- character references --}}
-    <div class="px-6 py-5 border-t border-gray-200">
+    <div class="px-6 py-3 border-t border-gray-200">
         <div class="flex items-center justify-between mb-3">
             <div>
                 <h3 class="font-medium text-gray-900">Character references</h3>
@@ -86,7 +86,7 @@
     </div>
 
     {{-- --------------------------------------------------------- certification --}}
-    <div class="px-6 py-5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+    <div class="px-6 py-3 border-t border-gray-200 bg-gray-50 rounded-b-xl">
         <p class="text-sm text-gray-800">
             I hereby certify that the above information is true and correct to the best of my
             knowledge and belief.

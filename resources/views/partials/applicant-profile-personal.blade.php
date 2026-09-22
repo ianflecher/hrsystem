@@ -5,8 +5,8 @@
         <h2 class="font-semibold text-gray-900">Personal details</h2>
     </div>
 
-    <div class="px-6 py-5 space-y-5">
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="px-6 py-4 space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
                 <label class="form-label" for="surname">Surname</label>
                 <input id="surname" type="text" wire:model="p.surname" class="form-input">
@@ -41,7 +41,7 @@
                       @if ($p['permanent_same_as_present'] ?? false) readonly @endif></textarea>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
                 <label class="form-label" for="cellphone">Cellphone no.</label>
                 <input id="cellphone" type="text" wire:model="p.cellphone" class="form-input" placeholder="09XX XXX XXXX">
@@ -58,7 +58,7 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div>
                 <label class="form-label" for="date_of_birth">Date of birth</label>
                 <input id="date_of_birth" type="date" wire:model="p.date_of_birth" class="form-input">
@@ -83,7 +83,7 @@
         @if (in_array($p['civil_status'] ?? '', ['married', 'live_in', 'widowed', 'separated'], true))
             <div>
                 <span class="form-label">Spouse</span>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-1">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-1">
                     <input type="text" wire:model="p.spouse_surname" class="form-input" placeholder="Surname">
                     <input type="text" wire:model="p.spouse_first_name" class="form-input" placeholder="First name">
                     <input type="text" wire:model="p.spouse_middle_name" class="form-input" placeholder="Middle name (N/A if none)">
@@ -91,7 +91,7 @@
             </div>
         @endif
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
                 <label class="form-label" for="fathers_name">Father's name</label>
                 <input id="fathers_name" type="text" wire:model="p.fathers_name" class="form-input" placeholder="N/A if none">
@@ -110,9 +110,9 @@
     </div>
 
     {{-- ------------------------------------------------------ government IDs --}}
-    <div class="px-6 py-5 border-t border-gray-200">
+    <div class="px-6 py-3 border-t border-gray-200">
         <h3 class="font-medium text-gray-900 mb-3">Government numbers</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
                 <label class="form-label" for="sss_number">SSS no.</label>
                 <input id="sss_number" type="text" wire:model="p.sss_number" class="form-input" placeholder="N/A if none">
@@ -133,9 +133,9 @@
     </div>
 
     {{-- ---------------------------------------------------- emergency contact --}}
-    <div class="px-6 py-5 border-t border-gray-200">
+    <div class="px-6 py-3 border-t border-gray-200">
         <h3 class="font-medium text-gray-900">In case of emergency, please contact</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
             <div>
                 <label class="form-label" for="emergency_name">Name</label>
                 <input id="emergency_name" type="text" wire:model="p.emergency_name" class="form-input">

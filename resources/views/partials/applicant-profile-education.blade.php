@@ -10,7 +10,7 @@
         </p>
     </div>
 
-    <div class="px-6 py-5 space-y-5">
+    <div class="px-6 py-4 space-y-3">
         @foreach ($levels as $key => $label)
             <div wire:key="edu-{{ $key }}">
                 <span class="form-label">{{ $label }}</span>
