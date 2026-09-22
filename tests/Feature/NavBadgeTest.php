@@ -69,6 +69,66 @@ class NavBadgeTest extends TestCase
         $this->assertSame(0, NavBadges::staff()['employee.interviews'], 'still badged after answering');
     }
 
+    /**
+     * Counting only "pending" made the badge look broken: it sat at zero while
+     * work plainly waited. These are the three states that need HR next.
+     */
+    public function test_the_applications_badge_counts_everything_waiting_on_hr(): void
+    {
+        NavBadges::forget();
+        $base = NavBadges::hr()['hr.applications'];
+
+        $unopened   = $this->application('pending');
+        $noInterview = $this->application('reviewed');
+
+        NavBadges::forget();
+        $this->assertSame($base + 2, NavBadges::hr()['hr.applications'],
+            'an unopened one and a reviewed one with no interview should both count');
+
+        // Reviewed, interview booked and not yet answered: that is the
+        // interviewer's move, not HR's, so it drops off.
+        $interviewId = DB::table('application_interviews')->insertGetId([
+            'application_id' => $noInterview, 'interviewer_id' => null, 'round' => 1,
+            'scheduled_at' => now()->addDay(), 'type' => 'in_person', 'status' => 'scheduled',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        NavBadges::forget();
+        $this->assertSame($base + 1, NavBadges::hr()['hr.applications'],
+            'waiting on the interviewer should not be badged to HR');
+
+        // Answered, and still no decision: back to HR.
+        DB::table('application_interviews')->where('interview_id', $interviewId)
+            ->update(['recommendation' => 'recommend', 'status' => 'completed']);
+
+        NavBadges::forget();
+        $this->assertSame($base + 2, NavBadges::hr()['hr.applications'],
+            'an answered interview with no decision is HR\'s move');
+
+        // Decided.
+        DB::table('job_applications')->where('application_id', $noInterview)->update(['status' => 'hired']);
+        DB::table('job_applications')->where('application_id', $unopened)->update(['status' => 'rejected']);
+
+        NavBadges::forget();
+        $this->assertSame($base, NavBadges::hr()['hr.applications'], 'settled applications should not be badged');
+    }
+
+    private function application(string $status): int
+    {
+        $n = random_int(100000, 999999);
+        $u = User::create(['full_name' => 'Badge Person', 'username' => "bp{$n}",
+            'email' => "bp{$n}@example.test", 'password' => 'x', 'role' => 'employee']);
+        $this->made[] = $u->user_id;
+
+        $id = DB::table('job_applications')->insertGetId([
+            'user_id' => $u->user_id, 'position_applied' => 'Crew', 'years_experience' => '',
+            'status' => $status, 'application_date' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->apps[] = $id;
+
+        return $id;
+    }
+
     public function test_hr_is_badged_for_work_that_is_actually_pending(): void
     {
         NavBadges::forget();

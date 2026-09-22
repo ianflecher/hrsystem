@@ -33,8 +33,40 @@ class NavBadges
     public static function hr(): array
     {
         return self::remember('hr', fn () => [
-            // New applications nobody has looked at.
-            'hr.applications' => (int) DB::table('job_applications')->where('status', 'pending')->count(),
+            // Applications that need HR to do something next. Counting only
+            // "pending" read as broken, because it stayed at zero while work
+            // plainly sat there: an application reviewed a week ago with no
+            // interview booked is waiting on HR just as much as one nobody
+            // has opened.
+            //
+            // Three things qualify, and nothing settled does:
+            //   - nobody has looked at it yet
+            //   - reviewed, but no interview arranged
+            //   - every interview answered, and still no decision
+            'hr.applications' => (int) DB::table('job_applications as ja')
+                ->where(function ($q) {
+                    $q->where('ja.status', 'pending')
+                        ->orWhere(function ($q) {
+                            $q->where('ja.status', 'reviewed')
+                                ->whereNotExists(fn ($e) => $e->select(DB::raw(1))
+                                    ->from('application_interviews as ai')
+                                    ->whereColumn('ai.application_id', 'ja.application_id')
+                                    ->where('ai.status', '!=', 'cancelled'));
+                        })
+                        ->orWhere(function ($q) {
+                            $q->where('ja.status', 'reviewed')
+                                ->whereExists(fn ($e) => $e->select(DB::raw(1))
+                                    ->from('application_interviews as ai')
+                                    ->whereColumn('ai.application_id', 'ja.application_id')
+                                    ->where('ai.status', '!=', 'cancelled'))
+                                ->whereNotExists(fn ($e) => $e->select(DB::raw(1))
+                                    ->from('application_interviews as ai')
+                                    ->whereColumn('ai.application_id', 'ja.application_id')
+                                    ->where('ai.status', '!=', 'cancelled')
+                                    ->whereNull('ai.recommendation'));
+                        });
+                })
+                ->count(),
 
             // Leave asked for and not yet answered.
             'hr.leave' => (int) DB::table('leaves')->where('status', 'pending')->count(),

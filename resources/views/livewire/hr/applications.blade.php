@@ -812,7 +812,14 @@ public function updateApplicationStatus($applicationId, $status)
 }
 ?>
 
-<div>
+{{-- New applications and freshly recorded recommendations arrive on their
+     own. Held while any dialog is open - the schedule form and the salary
+     form both carry typed values that a re-render would discard. --}}
+<div @if (! $showApplicationModal && ! $showInterviewModal && ! $showDocumentsModal
+          && ! $showInterviewResultModal && ! $showRoleChangeModal && ! $showSalaryModal
+          && ! $showDepartmentModal)
+        wire:poll.30s.visible
+     @endif>
     <!-- Page Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>

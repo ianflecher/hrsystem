@@ -171,7 +171,16 @@ new #[Layout('components.layouts.employeeland')] class extends Component
     }
 }; ?>
 
-<div class="p-6 md:p-8 max-w-[90rem] mx-auto">
+{{-- Picks up an interview booked while this page was already open.
+
+     Suspended whenever a panel is open, and that is not a nicety: wire:model
+     is deferred, so a half-typed recommendation lives only in the browser
+     until something is called. A poll landing mid-sentence would re-render the
+     textarea from the server and take the sentence with it.
+
+     .visible so a tab left open in the background stops asking. --}}
+<div class="p-6 md:p-8 max-w-[90rem] mx-auto"
+     @if ($openId === null) wire:poll.30s.visible @endif>
     <div class="mb-5">
         <h1 class="text-2xl font-semibold text-gray-900">My interviews</h1>
         <p class="text-sm text-gray-600 mt-1">
