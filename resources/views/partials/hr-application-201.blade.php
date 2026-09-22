@@ -10,6 +10,14 @@
 @php
     use App\Support\Na;
 
+    // HR sees the whole file. A supervisor interviewing the candidate sees the
+    // person, their schooling and their work - not health, medication or
+    // criminal history, which stay with HR. Defaults to the fuller view so a
+    // caller that forgets cannot quietly widen who sees them; the supervisor
+    // screen passes false deliberately.
+    $showDisclosures = $showDisclosures ?? true;
+    $showPrint = $showPrint ?? true;
+
     // N/A stands on its own as an answer, but must not turn up inside a line
     // that is assembled from several columns - "Lasam, Gian N/A", or a spouse
     // named "N/A N/A N/A".
@@ -36,7 +44,7 @@
                 </span>
             @endif
 
-            @if ($profile)
+            @if ($profile && $showPrint)
                 {{-- A new tab: printing should not take HR out of the list they
                      were working through. --}}
                 <a href="{{ route('hr.applications.print', $selectedApplication->application_id) }}"
@@ -244,7 +252,7 @@
             @endif
 
             {{-- ------------------------------------------------- disclosures --}}
-            @if ($disclosures)
+            @if ($disclosures && $showDisclosures)
                 <div class="rounded-lg border border-amber-200 bg-amber-50/40 p-4">
                     <div class="flex items-center justify-between mb-1">
                         <h5 class="font-medium text-gray-900">Disclosures</h5>

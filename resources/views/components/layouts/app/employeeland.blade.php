@@ -68,6 +68,7 @@
                     ['route' => 'people.employee', 'module' => 'announcements', 'icon' => 'bullhorn'],
                 ],
                 'My employment' => [
+                    ['route' => 'employee.interviews', 'label' => 'My interviews', 'icon' => 'user-check'],
                     ['route' => 'people.employee', 'module' => 'documents', 'icon' => 'folder-open'],
                     ['route' => 'people.employee', 'module' => 'checklists', 'icon' => 'list-check'],
                     ['route' => 'people.employee', 'module' => 'reviews', 'icon' => 'star'],

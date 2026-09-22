@@ -130,6 +130,11 @@ Route::middleware('auth')->group(function () {
     Volt::route('/employee/attendance', 'employee.attendance')->name('employee.attendance');
     Volt::route('/employee/payroll', 'employee.payroll')->name('employee.payroll');
     Volt::route('/employee/leave', 'employee.leave')->name('employee.leave');
+
+    // Interviews this person has been given. The component scopes every read
+    // and write to the signed-in interviewer, so the gate here is only that
+    // they are staff at all.
+    Volt::route('/employee/interviews', 'employee.interviews')->name('employee.interviews');
     Route::get('/employee/self-service', [\App\Http\Controllers\EmployeeOperationsController::class, 'selfService'])->name('employee.operations.self-service');
     Route::post('/employee/self-service/request', [\App\Http\Controllers\EmployeeOperationsController::class, 'request'])->name('employee.operations.request');
     Route::post('/employee/self-service/attendance-correction', [\App\Http\Controllers\EmployeeOperationsController::class, 'attendanceCorrection'])->name('employee.operations.attendance-correction');

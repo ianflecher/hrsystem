@@ -1298,6 +1298,46 @@ public function updateApplicationStatus($applicationId, $status)
 
                         @include('partials.hr-application-201')
 
+                        {{-- What the interviewing supervisor made of them. HR
+                             decides; this is what they weigh. --}}
+                        @if ($selectedApplication->interviewer_recommendation ?? null)
+                            @php
+                                $verdicts = [
+                                    'recommend'     => ['Recommends', 'bg-green-100 text-green-800', 'fa-thumbs-up'],
+                                    'not_recommend' => ['Does not recommend', 'bg-red-100 text-red-800', 'fa-thumbs-down'],
+                                    'undecided'     => ['Undecided', 'bg-gray-100 text-gray-700', 'fa-circle-question'],
+                                ];
+                                [$label, $tone, $icon] = $verdicts[$selectedApplication->interviewer_recommendation];
+                            @endphp
+                            <div class="md:col-span-2 border-t pt-4">
+                                <h4 class="text-sm font-medium text-gray-700 mb-3">Interviewer's recommendation</h4>
+                                <div class="rounded-lg border border-gray-200 p-4">
+                                    <div class="flex flex-wrap items-center justify-between gap-2">
+                                        <span class="px-3 py-1 rounded-full text-sm font-medium {{ $tone }}">
+                                            <i class="fas {{ $icon }} mr-1"></i>{{ $label }}
+                                        </span>
+                                        <span class="text-xs text-gray-500">
+                                            {{ $selectedApplication->interviewer_name ?? 'Interviewer' }}
+                                            @if ($selectedApplication->recommended_at)
+                                                &middot; {{ \Illuminate\Support\Carbon::parse($selectedApplication->recommended_at)->format('j M Y, g:ia') }}
+                                            @endif
+                                        </span>
+                                    </div>
+                                    @if (trim((string) ($selectedApplication->recommendation_notes ?? '')) !== '')
+                                        <p class="text-sm text-gray-700 mt-3">{{ $selectedApplication->recommendation_notes }}</p>
+                                    @endif
+                                </div>
+                            </div>
+                        @elseif (($selectedApplication->interviewer_id ?? null) && ($selectedApplication->interview_date ?? null))
+                            <div class="md:col-span-2 border-t pt-4">
+                                <h4 class="text-sm font-medium text-gray-700 mb-2">Interviewer's recommendation</h4>
+                                <p class="text-sm text-gray-500">
+                                    Not yet given by {{ $selectedApplication->interviewer_name ?? 'the interviewer' }}.
+                                    It appears here once they record it.
+                                </p>
+                            </div>
+                        @endif
+
                         <!-- Interview Information (if exists) -->
                         @if($selectedApplication->interview_date ?? false)
                         <div class="md:col-span-2 border-t pt-4">
