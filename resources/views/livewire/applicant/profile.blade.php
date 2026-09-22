@@ -765,13 +765,20 @@ new #[Layout('components.layouts.applicant')] class extends Component
 
     {{-- Where they are, and how much is left. Steps already passed can be
          clicked back to; ones ahead cannot, because they have not been saved. --}}
-    <nav class="mb-4 flex flex-wrap items-center gap-2" aria-label="Form steps">
+    {{-- One line that scrolls, not a block that wraps. Five pills of different
+         widths wrapped into a ragged two-column shape - "Government IDs" and
+         "Education" side by side under "Personal details" - which reads as
+         disordered when the whole job of the thing is to show an order. --}}
+    <nav class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1
+                [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+         aria-label="Form steps">
         @foreach ($steps as $number => $label)
             @php $state = $number === $step ? 'current' : ($number < $step ? 'done' : 'ahead'); @endphp
             <button type="button"
                     @if ($state === 'ahead') disabled @else wire:click="goToStep({{ $number }})" @endif
                     @if ($state === 'current') aria-current="step" @endif
-                    class="flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors
+                    @if ($state === 'current') data-current-step @endif
+                    class="flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors
                         @if ($state === 'current') border-red-600 bg-red-600 text-white
                         @elseif ($state === 'done') border-gray-300 bg-white text-gray-700 hover:border-red-300
                         @else border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed @endif">
@@ -781,10 +788,33 @@ new #[Layout('components.layouts.applicant')] class extends Component
                     @else bg-gray-200 @endif">
                     @if ($state === 'done') <i class="fas fa-check"></i> @else {{ $number }} @endif
                 </span>
-                {{ $label }}
+                <span class="{{ $state === 'current' ? '' : 'hidden sm:inline' }}">{{ $label }}</span>
             </button>
         @endforeach
     </nav>
+
+    {{-- On a phone the row is wider than the screen, so by step four the pill
+         telling you where you are has scrolled off to the right. This brings it
+         back. Re-run after every Livewire render, because moving between steps
+         is exactly when it matters. --}}
+    <script>
+        (function () {
+            const show = () => {
+                const nav = document.querySelector('nav[aria-label="Form steps"]');
+                const here = nav && nav.querySelector('[data-current-step]');
+
+                if (here && nav.scrollWidth > nav.clientWidth) {
+                    here.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+                }
+            };
+
+            show();
+            document.addEventListener('livewire:navigated', show);
+            if (window.Livewire) {
+                Livewire.hook('morphed', show);
+            }
+        })();
+    </script>
 
     @if ($step === 1)
         @include('partials.applicant-profile-personal')
