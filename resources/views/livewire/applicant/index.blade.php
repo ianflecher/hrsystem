@@ -15,6 +15,14 @@ new #[Layout('components.layouts.applicant')] class extends Component
     public $application;
     public $documents = [];
     public $interviewDetails = null;
+
+    /**
+     * Where the applicant has got to with their own details form - 'none',
+     * 'started' or 'done'. Signing it (certifying the record and agreeing to
+     * the disclosures) is what counts as finished; a saved row on its own
+     * only means they have begun.
+     */
+    public string $detailsState = 'none';
     
     #[Validate([
         'newDocuments' => 'max:5', // Maximum 5 files per upload
@@ -25,7 +33,16 @@ new #[Layout('components.layouts.applicant')] class extends Component
     public function mount()
     {
         $user = Auth::user();
-        
+
+        $profile = DB::table('applicant_profiles')->where('user_id', $user->user_id)->first();
+        $declaredAt = DB::table('applicant_disclosures')->where('user_id', $user->user_id)->value('declared_at');
+
+        $this->detailsState = match (true) {
+            ! $profile => 'none',
+            $profile->certified_at && $declaredAt => 'done',
+            default => 'started',
+        };
+
         // Get the latest application for the user
         $this->application = DB::table('job_applications')
             ->where('user_id', $user->user_id)
@@ -259,16 +276,24 @@ new #[Layout('components.layouts.applicant')] class extends Component
         @if($application)
             <div class="space-y-6">
                 <!-- Application Details -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {{-- Experience is only shown for applications that carry it. It is
+                     no longer asked at registration - the employment record on the
+                     details form says more - so newer applications have none, and an
+                     empty tile reading "years" is worse than no tile. --}}
+                <div class="grid grid-cols-1 {{ filled($application->years_experience) ? 'md:grid-cols-2' : '' }} gap-6">
                     <div class="bg-gray-50 p-4 rounded-lg">
                         <h3 class="font-semibold text-gray-700 mb-2">Position Applied</h3>
                         <p class="text-lg font-medium text-career-700">{{ $application->position_applied }}</p>
                     </div>
-                    
-                    <div class="bg-gray-50 p-4 rounded-lg">
-                        <h3 class="font-semibold text-gray-700 mb-2">Experience</h3>
-                        <p class="text-lg font-medium text-career-700">{{ $application->years_experience }} years</p>
-                    </div>
+
+                    @if(filled($application->years_experience))
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h3 class="font-semibold text-gray-700 mb-2">Experience</h3>
+                            {{-- The stored value already reads "3-5 years"; the template
+                                 used to append a second "years" to it. --}}
+                            <p class="text-lg font-medium text-career-700">{{ $application->years_experience }}</p>
+                        </div>
+                    @endif
                 </div>
                 
                 <!-- Notes Section -->
@@ -436,11 +461,51 @@ new #[Layout('components.layouts.applicant')] class extends Component
                                 <div class="ml-6">
                                     <h4 class="font-medium text-gray-800">Application Submitted</h4>
                                     <p class="text-sm text-gray-600">{{ \Carbon\Carbon::parse($application->application_date)->format('F j, Y') }}</p>
-                                    <p class="text-sm text-gray-600 mt-1">Your application has been received and is under review.</p>
+                                    {{-- It said "received and is under review" here, which was neither
+                                         true nor what the next two steps say: nothing is reviewed until
+                                         the details form is filled in and signed. --}}
                                 </div>
                             </div>
                             
-                            <!-- Step 2: Review Status -->
+                            {{-- Filling in the 201 file. It sits between applying and
+                                 being reviewed because HR reads the details when they
+                                 review, so an unfinished form holds the application up. --}}
+                            <div class="flex items-start">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full
+                                    {{ $detailsState === 'done' ? 'bg-career-500' : ($detailsState === 'started' ? 'bg-amber-500' : 'bg-gray-300') }}
+                                    flex items-center justify-center">
+                                    @if($detailsState === 'done')
+                                        <i class="fas fa-check text-white text-sm"></i>
+                                    @elseif($detailsState === 'started')
+                                        <i class="fas fa-pen text-white text-sm"></i>
+                                    @else
+                                        <i class="fas fa-pen text-gray-500 text-sm"></i>
+                                    @endif
+                                </div>
+                                <div class="ml-6">
+                                    <h4 class="font-medium text-gray-800">Your details</h4>
+                                    @if($detailsState === 'done')
+                                        <p class="text-sm text-gray-600">Your application details are complete.</p>
+                                        <p class="text-sm text-career-600 mt-1 font-medium">
+                                            <i class="fas fa-check-circle mr-1"></i> Signed and submitted
+                                        </p>
+                                    @elseif($detailsState === 'started')
+                                        <p class="text-sm text-gray-600">You have started filling in your details.</p>
+                                        <p class="text-sm text-amber-600 mt-1 font-medium">
+                                            <i class="fas fa-pen mr-1"></i>
+                                            <a href="{{ route('applicant.profile') }}" class="underline">Finish and sign them</a>
+                                        </p>
+                                    @else
+                                        <p class="text-sm text-gray-600">HR needs these before they can review you.</p>
+                                        <p class="text-sm text-career-600 mt-1 font-medium">
+                                            <i class="fas fa-arrow-right mr-1"></i>
+                                            <a href="{{ route('applicant.profile') }}" class="underline">Fill in your details</a>
+                                        </p>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <!-- Step 3: Review Status -->
                             <div class="flex items-start">
                                 <div class="flex-shrink-0 w-8 h-8 rounded-full 
                                     {{ in_array($application->status, ['reviewed', 'shortlisted', 'hired']) ? 'bg-career-500' : 'bg-gray-300' }} 
@@ -453,7 +518,15 @@ new #[Layout('components.layouts.applicant')] class extends Component
                                 </div>
                                 <div class="ml-6">
                                     <h4 class="font-medium text-gray-800">Under Review</h4>
-                                    <p class="text-sm text-gray-600">HR Department is reviewing your application</p>
+                                    {{-- Present tense only once it is actually happening. While the
+                                         details are outstanding this step is what they are waiting on. --}}
+                                    @if(in_array($application->status, ['reviewed', 'shortlisted', 'hired']))
+                                        <p class="text-sm text-gray-600">HR have reviewed your application.</p>
+                                    @elseif($detailsState === 'done')
+                                        <p class="text-sm text-gray-600">HR Department is reviewing your application</p>
+                                    @else
+                                        <p class="text-sm text-gray-600">Starts once your details are complete.</p>
+                                    @endif
                                     @if($application->status === 'reviewed')
                                         <p class="text-sm text-career-600 mt-1 font-medium">
                                             <i class="fas fa-check-circle mr-1"></i> Your application has been reviewed

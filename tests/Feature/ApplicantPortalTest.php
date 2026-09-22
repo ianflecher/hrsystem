@@ -38,21 +38,19 @@ class ApplicantPortalTest extends TestCase
     {
         $n = $this->uniqueSuffix();
 
+        // Name, email, position, password. Contact details and history are
+        // asked once on the applicant's own details form, not twice.
         Volt::test('auth.applicantlogin')
             ->set('full_name', 'Test Applicant')
-            ->set('username', "applicant{$n}")
             ->set('email', "applicant{$n}@example.test")
             ->set('password', 'Password!2345')
             ->set('password_confirmation', 'Password!2345')
-            ->set('phone', '09171234567')
-            ->set('address', '123 Test Street, Manila')
             ->set('position', 'Crew Member')
-            ->set('experience', '2')
             ->call('register')
             ->assertHasNoErrors()
             ->assertRedirect(route('applicant.index'));
 
-        $user = User::where('username', "applicant{$n}")->first();
+        $user = User::where('email', "applicant{$n}@example.test")->first();
         $this->assertNotNull($user, 'registration should create the user');
         $this->createdUserIds[] = $user->user_id;
 
@@ -66,6 +64,36 @@ class ApplicantPortalTest extends TestCase
             'user_id' => $user->user_id,
             'status'  => 'inactive',
         ]);
+    }
+
+    /**
+     * users.username is required and unique but no longer asked for, so it is
+     * generated from the name. Two people called the same thing must both get
+     * through.
+     */
+    public function test_the_username_is_generated_and_never_collides(): void
+    {
+        $made = [];
+
+        foreach ([1, 2] as $round) {
+            $n = $this->uniqueSuffix();
+
+            Volt::test('auth.applicantlogin')
+                ->set('full_name', 'Maria Santos')
+                ->set('email', "maria{$round}{$n}@example.test")
+                ->set('password', 'Password!2345')
+                ->set('password_confirmation', 'Password!2345')
+                ->set('position', 'Crew Member')
+                ->call('register')
+                ->assertHasNoErrors();
+
+            $user = User::where('email', "maria{$round}{$n}@example.test")->first();
+            $this->createdUserIds[] = $user->user_id;
+            $made[] = $user->username;
+        }
+
+        $this->assertSame('maria.santos', $made[0]);
+        $this->assertNotSame($made[0], $made[1], 'the same name must not collide');
     }
 
     public function test_applicant_can_sign_in(): void
@@ -93,6 +121,47 @@ class ApplicantPortalTest extends TestCase
             ->get('/applicant')
             ->assertOk()
             ->assertSee('Crew Member');
+    }
+
+    /**
+     * The timeline has a step for the details form between applying and being
+     * reviewed, because HR reads those details when they review. It reports
+     * three states: not started, started, and signed.
+     */
+    public function test_the_timeline_reports_the_details_form(): void
+    {
+        $n = $this->uniqueSuffix();
+        $user = $this->makeApplicant($n);
+
+        // Nothing filled in yet.
+        $this->actingAs($user)->get('/applicant')
+            ->assertSee('Your details')
+            ->assertSee('Fill in your details');
+
+        // Begun, but not signed off.
+        DB::table('applicant_profiles')->insert([
+            'user_id' => $user->user_id, 'surname' => 'Applicant', 'first_name' => 'Test',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)->get('/applicant')
+            ->assertSee('started filling in your details')
+            ->assertSee('Finish and sign them');
+
+        // Certified and declared.
+        DB::table('applicant_profiles')->where('user_id', $user->user_id)
+            ->update(['certified_name' => 'Test Applicant', 'certified_at' => now()]);
+        DB::table('applicant_disclosures')->insert([
+            'user_id' => $user->user_id, 'declared_name' => 'Test Applicant', 'declared_at' => now(),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)->get('/applicant')
+            ->assertSee('details are complete')
+            ->assertSee('Signed and submitted');
+
+        DB::table('applicant_disclosures')->where('user_id', $user->user_id)->delete();
+        DB::table('applicant_profiles')->where('user_id', $user->user_id)->delete();
     }
 
     public function test_applicant_can_upload_a_supporting_document(): void

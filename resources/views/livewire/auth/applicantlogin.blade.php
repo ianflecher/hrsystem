@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rules;
+use Illuminate\Support\Str;
 use App\Models\User;
 
 new #[Layout('components.layouts.employee')] class extends Component
@@ -39,14 +40,13 @@ new #[Layout('components.layouts.employee')] class extends Component
     public $password = '';
     public $remember = false;
     
-    // Registration fields
+    // Registration fields. Just enough to create the account and start an
+    // application - everything else (contact details, address, experience)
+    // is asked once, properly, on the applicant's own "My details" form
+    // rather than a second time here.
     public $full_name = '';
-    public $username = '';
     public $password_confirmation = '';
-    public $phone = '';
-    public $address = '';
     public $position = '';
-    public $experience = '';
     public $resume = null;
     
     /*
@@ -69,9 +69,27 @@ new #[Layout('components.layouts.employee')] class extends Component
     public function toggleForm()
     {
         $this->showLogin = !$this->showLogin;
-        $this->reset(['email', 'password', 'full_name', 'username', 'password_confirmation', 
-                      'phone', 'address', 'position', 'experience']);
+        $this->reset(['email', 'password', 'full_name', 'password_confirmation', 'position']);
         $this->resetErrorBag();
+    }
+
+    /**
+     * users.username is a required, unique column with nothing left on this
+     * form to fill it from - it is not the login credential (that is email)
+     * and was never shown back to the applicant anywhere. Generated here
+     * rather than asked for.
+     */
+    private function generateUsername(string $fullName): string
+    {
+        $base = Str::slug($fullName, '.') ?: 'applicant';
+        $username = $base;
+        $suffix = 1;
+
+        while (DB::table('users')->where('username', $username)->exists()) {
+            $username = $base.'.'.(++$suffix);
+        }
+
+        return $username;
     }
     
     public function login()
@@ -102,24 +120,20 @@ new #[Layout('components.layouts.employee')] class extends Component
 {
     $this->validate([
         'full_name' => ['required', 'string', 'max:150'],
-        'username' => ['required', 'string', 'max:100', 'unique:users'],
         'email' => ['required', 'string', 'email', 'max:150', 'unique:users'],
         'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        'phone' => ['required', 'string', 'max:50'],
-        'address' => ['required', 'string', 'max:500'],
         'position' => ['required', 'string', 'max:100'],
-        'experience' => ['required', 'string', 'max:50'],
     ]);
-    
+
     // Create user - role defaults to 'employee' according to your schema
     $user = User::create([
         'full_name' => $this->full_name,
-        'username' => $this->username,
+        'username' => $this->generateUsername($this->full_name),
         'email' => $this->email,
         'password' => Hash::make($this->password),
         // role will default to 'employee' as per your DB schema
     ]);
-    
+
     // Create employee record
     DB::table('employees')->insert([
         'user_id' => $user->user_id,
@@ -130,12 +144,12 @@ new #[Layout('components.layouts.employee')] class extends Component
         'created_at' => now(),
         'updated_at' => now(),
     ]);
-    
+
     // Create job application record (optional - for tracking)
     DB::table('job_applications')->insert([
         'user_id' => $user->user_id,
         'position_applied' => $this->position,
-        'years_experience' => $this->experience,
+        'years_experience' => '',
         'status' => 'pending', // Since we're creating employee immediately
         'application_date' => now(),
         'created_at' => now(),
@@ -438,7 +452,9 @@ new #[Layout('components.layouts.employee')] class extends Component
                         <h2 class="text-2xl font-bold text-gray-900 mb-6">Create Applicant Account</h2>
                         
                         <form wire:submit="register" class="space-y-6">
-                            <!-- Personal Information -->
+                            {{-- Deliberately short. Name, where to reach them, what
+                                 they are applying for, a password - everything else
+                                 is asked once on the details form rather than twice. --}}
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <!-- Full Name -->
                                 <div>
@@ -449,43 +465,19 @@ new #[Layout('components.layouts.employee')] class extends Component
                                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <i class="fas fa-user text-gray-400"></i>
                                         </div>
-                                        <input wire:model="full_name" 
+                                        <input wire:model="full_name"
                                                id="full_name"
-                                               type="text" 
+                                               type="text"
                                                required
                                                class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                                               placeholder="John Doe">
+                                               placeholder="Juan Dela Cruz">
                                     </div>
                                     @error('full_name')
                                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                                     @enderror
                                 </div>
 
-                                <!-- Username -->
-                                <div>
-                                    <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Username *
-                                    </label>
-                                    <div class="relative">
-                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <i class="fas fa-at text-gray-400"></i>
-                                        </div>
-                                        <input wire:model="username" 
-                                               id="username"
-                                               type="text" 
-                                               required
-                                               class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                                               placeholder="johndoe">
-                                    </div>
-                                    @error('username')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
-                            </div>
-
-                            <!-- Contact Information -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <!-- Email -->
+                                <!-- Email: this is what they sign in with. -->
                                 <div>
                                     <label for="register-email" class="block text-sm font-medium text-gray-700 mb-2">
                                         Email Address *
@@ -494,9 +486,9 @@ new #[Layout('components.layouts.employee')] class extends Component
                                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <i class="fas fa-envelope text-gray-400"></i>
                                         </div>
-                                        <input wire:model="email" 
+                                        <input wire:model="email"
                                                id="register-email"
-                                               type="email" 
+                                               type="email"
                                                required
                                                class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                                                placeholder="you@example.com">
@@ -504,112 +496,41 @@ new #[Layout('components.layouts.employee')] class extends Component
                                     @error('email')
                                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                                     @enderror
-                                </div>
-
-                                <!-- Phone -->
-                                <div>
-                                    <label for="phone" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Phone Number *
-                                    </label>
-                                    <div class="relative">
-                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <i class="fas fa-phone text-gray-400"></i>
-                                        </div>
-                                        <input wire:model="phone" 
-                                               id="phone"
-                                               type="tel" 
-                                               required
-                                               class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                                               placeholder="+1234567890">
-                                    </div>
-                                    @error('phone')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
+                                    <p class="mt-1 text-xs text-gray-500">You will sign in with this.</p>
                                 </div>
                             </div>
 
-                            <!-- Address -->
+                            <!-- Position Applied -->
                             <div>
-                                <label for="address" class="block text-sm font-medium text-gray-700 mb-2">
-                                    Address *
+                                <label for="position" class="block text-sm font-medium text-gray-700 mb-2">
+                                    Position Applied For *
                                 </label>
                                 <div class="relative">
-                                    <div class="absolute inset-y-0 left-0 pl-3 pt-3 pointer-events-none">
-                                        <i class="fas fa-home text-gray-400"></i>
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <i class="fas fa-briefcase text-gray-400"></i>
                                     </div>
-                                    <textarea wire:model="address" 
-                                              id="address"
-                                              rows="2"
-                                              required
-                                              class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                                              placeholder="123 Main St, City, Country"></textarea>
+                                    <select wire:model="position"
+                                            id="position"
+                                            required
+                                            class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none">
+                                        <option value="">Select Position</option>
+                                        {{-- Same source as the openings list above. --}}
+                                        @foreach ($this->openPositions() as $position)
+                                            {{-- Marked selected server-side as well as by wire:model: a
+                                                 role arriving from /careers should already be chosen in the
+                                                 first paint, not once Livewire has booted. --}}
+                                            <option value="{{ $position->title }}" @selected($this->position === $position->title)>{{ $position->title }}</option>
+                                        @endforeach
+                                        <option value="Other" @selected($this->position === 'Other')>Other</option>
+                                    </select>
                                 </div>
-                                @error('address')
+                                @error('position')
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
                             </div>
 
-                            <!-- Application Details -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <!-- Position Applied -->
-                                <div>
-                                    <label for="position" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Position Applied For *
-                                    </label>
-                                    <div class="relative">
-                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <i class="fas fa-briefcase text-gray-400"></i>
-                                        </div>
-                                        <select wire:model="position" 
-                                                id="position"
-                                                required
-                                                class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none">
-                                            <option value="">Select Position</option>
-                                            {{-- Same source as the openings list above. --}}
-                                            @foreach ($this->openPositions() as $position)
-                                                {{-- Marked selected server-side as well as by wire:model: a
-                                                     role arriving from /careers should already be chosen in the
-                                                     first paint, not once Livewire has booted. --}}
-                                                <option value="{{ $position->title }}" @selected($this->position === $position->title)>{{ $position->title }}</option>
-                                            @endforeach
-                                            <option value="Other" @selected($this->position === 'Other')>Other</option>
-                                        </select>
-                                    </div>
-                                    @error('position')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
-
-                                <!-- Experience -->
-                                <div>
-                                    <label for="experience" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Years of Experience *
-                                    </label>
-                                    <div class="relative">
-                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <i class="fas fa-chart-line text-gray-400"></i>
-                                        </div>
-                                        <select wire:model="experience" 
-                                                id="experience"
-                                                required
-                                                class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none">
-                                            <option value="">Select Experience</option>
-                                            <option value="0-1 years">0-1 years</option>
-                                            <option value="1-3 years">1-3 years</option>
-                                            <option value="3-5 years">3-5 years</option>
-                                            <option value="5-10 years">5-10 years</option>
-                                            <option value="10+ years">10+ years</option>
-                                        </select>
-                                    </div>
-                                    @error('experience')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
-                            </div>
-
                             <!-- Password -->
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <!-- Password -->
                                 <div>
                                     <label for="register-password" class="block text-sm font-medium text-gray-700 mb-2">
                                         Password *
@@ -618,12 +539,12 @@ new #[Layout('components.layouts.employee')] class extends Component
                                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <i class="fas fa-lock text-gray-400"></i>
                                         </div>
-                                        <input wire:model="password" 
+                                        <input wire:model="password"
                                                id="register-password"
-                                               type="password" 
+                                               type="password"
                                                required
                                                class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                                               placeholder="••••••••">
+                                               placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
                                     </div>
                                     @error('password')
                                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -639,12 +560,12 @@ new #[Layout('components.layouts.employee')] class extends Component
                                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <i class="fas fa-lock text-gray-400"></i>
                                         </div>
-                                        <input wire:model="password_confirmation" 
+                                        <input wire:model="password_confirmation"
                                                id="password_confirmation"
-                                               type="password" 
+                                               type="password"
                                                required
                                                class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                                               placeholder="••••••••">
+                                               placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
                                     </div>
                                 </div>
                             </div>
