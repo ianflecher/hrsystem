@@ -20,11 +20,25 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public $selectedApplication = null;
     public $selectedEmployee = null;
     public $showApplicationModal = false;
+
+    /**
+     * The 201 file the applicant filled in, for the application on screen.
+     *
+     * The dialog used to show only what registration collects - a name, an
+     * email and a position - while everything HR actually reviews sat in
+     * applicant_profiles and was never read by anything.
+     */
+    public $profile = null;
+    public array $education = [];
+    public array $employment = [];
+    public array $references = [];
+    public array $relatives = [];
+    public array $siblings = [];
+    public $disclosures = null;
     public $showRoleChangeModal = false;
     public $showInterviewModal = false;
     public $showInterviewResultModal = false;
     public $showDepartmentModal = false;
-    public $showNewDepartmentModal = false;
     public $showDocumentsModal = false;
     
     // Salary management
@@ -35,7 +49,6 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public $selectedUserForRoleChange = null;
     public $newRole = 'employee';
     public $newDepartment = '';
-    public $newDepartmentName = '';
     public $documents = [];
     
     // Interview scheduling
@@ -212,8 +225,61 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->where('ja.application_id', $applicationId)
             ->first();
 
+        $this->loadProfile($this->selectedApplication->user_id ?? null);
+
         $this->showApplicationModal = true;
     }
+
+    /**
+     * Everything the applicant wrote about themselves, keyed on their account
+     * rather than on this application - so it is the same record whether they
+     * applied once or three times.
+     */
+    private function loadProfile(?int $userId): void
+    {
+        $this->profile = null;
+        $this->disclosures = null;
+        $this->education = [];
+        $this->employment = [];
+        $this->references = [];
+        $this->relatives = [];
+        $this->siblings = [];
+
+        if (! $userId) {
+            return;
+        }
+
+        $this->profile = DB::table('applicant_profiles')->where('user_id', $userId)->first();
+
+        if (! $this->profile) {
+            return;
+        }
+
+        $this->education  = DB::table('applicant_education')->where('user_id', $userId)->get()->all();
+        $this->employment = DB::table('applicant_employment')->where('user_id', $userId)->orderBy('sort_order')->get()->all();
+        $this->references = DB::table('applicant_references')->where('user_id', $userId)->orderBy('sort_order')->get()->all();
+        $this->relatives  = DB::table('applicant_relatives')->where('user_id', $userId)->get()->all();
+        $this->siblings   = DB::table('applicant_siblings')->where('user_id', $userId)->orderBy('sort_order')->get()->all();
+        $this->disclosures = DB::table('applicant_disclosures')->where('user_id', $userId)->first();
+    }
+
+    /** The order a 201 file is read in, not the order the table stores. */
+    public function educationInOrder(): array
+    {
+        $order = ['elementary', 'junior_high', 'senior_high', 'high_school', 'vocational', 'tertiary'];
+        $rows = collect($this->education)->keyBy('level');
+
+        return collect($order)->map(fn ($l) => $rows->get($l))->filter()->all();
+    }
+
+    public array $educationLabels = [
+        'elementary'  => 'Elementary',
+        'junior_high' => 'Junior high',
+        'senior_high' => 'Senior high',
+        'high_school' => 'High school',
+        'vocational'  => 'Vocational',
+        'tertiary'    => 'College / tertiary',
+    ];
 
     public function viewDocuments($applicationId)
     {
@@ -487,41 +553,11 @@ public function updateApplicationStatus($applicationId, $status)
         session()->flash('success', 'Salary updated successfully!');
     }
 
-    public function openNewDepartmentModal()
-    {
-        $this->newDepartmentName = '';
-        $this->showNewDepartmentModal = true;
-    }
-
-    public function createNewDepartment()
-    {
-        $this->validate([
-            'newDepartmentName' => 'required|string|min:3|max:100|unique:departments,department_name'
-        ]);
-
-        DB::table('departments')->insert([
-            'department_name' => $this->newDepartmentName,
-            'created_at' => now(),
-            'updated_at' => now()
-        ]);
-
-        // Log the action
-        DB::table('audit_logs')->insert([
-            'action' => 'create',
-            'table_name' => 'departments',
-            'record_id' => DB::getPdo()->lastInsertId(),
-            'old_values' => json_encode([]),
-            'new_values' => json_encode(['department_name' => $this->newDepartmentName]),
-            'user_id' => auth()->id() ?? 1,
-            'created_at' => now(),
-            'updated_at' => now()
-        ]);
-
-        $this->showNewDepartmentModal = false;
-        $this->newDepartmentName = '';
-        $this->loadData();
-        session()->flash('success', 'Department created successfully!');
-    }
+    /*
+     * Creating a department lives on the employees screen, where the
+     * department is actually assigned. Two ways in meant two dialogs, two
+     * validation rules and two audit-log writes to keep in step.
+     */
 
     public function openDepartmentModal($employeeId)
     {
@@ -696,15 +732,12 @@ public function updateApplicationStatus($applicationId, $status)
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">Human Resources Management</h1>
-            <p class="text-gray-600 mt-1">Manage applications, employees, salaries and departments</p>
+            <p class="text-gray-600 mt-1">Manage applications, employees and salaries</p>
         </div>
         <div class="flex items-center gap-3">
             <span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
                 {{ $stats['total'] ?? 0 }} Total Applications
             </span>
-            <button wire:click="openNewDepartmentModal" class="btn-primary">
-                <i class="fas fa-plus mr-2"></i>New Department
-            </button>
         </div>
     </div>
 
@@ -954,7 +987,7 @@ public function updateApplicationStatus($applicationId, $status)
                                     </div>
                                 </td>
                                 <td class="font-medium">{{ $application->position_applied ?? 'N/A' }}</td>
-                                <td>{{ $application->years_experience ?? 0 }} years</td>
+                                <td>{{ filled($application->years_experience ?? null) ? $application->years_experience : "—" }}</td>
                                 <td>
                                     <span class="px-3 py-1 rounded-full text-xs font-medium {{ $statusColors[$displayStatus] ?? 'bg-gray-100 text-gray-800' }}">
                                         {{ $statusLabel }}
@@ -1172,70 +1205,6 @@ public function updateApplicationStatus($applicationId, $status)
     </div>
     @endif
 
-    <!-- New Department Modal -->
-    @if($showNewDepartmentModal)
-    <div class="fixed inset-0 z-[70] overflow-y-auto">
-        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
-            <!-- Overlay -->
-            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
-                 wire:click="$set('showNewDepartmentModal', false)"></div>
-            
-            <!-- Modal content -->
-            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <h3 class="text-lg font-medium text-gray-900">Create New Department</h3>
-                            <p class="text-sm text-gray-500">Add a new department to the system</p>
-                        </div>
-                        <button wire:click="$set('showNewDepartmentModal', false)" 
-                                class="text-gray-400 hover:text-gray-500">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <label class="form-label">Department Name</label>
-                            <input type="text" 
-                                   wire:model="newDepartmentName" 
-                                   class="form-input"
-                                   placeholder="Enter department name (e.g., Marketing, Engineering, HR)">
-                            @error('newDepartmentName') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                        </div>
-                        
-                        <!-- Information -->
-                        <div class="bg-blue-50 p-3 rounded-lg">
-                            <div class="flex">
-                                <i class="fas fa-info-circle text-blue-500 mt-1 mr-3"></i>
-                                <div class="text-sm text-blue-700">
-                                    <p><strong>Note:</strong></p>
-                                    <ul class="mt-1 space-y-1">
-                                        <li>• Departments help organize employees by function</li>
-                                        <li>• You can assign employees to departments later</li>
-                                        <li>• Department names must be unique</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                    <button wire:click="createNewDepartment" 
-                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
-                        <i class="fas fa-plus mr-2"></i>
-                        Create Department
-                    </button>
-                    <button wire:click="$set('showNewDepartmentModal', false)" 
-                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
-                        Cancel
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    @endif
 
     <!-- Application Details Modal -->
     @if($showApplicationModal && $selectedApplication)
@@ -1291,10 +1260,15 @@ public function updateApplicationStatus($applicationId, $status)
                                     <label class="text-xs text-gray-500">Position Applied</label>
                                     <p class="font-medium">{{ $selectedApplication->position_applied ?? 'N/A' }}</p>
                                 </div>
-                                <div>
-                                    <label class="text-xs text-gray-500">Years of Experience</label>
-                                    <p class="font-medium">{{ $selectedApplication->years_experience ?? 0 }} years</p>
-                                </div>
+                                @if (filled($selectedApplication->years_experience ?? null))
+                                    <div>
+                                        <label class="text-xs text-gray-500">Years of Experience</label>
+                                        {{-- The stored value already reads "3-5 years"; this printed
+                                             a second "years" after it, and a bare "years" for the
+                                             applications that no longer carry the figure at all. --}}
+                                        <p class="font-medium">{{ $selectedApplication->years_experience }}</p>
+                                    </div>
+                                @endif
                                 <div>
                                     <label class="text-xs text-gray-500">Application Date</label>
                                     <p class="font-medium">{{ date('M d, Y', strtotime($selectedApplication->application_date ?? now())) }}</p>
@@ -1316,6 +1290,8 @@ public function updateApplicationStatus($applicationId, $status)
                                 </div>
                             </div>
                         </div>
+
+                        @include('partials.hr-application-201')
 
                         <!-- Interview Information (if exists) -->
                         @if($selectedApplication->interview_date ?? false)
@@ -1825,7 +1801,6 @@ public function updateApplicationStatus($applicationId, $status)
                 @this.set('showDocumentsModal', false);
                 @this.set('showInterviewModal', false);
                 @this.set('showInterviewResultModal', false);
-                @this.set('showNewDepartmentModal', false);
                 @this.set('showDepartmentModal', false);
                 @this.set('showRoleChangeModal', false);
                 @this.set('showSalaryModal', false);
