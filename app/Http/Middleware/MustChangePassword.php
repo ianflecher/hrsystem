@@ -29,7 +29,20 @@ class MustChangePassword
 
         // The change-password screen itself, and the way out, stay reachable -
         // otherwise the redirect would loop.
-        if ($request->routeIs('password.change') || $request->routeIs('*.logout') || $request->is('livewire/*')) {
+        //
+        // Livewire's own endpoint has to be let through as well, and it is
+        // recognised by the header it sends rather than by its path. This used
+        // to test for 'livewire/*', which is not where Livewire serves from:
+        // the path carries a generated suffix, /livewire-773c66fa/update here,
+        // and the route is named default-livewire.update. So every request the
+        // change-password screen made to its own component was redirected back
+        // to the change-password page, and Livewire got a page of HTML where
+        // it expected JSON. It gave up and reloaded, which is exactly what
+        // somebody sees: the form empties itself and says nothing, whatever
+        // they type. The screen could not work at all.
+        if ($request->routeIs('password.change')
+            || $request->routeIs('*.logout')
+            || $request->hasHeader('X-Livewire')) {
             return $next($request);
         }
 

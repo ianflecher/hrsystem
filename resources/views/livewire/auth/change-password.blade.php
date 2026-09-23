@@ -141,6 +141,27 @@ new #[Layout('components.layouts.landing')] class extends Component
         }
 
         .pwc__field { margin-bottom: 16px; }
+
+        /* The reveal button sits inside the field, so the input needs room
+           on the right for it not to sit on top of what is typed. */
+        .pwc__wrap { position: relative; }
+        .pwc__wrap input { padding-right: 2.75rem; }
+
+        .pwc__eye {
+            position: absolute; top: 50%; right: .25rem;
+            transform: translateY(-50%);
+            display: flex; align-items: center; justify-content: center;
+            width: 2.25rem; height: 2.25rem;
+            background: none; border: 0; padding: 0;
+            color: #8795A8; cursor: pointer; border-radius: 6px;
+        }
+
+        .pwc__eye:hover { color: #D6DDE8; }
+
+        .pwc__eye:focus-visible {
+            outline: 2px solid var(--accent, #2563eb);
+            outline-offset: 2px;
+        }
         .pwc__error { margin-top: .375rem; color: #FCA5A9; font-size: .8125rem; }
 
         .pwc__submit {
@@ -173,21 +194,55 @@ new #[Layout('components.layouts.landing')] class extends Component
             <form wire:submit.prevent="save">
                 @csrf
 
+                {{-- Each field can be revealed on its own. Somebody typing a
+                     password they were handed on paper needs to see what they
+                     have typed, and a single toggle for all three would show
+                     the new password to the room as well.
+
+                     The real type="password" stays on the input underneath the
+                     Alpine binding. With only the binding, a field renders with
+                     no type at all until Alpine runs, which is a text box: if
+                     the script failed the password would be on screen. --}}
                 <div class="pwc__field">
                     <label for="current_password">The password you were given</label>
-                    <input id="current_password" type="password" wire:model="current_password" autofocus>
+                    <div class="pwc__wrap" x-data="{ shown: false }">
+                        <input id="current_password" type="password" :type="shown ? 'text' : 'password'"
+                               wire:model="current_password" autofocus autocomplete="current-password">
+                        <button type="button" class="pwc__eye" @click="shown = !shown"
+                                :aria-label="shown ? 'Hide password' : 'Show password'"
+                                :aria-pressed="shown">
+                            <i class="fas" :class="shown ? 'fa-eye-slash' : 'fa-eye'"></i>
+                        </button>
+                    </div>
                     @error('current_password') <p class="pwc__error">{{ $message }}</p> @enderror
                 </div>
 
                 <div class="pwc__field">
                     <label for="password">New password</label>
-                    <input id="password" type="password" wire:model="password" placeholder="At least 8 characters">
+                    <div class="pwc__wrap" x-data="{ shown: false }">
+                        <input id="password" type="password" :type="shown ? 'text' : 'password'" wire:model="password"
+                               placeholder="At least 8 characters" autocomplete="new-password">
+                        <button type="button" class="pwc__eye" @click="shown = !shown"
+                                :aria-label="shown ? 'Hide password' : 'Show password'"
+                                :aria-pressed="shown">
+                            <i class="fas" :class="shown ? 'fa-eye-slash' : 'fa-eye'"></i>
+                        </button>
+                    </div>
                     @error('password') <p class="pwc__error">{{ $message }}</p> @enderror
                 </div>
 
                 <div class="pwc__field">
                     <label for="password_confirmation">Confirm new password</label>
-                    <input id="password_confirmation" type="password" wire:model="password_confirmation">
+                    <div class="pwc__wrap" x-data="{ shown: false }">
+                        <input id="password_confirmation" type="password" :type="shown ? 'text' : 'password'"
+                               wire:model="password_confirmation" autocomplete="new-password">
+                        <button type="button" class="pwc__eye" @click="shown = !shown"
+                                :aria-label="shown ? 'Hide password' : 'Show password'"
+                                :aria-pressed="shown">
+                            <i class="fas" :class="shown ? 'fa-eye-slash' : 'fa-eye'"></i>
+                        </button>
+                    </div>
+                    @error('password_confirmation') <p class="pwc__error">{{ $message }}</p> @enderror
                 </div>
 
                 <button type="submit" class="pwc__submit">Save and continue</button>
