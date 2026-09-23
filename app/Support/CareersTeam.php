@@ -20,17 +20,19 @@ class CareersTeam
     {
         $shots = [];
 
-        // Sixteen slots rather than twelve, and twelve rather than six before
-        // that: each shoot - the shop, the barbershop, the gate, and now the
-        // cafe - has arrived with people who had nowhere to stand. Any slot
-        // without a file is simply skipped, so the ceiling costs nothing.
-        for ($i = 1; $i <= 16; $i++) {
+        // Twenty-four slots rather than sixteen, sixteen rather than twelve,
+        // twelve rather than six: each shoot - the shop, the barbershop, the
+        // gate, the cafe, and now the OJTs - has arrived with people who had
+        // nowhere to stand. Any slot without a file is simply skipped, so the
+        // ceiling costs nothing and raising it early costs less than the next
+        // shoot waiting on a code change.
+        for ($i = 1; $i <= 24; $i++) {
             if ($src = CareersMedia::pic('team-'.$i)) {
                 $shots[] = ['src' => $src, 'wide' => false];
             }
         }
 
-        for ($i = 1; $i <= 16; $i++) {
+        for ($i = 1; $i <= 24; $i++) {
             if ($src = CareersMedia::pic('team-group-'.$i)) {
                 $shots[] = ['src' => $src, 'wide' => true];
             }
