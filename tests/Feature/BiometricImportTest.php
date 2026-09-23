@@ -36,6 +36,23 @@ class BiometricImportTest extends TestCase
         parent::tearDown();
     }
 
+    /**
+     * A scanner id nobody real is using.
+     *
+     * The fixtures hardcoded 101, 102 and so on. Those became real enrolment
+     * numbers the day the company's own were imported, and the test began
+     * colliding with live staff - failing for a reason that had nothing to do
+     * with what it was testing.
+     */
+    private function freeBiometricId(): string
+    {
+        do {
+            $candidate = (string) random_int(900000, 999999);
+        } while (DB::table('employees')->where('biometric_id', $candidate)->exists());
+
+        return $candidate;
+    }
+
     private function employee(string $biometricId, ?string $shift = '08:00:00'): int
     {
         $n = random_int(100000, 999999);
@@ -74,13 +91,14 @@ class BiometricImportTest extends TestCase
 
     public function test_several_scans_in_a_day_become_one_row(): void
     {
-        $id = $this->employee('101');
+        $bio101 = $this->freeBiometricId();
+        $id = $this->employee($bio101);
 
         (new PunchImporter)->import([
-            ['biometric_id' => '101', 'timestamp' => '2020-06-01 07:58:00'],
-            ['biometric_id' => '101', 'timestamp' => '2020-06-01 12:01:00'],
-            ['biometric_id' => '101', 'timestamp' => '2020-06-01 13:00:00'],
-            ['biometric_id' => '101', 'timestamp' => '2020-06-01 17:32:00'],
+            ['biometric_id' => $bio101, 'timestamp' => '2020-06-01 07:58:00'],
+            ['biometric_id' => $bio101, 'timestamp' => '2020-06-01 12:01:00'],
+            ['biometric_id' => $bio101, 'timestamp' => '2020-06-01 13:00:00'],
+            ['biometric_id' => $bio101, 'timestamp' => '2020-06-01 17:32:00'],
         ]);
 
         $rows = DB::table('hr_attendance')->where('employee_id', $id)->get();
@@ -92,10 +110,11 @@ class BiometricImportTest extends TestCase
 
     public function test_a_single_scan_leaves_the_departure_empty(): void
     {
-        $id = $this->employee('102');
+        $bio102 = $this->freeBiometricId();
+        $id = $this->employee($bio102);
 
         (new PunchImporter)->import([
-            ['biometric_id' => '102', 'timestamp' => '2020-06-02 08:00:00'],
+            ['biometric_id' => $bio102, 'timestamp' => '2020-06-02 08:00:00'],
         ]);
 
         $row = DB::table('hr_attendance')->where('employee_id', $id)->first();
@@ -106,11 +125,12 @@ class BiometricImportTest extends TestCase
 
     public function test_scans_are_split_by_day(): void
     {
-        $id = $this->employee('103');
+        $bio103 = $this->freeBiometricId();
+        $id = $this->employee($bio103);
 
         (new PunchImporter)->import([
-            ['biometric_id' => '103', 'timestamp' => '2020-06-03 08:00:00'],
-            ['biometric_id' => '103', 'timestamp' => '2020-06-04 08:00:00'],
+            ['biometric_id' => $bio103, 'timestamp' => '2020-06-03 08:00:00'],
+            ['biometric_id' => $bio103, 'timestamp' => '2020-06-04 08:00:00'],
         ]);
 
         $this->assertSame(2, DB::table('hr_attendance')->where('employee_id', $id)->count());
@@ -120,10 +140,11 @@ class BiometricImportTest extends TestCase
 
     public function test_an_unknown_enrolment_number_is_reported_not_swallowed(): void
     {
-        $this->employee('104');
+        $bio104 = $this->freeBiometricId();
+        $this->employee($bio104);
 
         $summary = (new PunchImporter)->import([
-            ['biometric_id' => '104', 'timestamp' => '2020-06-05 08:00:00'],
+            ['biometric_id' => $bio104, 'timestamp' => '2020-06-05 08:00:00'],
             ['biometric_id' => '999', 'timestamp' => '2020-06-05 08:00:00'],
         ]);
 
@@ -136,13 +157,15 @@ class BiometricImportTest extends TestCase
 
     public function test_the_arrival_decides_whether_the_day_is_late(): void
     {
-        $onTime = $this->employee('105');
-        $late = $this->employee('106');
+        $bio105 = $this->freeBiometricId();
+        $onTime = $this->employee($bio105);
+        $bio106 = $this->freeBiometricId();
+        $late = $this->employee($bio106);
 
         (new PunchImporter)->import([
             // Three minutes late is inside the grace period.
-            ['biometric_id' => '105', 'timestamp' => '2020-06-06 08:03:00'],
-            ['biometric_id' => '106', 'timestamp' => '2020-06-06 08:20:00'],
+            ['biometric_id' => $bio105, 'timestamp' => '2020-06-06 08:03:00'],
+            ['biometric_id' => $bio106, 'timestamp' => '2020-06-06 08:20:00'],
         ]);
 
         $this->assertSame('present', DB::table('hr_attendance')->where('employee_id', $onTime)->value('status'));
@@ -151,10 +174,11 @@ class BiometricImportTest extends TestCase
 
     public function test_somebody_with_no_shift_is_never_marked_late(): void
     {
-        $id = $this->employee('107', null);
+        $bio107 = $this->freeBiometricId();
+        $id = $this->employee($bio107, null);
 
         (new PunchImporter)->import([
-            ['biometric_id' => '107', 'timestamp' => '2020-06-07 11:00:00'],
+            ['biometric_id' => $bio107, 'timestamp' => '2020-06-07 11:00:00'],
         ]);
 
         $this->assertSame('present', DB::table('hr_attendance')->where('employee_id', $id)->value('status'));
@@ -162,7 +186,8 @@ class BiometricImportTest extends TestCase
 
     public function test_a_dated_shift_decides_scanner_lateness_for_that_day(): void
     {
-        $id = $this->employee('121', '08:00:00');
+        $bio121 = $this->freeBiometricId();
+        $id = $this->employee($bio121, '08:00:00');
 
         DB::table('shift_assignments')->insert([
             'employee_id' => $id,
@@ -175,8 +200,8 @@ class BiometricImportTest extends TestCase
         ]);
 
         (new PunchImporter)->import([
-            ['biometric_id' => '121', 'timestamp' => '2020-06-21 09:30:00'],
-            ['biometric_id' => '121', 'timestamp' => '2020-06-22 09:30:00'],
+            ['biometric_id' => $bio121, 'timestamp' => '2020-06-21 09:30:00'],
+            ['biometric_id' => $bio121, 'timestamp' => '2020-06-22 09:30:00'],
         ]);
 
         $byDate = DB::table('hr_attendance')->where('employee_id', $id)->pluck('status', 'date');
@@ -189,7 +214,8 @@ class BiometricImportTest extends TestCase
 
     public function test_a_day_entered_by_hand_is_not_overwritten(): void
     {
-        $id = $this->employee('108');
+        $bio108 = $this->freeBiometricId();
+        $id = $this->employee($bio108);
 
         DB::table('hr_attendance')->insert([
             'employee_id' => $id,
@@ -202,7 +228,7 @@ class BiometricImportTest extends TestCase
         ]);
 
         (new PunchImporter)->import([
-            ['biometric_id' => '108', 'timestamp' => '2020-06-08 09:45:00'],
+            ['biometric_id' => $bio108, 'timestamp' => '2020-06-08 09:45:00'],
         ]);
 
         $row = DB::table('hr_attendance')->where('employee_id', $id)->first();
@@ -214,7 +240,8 @@ class BiometricImportTest extends TestCase
 
     public function test_but_it_can_be_overwritten_on_purpose(): void
     {
-        $id = $this->employee('109');
+        $bio109 = $this->freeBiometricId();
+        $id = $this->employee($bio109);
 
         DB::table('hr_attendance')->insert([
             'employee_id' => $id,
@@ -227,7 +254,7 @@ class BiometricImportTest extends TestCase
         ]);
 
         (new PunchImporter)->import([
-            ['biometric_id' => '109', 'timestamp' => '2020-06-09 09:45:00'],
+            ['biometric_id' => $bio109, 'timestamp' => '2020-06-09 09:45:00'],
         ], overwriteManual: true);
 
         $row = DB::table('hr_attendance')->where('employee_id', $id)->first();
@@ -238,9 +265,10 @@ class BiometricImportTest extends TestCase
 
     public function test_re_running_a_sync_does_not_duplicate_days(): void
     {
-        $id = $this->employee('110');
+        $bio110 = $this->freeBiometricId();
+        $id = $this->employee($bio110);
 
-        $punches = [['biometric_id' => '110', 'timestamp' => '2020-06-10 08:00:00']];
+        $punches = [['biometric_id' => $bio110, 'timestamp' => '2020-06-10 08:00:00']];
 
         (new PunchImporter)->import($punches);
         (new PunchImporter)->import($punches);
@@ -250,7 +278,8 @@ class BiometricImportTest extends TestCase
 
     public function test_the_attendance_screen_shows_undertime_against_the_shift(): void
     {
-        $id = $this->employee('120');
+        $bio120 = $this->freeBiometricId();
+        $id = $this->employee($bio120);
         DB::table('employees')->where('employee_id', $id)->update(['shift_end' => '17:00:00']);
         DB::table('hr_attendance')->insert(['employee_id' => $id, 'date' => '2020-06-20',
             'time_in' => '2020-06-20 08:00:00', 'time_out' => '2020-06-20 16:20:00', 'status' => 'present',
@@ -267,10 +296,11 @@ class BiometricImportTest extends TestCase
 
     public function test_incremental_imports_preserve_the_full_day(): void
     {
-        $id = $this->employee('115');
+        $bio115 = $this->freeBiometricId();
+        $id = $this->employee($bio115);
         $importer = new PunchImporter;
         foreach (['08:00:00', '17:00:00', '12:00:00'] as $time) {
-            $importer->import([['biometric_id' => '115', 'timestamp' => '2020-06-15 '.$time]]);
+            $importer->import([['biometric_id' => $bio115, 'timestamp' => '2020-06-15 '.$time]]);
         }
         $row = DB::table('hr_attendance')->where('employee_id', $id)->first();
         $this->assertStringContainsString('08:00:00', $row->time_in);
@@ -286,10 +316,11 @@ class BiometricImportTest extends TestCase
 
     public function test_upload_import_refreshes_the_attendance_screen(): void
     {
-        $id = $this->employee('117');
+        $bio117 = $this->freeBiometricId();
+        $id = $this->employee($bio117);
         $hr = User::where('username', 'hr')->firstOrFail();
         $file = \Illuminate\Http\UploadedFile::fake()->createWithContent(
-            'punches.csv', "User ID,Date/Time\n117,2020-06-17 08:00:00\n"
+            'punches.csv', "User ID,Date/Time\n{$bio117},2020-06-17 08:00:00\n"
         );
         \Livewire\Volt\Volt::actingAs($hr)->test('hr.attendance')
             ->set('selectedDate', '2020-06-17')
@@ -339,8 +370,9 @@ class BiometricImportTest extends TestCase
 
     public function test_a_file_and_the_device_produce_the_same_result(): void
     {
-        $id = $this->employee('114');
-        $path = $this->file("User ID,Date/Time\n114,2020-06-14 07:55:00\n114,2020-06-14 17:10:00\n");
+        $bio114 = $this->freeBiometricId();
+        $id = $this->employee($bio114);
+        $path = $this->file("User ID,Date/Time\n{$bio114},2020-06-14 07:55:00\n{$bio114},2020-06-14 17:10:00\n");
 
         $read = (new PunchFileReader)->read($path);
         (new PunchImporter)->import($read['punches']);

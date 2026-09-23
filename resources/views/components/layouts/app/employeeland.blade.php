@@ -90,7 +90,12 @@
                     ['route' => 'people.employee', 'module' => 'announcements', 'icon' => 'bullhorn'],
                 ],
                 'My employment' => [
-                    ['route' => 'employee.interviews', 'label' => 'My interviews', 'icon' => 'user-check'],
+                    // The interviewer's screen, so only for somebody who has
+                    // been asked to meet a candidate. It used to be here for
+                    // everybody, reading as though it were about their own
+                    // interview and opening on a page that was always empty.
+                    ['route' => 'employee.interviews', 'label' => 'Interviews to conduct', 'icon' => 'user-check',
+                     'when' => \App\Support\NavBadges::conductsInterviews()],
                     ['route' => 'people.employee', 'module' => 'documents', 'icon' => 'folder-open'],
                     ['route' => 'people.employee', 'module' => 'checklists', 'icon' => 'list-check'],
                     ['route' => 'people.employee', 'module' => 'reviews', 'icon' => 'star'],
@@ -112,6 +117,7 @@
                 <div class="hr-sidebar__group" role="group" aria-labelledby="emp-nav-group-{{ $loop->index }}">
                     <p class="hr-sidebar__label" id="emp-nav-group-{{ $loop->index }}">{{ $group }}</p>
                     @foreach($items as $item)
+                        @continue(array_key_exists('when', $item) && ! $item['when'])
                         @php
                             $active = request()->routeIs($item['route']) && (!isset($item['module']) || request()->route('module') === $item['module']);
                             $label = $item['label'] ?? $moduleLabels[$item['module']];

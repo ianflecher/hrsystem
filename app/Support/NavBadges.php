@@ -105,6 +105,31 @@ class NavBadges
         ]);
     }
 
+    /**
+     * Whether this person conducts interviews at all.
+     *
+     * "My interviews" is the interviewer's screen - the candidates somebody
+     * has been asked to meet - and it was in the sidebar for everybody. A
+     * sewer with no interviews to give got a menu item that reads as though it
+     * is about their own, opens on an empty page, and never changes. It shows
+     * only for somebody who has actually been assigned one.
+     */
+    public static function conductsInterviews(): bool
+    {
+        $id = Auth::id();
+
+        if (! $id) {
+            return false;
+        }
+
+        return self::remember('conducts-interviews', fn () => [
+            'yes' => DB::table('application_interviews')
+                ->where('interviewer_id', $id)
+                ->where('status', '!=', 'cancelled')
+                ->exists(),
+        ])['yes'];
+    }
+
     /** One count per request, however many times the sidebar asks. */
     private static function remember(string $key, callable $make): array
     {
