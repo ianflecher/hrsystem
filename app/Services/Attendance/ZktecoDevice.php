@@ -35,9 +35,20 @@ class ZktecoDevice extends ZKTeco
     /** Not in the vendor's Util, which stops at CMD_CHANGE_SPEED. */
     private const CMD_AUTH = 1102;
 
-    public function __construct(string $ip, int $port = 4370, private readonly ?string $commKey = null)
-    {
+    public function __construct(
+        string $ip,
+        int $port = 4370,
+        private readonly ?string $commKey = null,
+        int $timeoutSeconds = 5,
+    ) {
         parent::__construct($ip, $port);
+
+        // The library waits 60 seconds for a reply. A device that is going to
+        // answer answers in milliseconds - it is on the same switch - so the
+        // only thing a minute buys is HR staring at a frozen screen before
+        // being told it did not work. Five seconds is generous.
+        socket_set_option($this->_zkclient, SOL_SOCKET, SO_RCVTIMEO,
+            ['sec' => max(1, $timeoutSeconds), 'usec' => 0]);
     }
 
     /**

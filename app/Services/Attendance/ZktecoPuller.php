@@ -56,8 +56,12 @@ class ZktecoPuller
 
         if (! $device->connect()) {
             throw new RuntimeException(
-                "Could not reach the scanner at {$this->host}:{$this->port}. ".
-                'Check it is switched on, on the same network as this server, and still at that address.'
+                "The scanner at {$this->host}:{$this->port} did not answer. ".
+                'If it shows up on the network but stays silent, it is most likely set to '.
+                'push rather than pull - check Menu > Comm > Cloud Server (ADMS) on the '.
+                'device, and clear it to pull from here. Otherwise check it is switched on '.
+                'and still at that address. Attendance can be uploaded from its export in '.
+                'the meantime.'
             );
         }
 
