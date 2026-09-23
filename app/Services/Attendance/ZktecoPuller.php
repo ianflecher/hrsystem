@@ -2,7 +2,6 @@
 
 namespace App\Services\Attendance;
 
-use Rats\Zkteco\Lib\ZKTeco;
 use RuntimeException;
 
 /**
@@ -23,6 +22,7 @@ class ZktecoPuller
     public function __construct(
         private readonly string $host,
         private readonly int $port = 4370,
+        private readonly ?string $commKey = null,
     ) {
     }
 
@@ -36,7 +36,11 @@ class ZktecoPuller
             );
         }
 
-        return new self($host, (int) config('attendance.zkteco.port', 4370));
+        return new self(
+            $host,
+            (int) config('attendance.zkteco.port', 4370),
+            config('attendance.zkteco.comm_key'),
+        );
     }
 
     /**
@@ -48,7 +52,7 @@ class ZktecoPuller
             throw new RuntimeException('Enable the PHP sockets extension to connect to the scanner, or upload an export.');
         }
 
-        $device = new ZKTeco($this->host, $this->port);
+        $device = new ZktecoDevice($this->host, $this->port, $this->commKey);
 
         if (! $device->connect()) {
             throw new RuntimeException(

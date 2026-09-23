@@ -15,6 +15,18 @@ return [
     'zkteco' => [
         'host' => env('ZKTECO_HOST'),
         'port' => env('ZKTECO_PORT', 4370),
+
+        /*
+         * The device's COM key, if one is set on it: Menu > Comm > Security >
+         * Comm Key. A device with a key refuses every command until the client
+         * proves it knows it, and it does so quietly - the connection looks
+         * healthy and the punches simply come back empty, which reads as
+         * "nobody clocked in" rather than as a failure.
+         *
+         * Leave it unset when the device's key is 0, which is the default and
+         * means no key at all.
+         */
+        'comm_key' => env('ZKTECO_COMM_KEY'),
     ],
 
 ];
