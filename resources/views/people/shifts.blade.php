@@ -1,5 +1,6 @@
 @use('App\Support\WorkWeek')
-@if($hr)
+@php($teamShiftManager = !$hr && in_array(auth()->user()->role, ['supervisor', 'leader'], true))
+@if($hr || $teamShiftManager)
     <details class="card" @if($errors->any()) open @endif><summary>Assign a shift</summary>
         <form method="POST" action="{{ $base }}" class="grid divider">@csrf
             <label class="people-field"><span>Employee</span>
@@ -13,11 +14,18 @@
             <x-people.field name="ends_at" label="Ends" type="time" :required="false" />
             <x-people.field name="label" label="Label" maxlength="80" :required="false" placeholder="Morning shift" />
             <label class="people-field"><span>Rest day</span><label class="row"><input type="checkbox" name="rest_day" value="1"> Mark as rest day</label></label>
-            <p class="muted wide">Assignments override the employee's default shift for attendance and payroll on those dates.</p>
-            <div><button>Save assignment</button></div>
+            <p class="muted wide">
+                @if($hr)
+                    Assignments override the employee's default shift for attendance and payroll.
+                @else
+                    Your assignments go to HR first. Attendance and payroll use them only after HR approval.
+                @endif
+            </p>
+            <div><button>{{ $hr ? 'Save assignment' : 'Send to HR' }}</button></div>
         </form>
     </details>
 
+    @if($hr)
     <details class="card"><summary>Add a holiday</summary>
         <form method="POST" action="{{ $base }}" class="grid divider">@csrf
             <input type="hidden" name="kind" value="holiday">
@@ -34,6 +42,7 @@
             <div><button>Save holiday</button></div>
         </form>
     </details>
+    @endif
 @endif
 
 <form method="GET" class="row card">
@@ -75,9 +84,17 @@
                             {{ substr($shift->starts_at, 0, 5) }}–{{ substr($shift->ends_at, 0, 5) }}
                         @endif
                         @if($shift->label)<br>{{ $shift->label }}@endif
+                        @if(($shift->status ?? 'approved') !== 'approved')<br><span class="badge">{{ $shift->status }}</span>@endif
                         @if($hr)
                             <form method="POST" action="{{ $base }}/{{ $shift->id }}">@csrf
+                                @if(($shift->status ?? 'approved') === 'pending_hr')
+                                    <button name="action" value="approve" aria-label="Approve assigned shift on {{ $date }}">Approve</button>
+                                @endif
                                 <button class="secondary" name="action" value="delete" aria-label="Remove assigned shift on {{ $date }}">Remove</button>
+                            </form>
+                        @elseif($teamShiftManager && ($shift->status ?? 'approved') === 'pending_hr')
+                            <form method="POST" action="{{ $base }}/{{ $shift->id }}">@csrf
+                                <button class="secondary" name="action" value="delete" aria-label="Withdraw assigned shift on {{ $date }}">Withdraw</button>
                             </form>
                         @endif
                     </div>
@@ -100,10 +117,10 @@
     @endfor
 </div></div>
 
-@if($hr)
+@if($hr || $teamShiftManager)
     <article class="card">
         <h2>Rest days</h2>
-        <p class="muted">Set on each person under Employees. Nothing here needs entering per date.</p>
+        <p class="muted">{{ $hr ? 'Set on each person under Employees. Nothing here needs entering per date.' : 'Showing your team only.' }}</p>
         <div class="scroll"><table>
             <thead><tr><th>Employee</th><th>Shift</th><th>Rest days</th></tr></thead>
             <tbody>

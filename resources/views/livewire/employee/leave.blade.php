@@ -276,7 +276,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         <div class="flex items-center justify-between p-3 rounded-xl bg-slate-100">
                             <div class="flex items-center">
                                 <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mr-3">
-                                    <span class="text-emerald-600 font-bold">{{ $this->leaves->where('status', 'pending')->count() }}</span>
+                                    <span class="text-emerald-600 font-bold">{{ $this->leaves->whereIn('status', ['pending', 'pending_hr'])->count() }}</span>
                                 </div>
                                 <span class="font-medium text-gray-700">Pending</span>
                             </div>
@@ -362,9 +362,11 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                             @if($leave->status === 'approved')
                                                 <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">Approved</span>
                                             @elseif($leave->status === 'pending')
-                                                <span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-semibold">Pending</span>
+                                                <span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-semibold">Supervisor Review</span>
+                                            @elseif($leave->status === 'pending_hr')
+                                                <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold">HR Review</span>
                                             @else
-                                                <span class="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-semibold">{{ ucfirst($leave->status) }}</span>
+                                                <span class="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-semibold">{{ ucfirst(str_replace('_', ' ', $leave->status)) }}</span>
                                             @endif
                                         </td>
                                         <td class="px-6 py-4 text-gray-600">{{ $leave->reason }}</td>

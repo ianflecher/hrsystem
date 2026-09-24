@@ -35,6 +35,13 @@ class PeopleController extends Controller
         return [$hr, $hr ? null : PeopleAccess::employeeId()];
     }
 
+    private function isTeamPortal(string $module): bool
+    {
+        return ! PeopleAccess::isHr()
+            && in_array(auth()->user()->role, ['supervisor', 'leader'], true)
+            && in_array($module, ['overtime', 'shifts'], true);
+    }
+
     public function index(Request $request, string $module)
     {
         [$hr, $employeeId] = $this->context($request);
@@ -50,7 +57,10 @@ class PeopleController extends Controller
             'status' => $requestStatuses ? ['nullable', 'string', Rule::in($requestStatuses)] : 'nullable|string|max:30',
         ]);
         $month = Carbon::parse(($request->input('month') ?: now()->format('Y-m')).'-01');
-        $employees = $hr ? DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
+        $teamPortal = $this->isTeamPortal($module);
+        $managedDepartmentIds = PeopleAccess::managedDepartmentIds();
+        $employees = ($hr || $teamPortal) ? DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
+            ->when(! $hr, fn ($q) => $q->whereIn('e.department_id', $managedDepartmentIds))
             ->select('e.employee_id', 'u.full_name')->orderBy('u.full_name')->get() : collect();
         $departments = $hr ? DB::table('departments')->orderBy('department_name')->get() : collect();
         $query = null;
@@ -65,8 +75,8 @@ class PeopleController extends Controller
             if (! $hr) {
                 $query->where(function ($q) use ($module, $employeeId) {
                     $q->where('r.employee_id', $employeeId);
-                    if ($module === 'overtime' && auth()->user()->role === 'supervisor') {
-                        $q->orWhereIn('e.department_id', DB::table('departments')->where('supervisor_id', auth()->id())->select('department_id'));
+                    if ($module === 'overtime' && in_array(auth()->user()->role, ['supervisor', 'leader'], true)) {
+                        $q->orWhereIn('e.department_id', PeopleAccess::managedDepartmentIds());
                     }
                 });
             }
@@ -100,14 +110,17 @@ class PeopleController extends Controller
                 ->whereBetween('date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()])
                 ->orderBy('date')->get()->keyBy('date');
             $extra['staff'] = DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
-                ->when($hr, fn ($q) => $q->where('e.status', 'active'), fn ($q) => $q->where('e.employee_id', $employeeId))
+                ->when($hr, fn ($q) => $q->where('e.status', 'active'))
+                ->when(! $hr && $teamPortal, fn ($q) => $q->where('e.status', 'active')->whereIn('e.department_id', $managedDepartmentIds))
+                ->when(! $hr && ! $teamPortal, fn ($q) => $q->where('e.employee_id', $employeeId))
                 ->select('e.employee_id', 'e.shift_start', 'e.shift_end', 'e.rest_days', 'u.full_name')
                 ->orderBy('u.full_name')->get();
             $extra['assignments'] = DB::table('shift_assignments as s')
                 ->join('employees as e', 'e.employee_id', '=', 's.employee_id')
                 ->join('users as u', 'u.user_id', '=', 'e.user_id')
                 ->whereBetween('s.work_date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()])
-                ->when(! $hr, fn ($q) => $q->where('s.employee_id', $employeeId))
+                ->when(! $hr && $teamPortal, fn ($q) => $q->whereIn('e.department_id', $managedDepartmentIds))
+                ->when(! $hr && ! $teamPortal, fn ($q) => $q->where('s.employee_id', $employeeId))
                 ->select('s.*', 'u.full_name')
                 ->orderBy('s.work_date')->orderBy('u.full_name')->get()
                 ->groupBy(fn ($row) => substr((string) $row->work_date, 0, 10));
@@ -213,7 +226,7 @@ class PeopleController extends Controller
         [$hr, $employeeId] = $this->context($request);
         abort_unless(isset(self::MODULES[$module]), 404);
         // Documents, overtime and loans come from the person they are about.
-        if (! in_array($module, ['overtime', 'loans', 'documents'], true)) PeopleAccess::hr();
+        if (! in_array($module, ['overtime', 'loans', 'documents'], true) && ! ($module === 'shifts' && $this->isTeamPortal($module))) PeopleAccess::hr();
         // Loans are requested from the employee portal only - see the view.
         abort_if($hr && in_array($module, ['loans', 'overtime'], true), 403, 'This is requested by the employee.');
         if (in_array($module, ['documents', 'checklists', 'reviews'], true) && $hr) {
@@ -245,7 +258,7 @@ class PeopleController extends Controller
                 if ($minutes > 960) throw ValidationException::withMessages(['ends_at' => 'Submit at most 16 hours per request.']);
                 DB::transaction(function () use ($employeeId, $start, $end, $base, $data, $minutes) {
                     DB::table('employees')->where('employee_id', $employeeId)->lockForUpdate()->first();
-                    if (DB::table('overtime_requests')->where('employee_id', $employeeId)->whereIn('status', ['pending', 'approved'])
+                    if (DB::table('overtime_requests')->where('employee_id', $employeeId)->whereIn('status', ['pending', 'pending_hr', 'approved'])
                         ->where('starts_at', '<', $end)->where('ends_at', '>', $start)->exists()) {
                         throw ValidationException::withMessages(['starts_at' => 'This request overlaps existing overtime.']);
                     }
@@ -253,7 +266,9 @@ class PeopleController extends Controller
                 });
                 break;
             case 'shifts':
+                $teamPortal = $this->isTeamPortal($module);
                 if ($request->input('kind') === 'holiday' || $request->filled(['date', 'name', 'type'])) {
+                    PeopleAccess::hr();
                     $data = $request->validate([
                         'date' => 'required|date_format:Y-m-d',
                         'name' => 'required|string|max:120',
@@ -273,9 +288,13 @@ class PeopleController extends Controller
                     'rest_day' => 'nullable|boolean',
                     'label' => 'nullable|string|max:80',
                 ]);
+                if ($teamPortal) {
+                    PeopleAccess::managerForEmployee((int) $data['employee_id']);
+                }
                 $from = Carbon::parse($data['from']);
                 $to = Carbon::parse($data['to']);
                 if ($from->diffInDays($to) > 93) throw ValidationException::withMessages(['to' => 'Schedule at most 93 days at a time.']);
+                $status = $hr ? 'approved' : 'pending_hr';
                 for ($day = $from->copy(); $day->lte($to); $day->addDay()) {
                     DB::table('shift_assignments')->updateOrInsert(
                         ['employee_id' => (int) $data['employee_id'], 'work_date' => $day->toDateString()],
@@ -283,6 +302,10 @@ class PeopleController extends Controller
                             'ends_at' => $request->boolean('rest_day') ? null : $data['ends_at'],
                             'rest_day' => $request->boolean('rest_day'),
                             'label' => $data['label'] ?: ($request->boolean('rest_day') ? 'Rest day' : 'Assigned shift'),
+                            'status' => $status,
+                            'created_by' => auth()->id(),
+                            'approved_by' => $hr ? auth()->id() : null,
+                            'approved_at' => $hr ? now() : null,
                             'created_at' => now(), 'updated_at' => now()]
                     );
                 }
@@ -357,14 +380,29 @@ class PeopleController extends Controller
         }
         abort_unless(isset($tables[$module]), 404);
         if ($module === 'shifts') {
-            PeopleAccess::hr();
-            abort_unless(in_array($action, ['delete', 'delete-holiday'], true), 422);
+            abort_unless(PeopleAccess::isHr() || in_array(auth()->user()->role, ['supervisor', 'leader'], true), 403);
+            abort_unless(in_array($action, ['delete', 'delete-holiday', 'approve'], true), 422);
             if ($action === 'delete') {
+                $shift = DB::table('shift_assignments')->where('id', $id)->first();
+                if ($shift && ! PeopleAccess::isHr()) {
+                    PeopleAccess::managerForEmployee((int) $shift->employee_id);
+                    abort_unless($shift->status === 'pending_hr', 403);
+                }
                 $deleted = DB::table('shift_assignments')->where('id', $id)->delete();
                 if (! $deleted) {
+                    PeopleAccess::hr();
                     DB::table('holidays')->where('id', $id)->delete();
                 }
+            } elseif ($action === 'approve') {
+                PeopleAccess::hr();
+                DB::table('shift_assignments')->where('id', $id)->update([
+                    'status' => 'approved',
+                    'approved_by' => auth()->id(),
+                    'approved_at' => now(),
+                    'updated_at' => now(),
+                ]);
             } else {
+                PeopleAccess::hr();
                 DB::table('holidays')->where('id', $id)->delete();
             }
             return back()->with('success', 'Updated successfully.');
@@ -389,11 +427,26 @@ class PeopleController extends Controller
                     DB::table('employee_loans')->where('id', $id)->update(['status' => 'active', 'disbursed_at' => now(), 'updated_at' => now()]);
                     return;
                 }
-                abort_unless(in_array($action, ['approve', 'reject'], true) && $row->status === 'pending', 422);
+                $firstReview = $module === 'overtime' && ! PeopleAccess::isHr();
+                $expectedStatus = $module === 'overtime' && PeopleAccess::isHr() ? 'pending_hr' : 'pending';
+                abort_unless(in_array($action, ['approve', 'reject'], true) && $row->status === $expectedStatus, 422);
                 $data = $request->validate(['decision_note' => ($action === 'reject' ? 'required' : 'nullable').'|string|max:2000']);
-                $update = ['status' => $action === 'approve' ? 'approved' : 'rejected', 'decision_note' => $data['decision_note'] ?? null, 'reviewed_by' => auth()->id(), 'updated_at' => now()];
+                $update = [
+                    'status' => $action === 'approve'
+                        ? ($firstReview ? 'pending_hr' : 'approved')
+                        : 'rejected',
+                    'decision_note' => $firstReview ? null : ($data['decision_note'] ?? null),
+                    'reviewed_by' => $firstReview ? null : auth()->id(),
+                    'updated_at' => now(),
+                ];
                 if ($module === 'overtime') {
-                    $update['reviewed_at'] = now();
+                    if ($firstReview) {
+                        $update['manager_reviewed_by'] = auth()->id();
+                        $update['manager_reviewed_at'] = now();
+                        $update['manager_decision_note'] = $data['decision_note'] ?? null;
+                    } else {
+                        $update['reviewed_at'] = now();
+                    }
                     if ($action === 'approve') {
                         $request->validate(['approved_amount' => 'nullable|numeric|min:0.01|max:1000000']);
                         $employee = DB::table('employees')->where('employee_id', $row->employee_id)->first();
@@ -402,8 +455,12 @@ class PeopleController extends Controller
                         $approved = $request->filled('approved_amount')
                             ? round((float) $request->input('approved_amount'), 2)
                             : $suggestion['suggested_amount'];
-                        $update['approved_amount'] = $approved;
-                        $update['decision_note'] = trim(($update['decision_note'] ?? '').' Auto-calculated suggestion: PHP '.number_format($suggestion['suggested_amount'], 2).' at '.$suggestion['multiplier'].'x; HR-approved amount: PHP '.number_format($approved, 2).'.');
+                        if ($firstReview) {
+                            $update['manager_decision_note'] = trim(($update['manager_decision_note'] ?? '').' Supervisor checked suggested amount: PHP '.number_format($suggestion['suggested_amount'], 2).' at '.$suggestion['multiplier'].'x.');
+                        } else {
+                            $update['approved_amount'] = $approved;
+                            $update['decision_note'] = trim(($update['decision_note'] ?? '').' Auto-calculated suggestion: PHP '.number_format($suggestion['suggested_amount'], 2).' at '.$suggestion['multiplier'].'x; HR-approved amount: PHP '.number_format($approved, 2).'.');
+                        }
                     }
                 }
                 DB::table($tables[$module])->where('id', $id)->update($update);

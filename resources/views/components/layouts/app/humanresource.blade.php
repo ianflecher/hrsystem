@@ -657,7 +657,8 @@
         @php
             $moduleLabels = \App\Http\Controllers\PeopleController::MODULES;
             $badges = \App\Support\NavBadges::hr();
-            $navigationGroups = [
+            $hrShell = \App\Support\PeopleAccess::isHr();
+            $navigationGroups = $hrShell ? [
                 'Overview' => [
                     ['route' => 'hr.home', 'label' => 'Dashboard', 'icon' => 'gauge-high'],
                     ['route' => 'people.hr', 'module' => 'announcements', 'icon' => 'bullhorn'],
@@ -682,6 +683,18 @@
                 'Recruitment' => [
                     ['route' => 'hr.positions', 'label' => 'Openings', 'icon' => 'briefcase'],
                     ['route' => 'hr.applications', 'label' => 'Applications', 'icon' => 'file-lines'],
+                ],
+            ] : [
+                'Overview' => [
+                    ['route' => 'employee.dashboard', 'label' => 'Dashboard', 'icon' => 'gauge-high'],
+                    ['route' => 'employee.team', 'label' => 'Team Dashboard', 'icon' => 'users-gear'],
+                    ['route' => 'people.employee', 'module' => 'announcements', 'icon' => 'bullhorn'],
+                ],
+                'Time & attendance' => [
+                    ['route' => 'employee.attendance', 'label' => 'My Attendance', 'icon' => 'clock'],
+                    ['route' => 'employee.leave', 'label' => 'My Leave', 'icon' => 'umbrella-beach'],
+                    ['route' => 'people.employee', 'module' => 'overtime', 'icon' => 'stopwatch'],
+                    ['route' => 'people.employee', 'module' => 'shifts', 'icon' => 'calendar-days'],
                 ],
             ];
         @endphp

@@ -42,7 +42,7 @@ class LeaveBalances
 
         $taken = DB::table('leaves')
             ->where('employee_id', $employeeId)
-            ->whereIn('status', ['approved', 'pending'])
+            ->whereIn('status', ['approved', 'pending', 'pending_hr'])
             ->whereBetween('start_date', [$year.'-01-01', $year.'-12-31'])
             ->selectRaw('leave_type, status, COALESCE(SUM(total_days), 0) as days')
             ->groupBy('leave_type', 'status')
@@ -58,7 +58,9 @@ class LeaveBalances
             $eligible = $months === null ? false : $months >= $afterMonths;
 
             $used = (float) $taken->where('leave_type', $type)->where('status', 'approved')->sum('days');
-            $pending = (float) $taken->where('leave_type', $type)->where('status', 'pending')->sum('days');
+            $pending = (float) $taken->where('leave_type', $type)
+                ->whereIn('status', ['pending', 'pending_hr'])
+                ->sum('days');
 
             $entitled = $entitlement && ! in_array($type, self::UNLIMITED_TYPES, true)
                 ? (float) $entitlement->days_per_year

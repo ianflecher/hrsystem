@@ -25,7 +25,7 @@ class PayrollOperations
             }
         }
 
-        $pendingOt = DB::table('overtime_requests')->where('status', 'pending')->where('starts_at', '<', Carbon::parse($period->end)->addDay())->where('ends_at', '>=', $period->start)->get();
+        $pendingOt = DB::table('overtime_requests')->whereIn('status', ['pending', 'pending_hr'])->where('starts_at', '<', Carbon::parse($period->end)->addDay())->where('ends_at', '>=', $period->start)->get();
         foreach ($pendingOt as $ot) $rows[] = $this->exception((int) $ot->employee_id, $period, 'pending_ot', 'medium', 'Overtime request is still awaiting approval.');
 
         foreach ($rows as $row) DB::table('payroll_exceptions')->insert($row);

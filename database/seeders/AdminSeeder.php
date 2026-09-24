@@ -22,13 +22,13 @@ class AdminSeeder extends Seeder
     {
         $accounts = [
             [
-                'full_name' => 'System Administrator',
+                'full_name' => 'Gian Karlo Dumalay Lasam',
                 'username'  => 'admin',
                 'email'     => 'admin@imprintcustoms.ph',
                 'job_title' => 'System Administrator',
             ],
             [
-                'full_name' => 'HR Supervisor',
+                'full_name' => 'Emadeth Togonon Comanda',
                 'username'  => 'hr',
                 'email'     => 'hr@imprintcustoms.ph',
                 'job_title' => 'HR Supervisor',

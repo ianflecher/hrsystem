@@ -622,14 +622,10 @@
                         ['name' => 'Admin Center', 'route' => 'hr.operations.admin-center', 'icon' => '⚙️'],
                     ],
                     'supervisor' => [
-                        ['name' => 'Team Dashboard', 'route' => 'hr.operations.manager', 'icon' => '👥'],
-                        ['name' => 'HR Inbox', 'route' => 'hr.operations.inbox', 'icon' => '📥'],
-                        ['name' => 'Attendance Exceptions', 'route' => 'hr.operations.attendance-exceptions', 'icon' => '⚠️'],
+                        ['name' => 'Team Dashboard', 'route' => 'employee.team', 'icon' => '👥'],
                     ],
                     'leader' => [
-                        ['name' => 'Team Dashboard', 'route' => 'hr.operations.manager', 'icon' => '👥'],
-                        ['name' => 'HR Inbox', 'route' => 'hr.operations.inbox', 'icon' => '📥'],
-                        ['name' => 'Attendance Exceptions', 'route' => 'hr.operations.attendance-exceptions', 'icon' => '⚠️'],
+                        ['name' => 'Team Dashboard', 'route' => 'employee.team', 'icon' => '👥'],
                     ],
                     'hr' => [
                         ['name' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => '📊'],

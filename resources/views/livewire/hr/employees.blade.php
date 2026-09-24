@@ -36,6 +36,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public string $username = '';
     public string $email = '';
     public string $job_title = '';
+    public string $contact_number = '';
+    public string $address = '';
     public string $shift_start = '';
     public string $shift_end = '';
     public array $rest_days = [];
@@ -213,6 +215,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->username      = $row->username;
         $this->email         = $row->email;
         $this->job_title     = $row->job_title;
+        $this->contact_number = (string) ($row->contact_number ?? '');
+        $this->address       = (string) ($row->address ?? '');
         $this->shift_start   = $row->shift_start ? substr($row->shift_start, 0, 5) : '';
         $this->shift_end     = $row->shift_end ? substr($row->shift_end, 0, 5) : '';
         $this->rest_days     = WorkWeek::days($row->rest_days);
@@ -410,6 +414,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'username'      => ['required', 'string', 'max:100', Rule::unique('users', 'username')->ignore($userId, 'user_id')],
             'email'         => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($userId, 'user_id')],
             'job_title'     => ['required', 'string', 'max:100'],
+            'contact_number' => ['nullable', 'string', 'max:40'],
+            'address'       => ['nullable', 'string', 'max:255'],
             'shift_start'   => ['nullable', 'date_format:H:i'],
             'shift_end'     => ['nullable', 'date_format:H:i'],
             'rest_days'     => ['array'],
@@ -462,6 +468,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
                 DB::table('employees')->where('employee_id', $this->editingId)->update([
                     'job_title'     => $data['job_title'],
+                    'contact_number' => $data['contact_number'] ?: null,
+                    'address'       => $data['address'] ?: null,
                     'shift_start'   => $shiftStart,
                     'shift_end'     => $shiftEnd,
                     'rest_days'     => $restDays,
@@ -526,6 +534,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             $employeeId = DB::table('employees')->insertGetId([
                 'user_id'       => $newUserId,
                 'job_title'     => $data['job_title'],
+                'contact_number' => $data['contact_number'] ?: null,
+                'address'       => $data['address'] ?: null,
                 'shift_start'   => $shiftStart,
                 'shift_end'     => $shiftEnd,
                 'rest_days'     => $restDays,
@@ -703,6 +713,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->username      = '';
         $this->email         = '';
         $this->job_title     = '';
+        $this->contact_number = '';
+        $this->address       = '';
         $this->shift_start   = '';
         $this->shift_end     = '';
         $this->rest_days     = [];
@@ -1058,6 +1070,17 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <label class="form-label" for="email">Email</label>
                                 <input id="email" type="email" wire:model="email" class="form-input">
                                 @error('email') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="contact_number">Contact number</label>
+                                <input id="contact_number" type="text" wire:model="contact_number" class="form-input" maxlength="40">
+                                @error('contact_number') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label class="form-label" for="address">Address</label>
+                                <textarea id="address" wire:model="address" class="form-input" maxlength="255" rows="2"
+                                          placeholder="House/lot, street, barangay, city"></textarea>
+                                @error('address') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
                             <div>
                                 <label class="form-label" for="shift_start">Shift starts</label>

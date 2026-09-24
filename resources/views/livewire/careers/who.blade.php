@@ -18,16 +18,16 @@ use App\Support\CareersStory;
  */
 new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extends Component {
     public array $welcome = [
-        ['title' => 'Students and part-timers',
+        ['title' => 'Students and Part-timers',
          'body'  => 'Shifts arranged around class schedules, including weekends and semestral breaks.',
          'icon'  => 'fas fa-clock', 'pic' => 'welcome-part-time'],
-        ['title' => 'OJT and work immersion',
-         'body'  => 'We take senior high and college trainees, sign the paperwork your school needs, and pay immersion in full.',
+        ['title' => 'On the Job Trainees',
+         'body'  => 'We accept college trainees. Complete your OJT with us and receive a paid allowance while you train, with the opportunity to be hired after your internship.',
          'icon'  => 'fas fa-graduation-cap', 'pic' => 'welcome-ojt'],
-        ['title' => 'Fresh graduates',
+        ['title' => 'Fresh Graduates',
          'body'  => 'First job? Good. We would rather train you our way than undo habits picked up somewhere else.',
          'icon'  => 'fas fa-seedling', 'pic' => 'welcome-fresh-grad'],
-        ['title' => 'No degree needed',
+        ['title' => 'No Degree Needed',
          'body'  => 'Senior high, vocational, self-taught or straight off another trade - what matters is that you can do the work.',
          'icon'  => 'fas fa-door-open', 'pic' => 'welcome-no-degree'],
     ];

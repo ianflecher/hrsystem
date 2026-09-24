@@ -28,15 +28,19 @@ class PayrollControlCenter
         $rows = DB::table('hr_payroll')->where('period_start', $period->start)
             ->selectRaw('status, COUNT(*) n')->groupBy('status')->pluck('n', 'status')->all();
 
-        $missingSalary = DB::table('employees')->where('status', 'active')->where(function($q){ $q->where(function($x){$x->where('pay_basis','monthly')->where('salary','<=',0);})->orWhere(function($x){$x->whereIn('pay_basis',['daily','hourly'])->where('daily_rate','<=',0);}); })->count();
-        $unapprovedOt = DB::table('overtime_requests')->where('status', 'pending')
-            ->where('starts_at', '<', Carbon::parse($period->end)->addDay())->where('ends_at', '>=', $period->start)->count();
+        $unapprovedOt = DB::table('overtime_requests as o')
+            ->join('employees as e', 'o.employee_id', '=', 'e.employee_id')
+            ->where('e.status', 'active')
+            ->where(function($q){ $q->where('e.salary','>',0)->orWhere('e.daily_rate','>',0); })
+            ->whereIn('o.status', ['pending', 'pending_hr'])
+            ->where('o.starts_at', '<', Carbon::parse($period->end)->addDay())
+            ->where('o.ends_at', '>=', $period->start)
+            ->count();
         $gaps = $this->attendanceGapCount($period);
         $negative = DB::table('hr_payroll')->where('period_start', $period->start)->where('net_pay', '<', 0)->count();
         $ruleReady = app(PhilippinePayrollCompliance::class)->status($period->start)['ready'] ?? false;
 
         $issues = [];
-        if ($missingSalary) $issues[] = ['level' => 'high', 'count' => $missingSalary, 'label' => 'Active employees without salary'];
         if ($unapprovedOt) $issues[] = ['level' => 'medium', 'count' => $unapprovedOt, 'label' => 'Pending overtime requests'];
         if ($gaps) $issues[] = ['level' => 'high', 'count' => $gaps, 'label' => 'Attendance gaps'];
         if ($negative) $issues[] = ['level' => 'high', 'count' => $negative, 'label' => 'Negative net pay records'];

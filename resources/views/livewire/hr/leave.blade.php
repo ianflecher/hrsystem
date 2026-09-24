@@ -35,9 +35,17 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     ];
     public $statusColors = [
         'pending' => 'bg-yellow-100 text-yellow-800',
+        'pending_hr' => 'bg-blue-100 text-blue-800',
         'approved' => 'bg-green-100 text-green-800',
         'rejected' => 'bg-red-100 text-red-800',
         'cancelled' => 'bg-gray-100 text-gray-800',
+    ];
+    public $statusLabels = [
+        'pending' => 'Supervisor review',
+        'pending_hr' => 'HR review',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+        'cancelled' => 'Cancelled',
     ];
 
     public function mount()
@@ -74,7 +82,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         $stats = DB::table('leaves')
             ->select(
-                DB::raw('COUNT(CASE WHEN status = "pending" THEN 1 END) as pending_count'),
+                DB::raw('COUNT(CASE WHEN status = "pending_hr" THEN 1 END) as pending_count'),
                 DB::raw('COUNT(CASE WHEN status = "approved" THEN 1 END) as approved_count'),
                 DB::raw('COUNT(CASE WHEN status = "rejected" THEN 1 END) as rejected_count'),
                 DB::raw('COUNT(CASE WHEN status = "cancelled" THEN 1 END) as cancelled_count'),
@@ -129,8 +137,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         if ($this->filters['status']) {
             $query->where('l.status', $this->filters['status']);
         } else {
-            // Show all except cancelled by default
-            $query->where('l.status', '!=', 'cancelled');
+            // HR sees requests after the supervisor/leader has reviewed them.
+            $query->where('l.status', 'pending_hr');
         }
 
         if ($this->filters['type']) {
@@ -235,6 +243,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         if (! $leave) {
             session()->flash('error', 'That leave request no longer exists.');
+
+            return;
+        }
+
+        if (! in_array($leave->status, ['pending_hr', 'pending'], true)) {
+            session()->flash('error', 'Only requests waiting for approval can be approved.');
 
             return;
         }
@@ -580,7 +594,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 <label class="form-label">Leave Status</label>
                 <select wire:model.live="filters.status" class="form-input">
                     <option value="">All Status</option>
-                    <option value="pending">Pending</option>
+                    <option value="pending">Supervisor review</option>
+                    <option value="pending_hr">HR review</option>
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                     <option value="cancelled">Cancelled</option>
@@ -780,7 +795,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <td>
                                     <div class="flex flex-col">
                                         <span class="px-3 py-1 rounded-full text-xs font-medium {{ $statusColors[$leave->status] ?? 'bg-gray-100 text-gray-800' }}">
-                                            {{ ucfirst($leave->status) }}
+                                            {{ $statusLabels[$leave->status] ?? ucfirst(str_replace('_', ' ', $leave->status)) }}
                                         </span>
                                         @if($leave->approved_at && $leave->approver_name)
                                             <div class="text-xs text-gray-500 mt-1">
@@ -808,7 +823,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                             </button>
                                         @endif
                                         
-                                        @if($leave->status === 'pending')
+                                        @if($leave->status === 'pending_hr')
                                             <button wire:click="approveLeave('{{ $leave->leave_id }}')" 
                                                     onclick="return confirm('Approve leave request for {{ $leave->full_name }}?')"
                                                     class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100">
@@ -935,7 +950,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <div>
                                     <label class="text-xs text-gray-500">Status</label>
                                     <span class="px-3 py-1 rounded-full text-sm font-medium {{ $statusColors[$selectedLeave->status] ?? 'bg-gray-100 text-gray-800' }}">
-                                        {{ ucfirst($selectedLeave->status) }}
+                                        {{ $statusLabels[$selectedLeave->status] ?? ucfirst(str_replace('_', ' ', $selectedLeave->status)) }}
                                     </span>
                                 </div>
                             </div>
@@ -996,7 +1011,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         @endif
 
                         <!-- Actions (if pending) -->
-                        @if($selectedLeave->status === 'pending')
+                        @if($selectedLeave->status === 'pending_hr')
                         @php($balance = $this->selectedBalances[$selectedLeave->leave_type] ?? null)
                         <div class="md:col-span-2 border-t pt-4">
                             {{-- The figures belong next to the button, not on

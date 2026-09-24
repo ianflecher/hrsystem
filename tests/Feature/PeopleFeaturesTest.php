@@ -138,12 +138,28 @@ class PeopleFeaturesTest extends TestCase
         return (int) DB::table('overtime_requests')->where('employee_id', $this->employeeId)->value('id');
     }
 
+    private function assignSupervisor(User $supervisor): int
+    {
+        $department = DB::table('departments')->insertGetId([
+            'department_name' => 'Test team '.bin2hex(random_bytes(3)),
+            'supervisor_id' => $supervisor->user_id,
+        ]);
+        DB::table('employees')->where('employee_id', $this->employeeId)->update(['department_id' => $department]);
+
+        return $department;
+    }
+
     public function test_overtime_ownership_overlap_approval_and_display(): void
     {
         $id = $this->overtime();
         $this->assertDatabaseHas('overtime_requests', ['id' => $id, 'employee_id' => $this->employeeId, 'minutes' => 120]);
         $this->post('/employee/people/overtime', ['starts_at' => '2018-01-02T19:00', 'ends_at' => '2018-01-02T21:00', 'reason' => 'Overlapping request'])->assertSessionHasErrors('starts_at');
         $this->post('/employee/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 300])->assertForbidden();
+        $this->actingAs($this->hr)->post('/hr/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 300])->assertStatus(422);
+        $supervisor = $this->user('supervisor');
+        $this->assignSupervisor($supervisor);
+        $this->actingAs($supervisor)->post('/employee/people/overtime/'.$id, ['action' => 'approve'])->assertRedirect();
+        $this->assertDatabaseHas('overtime_requests', ['id' => $id, 'status' => 'pending_hr', 'manager_reviewed_by' => $supervisor->user_id]);
         $this->actingAs($this->hr)->post('/hr/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 300])->assertRedirect();
         $this->assertDatabaseHas('overtime_requests', ['id' => $id, 'status' => 'approved', 'approved_amount' => 300]);
         $this->get('/hr/people/overtime')->assertOk()->assertSee('300.00');
@@ -155,9 +171,9 @@ class PeopleFeaturesTest extends TestCase
         $id = $this->overtime();
         $supervisor = $this->user('supervisor');
         $this->actingAs($supervisor)->post('/employee/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 300])->assertForbidden();
-        $department = DB::table('departments')->insertGetId(['department_name' => 'Test team', 'supervisor_id' => $supervisor->user_id]);
-        DB::table('employees')->where('employee_id', $this->employeeId)->update(['department_id' => $department]);
+        $this->assignSupervisor($supervisor);
         $this->post('/employee/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 300])->assertRedirect();
+        $this->assertDatabaseHas('overtime_requests', ['id' => $id, 'status' => 'pending_hr', 'manager_reviewed_by' => $supervisor->user_id]);
     }
 
     public function test_the_calendar_draws_itself_from_the_employee_and_the_holidays(): void
@@ -580,6 +596,9 @@ class PeopleFeaturesTest extends TestCase
     public function test_loan_and_overtime_integrate_with_payroll_exactly_once(): void
     {
         $overtime = $this->overtime();
+        $supervisor = $this->user('supervisor');
+        $this->assignSupervisor($supervisor);
+        $this->actingAs($supervisor)->post('/employee/people/overtime/'.$overtime, ['action' => 'approve'])->assertRedirect();
         $this->actingAs($this->hr)->post('/hr/people/overtime/'.$overtime, ['action' => 'approve', 'approved_amount' => 300])->assertRedirect();
         $this->actingAs($this->staff)->post('/employee/people/loans', ['type' => 'cash_advance', 'amount' => 1000, 'installment' => 600, 'starts_on' => '2018-01-01', 'reason' => 'Travel expenses'])->assertRedirect();
         $loan = DB::table('employee_loans')->where('employee_id', $this->employeeId)->value('id');

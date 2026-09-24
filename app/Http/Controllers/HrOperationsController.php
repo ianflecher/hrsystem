@@ -39,42 +39,101 @@ class HrOperationsController extends Controller
 
     public function employee(int $id)
     {
-        \App\Support\PeopleAccess::hr();
         $employee = DB::table('employees as e')->join('users as u', 'e.user_id', '=', 'u.user_id')->leftJoin('departments as d', 'e.department_id', '=', 'd.department_id')->where('e.employee_id', $id)->select('e.*', 'u.full_name', 'u.email', 'd.department_name')->first();
         abort_unless($employee, 404);
-        $payroll = DB::table('hr_payroll')->where('employee_id', $id)->orderByDesc('period_end')->limit(12)->get();
+        \App\Support\PeopleAccess::managerForEmployee($id);
+        $payroll = \App\Support\PeopleAccess::isHr()
+            ? DB::table('hr_payroll')->where('employee_id', $id)->orderByDesc('period_end')->limit(12)->get()
+            : collect();
         $attendance = DB::table('hr_attendance')->where('employee_id', $id)->orderByDesc('date')->limit(30)->get();
         $leave = DB::table('leaves')->where('employee_id', $id)->orderByDesc('start_date')->limit(20)->get();
-        $loans = DB::table('employee_loans')->where('employee_id', $id)->orderByDesc('id')->get();
-        $documents = DB::table('employee_documents')->where('employee_id', $id)->orderByDesc('id')->get();
-        $salaryHistory = DB::table('employee_salary_history')->where('employee_id', $id)->orderByDesc('effective_from')->get();
+        $loans = \App\Support\PeopleAccess::isHr() ? DB::table('employee_loans')->where('employee_id', $id)->orderByDesc('id')->get() : collect();
+        $documents = \App\Support\PeopleAccess::isHr() ? DB::table('employee_documents')->where('employee_id', $id)->orderByDesc('id')->get() : collect();
+        $salaryHistory = \App\Support\PeopleAccess::isHr() ? DB::table('employee_salary_history')->where('employee_id', $id)->orderByDesc('effective_from')->get() : collect();
         return view('hr.operations.employee-360', compact('employee', 'payroll', 'attendance', 'leave', 'loans', 'documents', 'salaryHistory'));
     }
 
     public function manager()
     {
         \App\Support\PeopleAccess::manager();
-        $user = auth()->user();
-        $departmentId = DB::table('employees')->where('user_id', $user->user_id)->value('department_id');
-        $employees = DB::table('employees as e')->join('users as u', 'e.user_id', '=', 'u.user_id')->where('e.status', 'active')->when($departmentId, fn($q) => $q->where('e.department_id', $departmentId))->select('e.employee_id','u.full_name','e.department_id')->orderBy('u.full_name')->get();
-        $pendingLeave = DB::table('leaves as l')->join('employees as e','l.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('l.status','pending')->when($departmentId, fn($q)=>$q->where('e.department_id',$departmentId))->select('l.*','u.full_name')->orderBy('l.start_date')->get();
-        $pendingOt = DB::table('overtime_requests as o')->join('employees as e','o.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('o.status','pending')->when($departmentId, fn($q)=>$q->where('e.department_id',$departmentId))->select('o.*','u.full_name')->orderBy('o.starts_at')->get();
+        $departmentIds = \App\Support\PeopleAccess::managedDepartmentIds();
+        $employees = DB::table('employees as e')
+            ->join('users as u', 'e.user_id', '=', 'u.user_id')
+            ->leftJoin('departments as d', 'e.department_id', '=', 'd.department_id')
+            ->where('e.status', 'active')
+            ->when(! \App\Support\PeopleAccess::isHr(), fn($q) => $q->whereIn('e.department_id', $departmentIds))
+            ->select('e.employee_id','e.job_title','e.department_id','u.full_name','d.department_name')
+            ->orderBy('u.full_name')
+            ->get();
+        $pendingLeave = DB::table('leaves as l')->join('employees as e','l.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')
+            ->where('l.status', \App\Support\PeopleAccess::isHr() ? 'pending_hr' : 'pending')
+            ->when(! \App\Support\PeopleAccess::isHr(), fn($q)=>$q->whereIn('e.department_id',$departmentIds))
+            ->select('l.*','u.full_name')->orderBy('l.start_date')->get();
+        $pendingOt = DB::table('overtime_requests as o')->join('employees as e','o.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')
+            ->where('o.status', \App\Support\PeopleAccess::isHr() ? 'pending_hr' : 'pending')
+            ->when(! \App\Support\PeopleAccess::isHr(), fn($q)=>$q->whereIn('e.department_id',$departmentIds))
+            ->select('o.*','u.full_name')->orderBy('o.starts_at')->get();
         return view('hr.operations.manager', compact('employees','pendingLeave','pendingOt'));
+    }
+
+    public function managerLeaveDecision(Request $request, int $id)
+    {
+        \App\Support\PeopleAccess::manager();
+        $leave = DB::table('leaves')->where('leave_id', $id)->first();
+        abort_unless($leave, 404);
+        \App\Support\PeopleAccess::managerForEmployee((int) $leave->employee_id);
+
+        $action = $request->input('action');
+        abort_unless(in_array($action, ['approve', 'reject'], true) && $leave->status === 'pending', 422);
+        $data = $request->validate(['note' => ($action === 'reject' ? 'required' : 'nullable').'|string|max:2000']);
+
+        DB::table('leaves')->where('leave_id', $id)->update([
+            'status' => $action === 'approve' ? 'pending_hr' : 'rejected',
+            'manager_reviewed_by' => auth()->id(),
+            'manager_reviewed_at' => now(),
+            'manager_decision_note' => $data['note'] ?? null,
+            'rejection_reason' => $action === 'reject' ? ($data['note'] ?? null) : $leave->rejection_reason,
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('success', $action === 'approve' ? 'Leave sent to HR.' : 'Leave rejected.');
+    }
+
+    public function managerOvertimeDecision(Request $request, int $id)
+    {
+        \App\Support\PeopleAccess::manager();
+        $row = DB::table('overtime_requests')->where('id', $id)->first();
+        abort_unless($row, 404);
+        \App\Support\PeopleAccess::managerForEmployee((int) $row->employee_id);
+
+        $action = $request->input('action');
+        abort_unless(in_array($action, ['approve', 'reject'], true) && $row->status === 'pending', 422);
+        $data = $request->validate(['note' => ($action === 'reject' ? 'required' : 'nullable').'|string|max:2000']);
+
+        DB::table('overtime_requests')->where('id', $id)->update([
+            'status' => $action === 'approve' ? 'pending_hr' : 'rejected',
+            'manager_reviewed_by' => auth()->id(),
+            'manager_reviewed_at' => now(),
+            'manager_decision_note' => $data['note'] ?? null,
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('success', $action === 'approve' ? 'Overtime sent to HR.' : 'Overtime rejected.');
     }
 
     public function inbox()
     {
         \App\Support\PeopleAccess::hr();
         $requests = DB::table('employee_requests as r')->join('employees as e', 'r.employee_id', '=', 'e.employee_id')->join('users as u', 'e.user_id', '=', 'u.user_id')->where('r.status', 'pending')->select('r.*', 'u.full_name')->orderBy('r.created_at')->get();
-        $overtime = DB::table('overtime_requests as o')->join('employees as e', 'o.employee_id', '=', 'e.employee_id')->join('users as u', 'e.user_id', '=', 'u.user_id')->where('o.status', 'pending')->select('o.*', 'u.full_name')->orderBy('o.starts_at')->get();
+        $overtime = DB::table('overtime_requests as o')->join('employees as e', 'o.employee_id', '=', 'e.employee_id')->join('users as u', 'e.user_id', '=', 'u.user_id')->where('o.status', 'pending_hr')->select('o.*', 'u.full_name')->orderBy('o.starts_at')->get();
         return view('hr.operations.inbox', compact('requests', 'overtime'));
     }
 
     public function approvalCenter()
     {
         \App\Support\PeopleAccess::hr();
-        $leave = DB::table('leaves as l')->join('employees as e','l.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('l.status','pending')->select('l.leave_id as id','l.employee_id','l.start_date','l.end_date','l.reason','u.full_name')->orderBy('l.start_date')->get();
-        $overtime = DB::table('overtime_requests as o')->join('employees as e','o.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('o.status','pending')->select('o.id','o.employee_id','o.starts_at','o.ends_at','o.minutes','o.reason','u.full_name')->orderBy('o.starts_at')->get();
+        $leave = DB::table('leaves as l')->join('employees as e','l.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('l.status','pending_hr')->select('l.leave_id as id','l.employee_id','l.start_date','l.end_date','l.reason','u.full_name')->orderBy('l.start_date')->get();
+        $overtime = DB::table('overtime_requests as o')->join('employees as e','o.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('o.status','pending_hr')->select('o.id','o.employee_id','o.starts_at','o.ends_at','o.minutes','o.reason','u.full_name')->orderBy('o.starts_at')->get();
         $attendance = Schema::hasTable('attendance_corrections') ? DB::table('attendance_corrections as a')->join('employees as e','a.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('a.status','pending')->select('a.*','u.full_name')->orderBy('a.attendance_date')->get() : collect();
         $requests = DB::table('employee_requests as r')->join('employees as e','r.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')->where('r.status','pending')->select('r.*','u.full_name')->orderBy('r.created_at')->get();
         return view('hr.operations.approval-center', compact('leave','overtime','attendance','requests'));
@@ -131,8 +190,8 @@ class HrOperationsController extends Controller
             'separations_30' => Schema::hasTable('employee_separations') ? DB::table('employee_separations')->where('separation_date','>=',now()->subDays(30)->toDateString())->count() : 0,
             'attendance_today' => DB::table('hr_attendance')->whereDate('date',$today)->count(),
             'late_today' => DB::table('hr_attendance')->whereDate('date',$today)->where('status','late')->count(),
-            'pending_leave' => DB::table('leaves')->where('status','pending')->count(),
-            'pending_ot' => DB::table('overtime_requests')->where('status','pending')->count(),
+            'pending_leave' => DB::table('leaves')->where('status','pending_hr')->count(),
+            'pending_ot' => DB::table('overtime_requests')->where('status','pending_hr')->count(),
             'payroll_cost' => (float) DB::table('hr_payroll')->whereMonth('period_end',now()->month)->whereYear('period_end',now()->year)->sum('employer_total_cost'),
         ];
         $departmentCosts = DB::table('hr_payroll as p')->join('employees as e','p.employee_id','=','e.employee_id')->leftJoin('departments as d','e.department_id','=','d.department_id')->whereMonth('p.period_end',now()->month)->whereYear('p.period_end',now()->year)->groupBy('d.department_name')->selectRaw("COALESCE(d.department_name,'Unassigned') department, SUM(p.employer_total_cost) cost, COUNT(DISTINCT p.employee_id) employees")->orderByDesc('cost')->get();

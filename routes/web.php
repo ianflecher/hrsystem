@@ -109,6 +109,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/hr/operations/employee/{id}/lifecycle', [\App\Http\Controllers\HrOperationsController::class, 'lifecycleEvent'])->whereNumber('id')->name('hr.operations.employee.lifecycle');
     Route::post('/hr/operations/anomalies/{id}/resolve', [\App\Http\Controllers\HrOperationsController::class, 'resolveAnomaly'])->whereNumber('id')->name('hr.operations.anomaly.resolve');
     Route::get('/hr/operations/manager', [\App\Http\Controllers\HrOperationsController::class, 'manager'])->name('hr.operations.manager');
+    Route::post('/hr/operations/manager/leave/{id}', [\App\Http\Controllers\HrOperationsController::class, 'managerLeaveDecision'])->whereNumber('id')->name('hr.operations.manager.leave');
+    Route::post('/hr/operations/manager/overtime/{id}', [\App\Http\Controllers\HrOperationsController::class, 'managerOvertimeDecision'])->whereNumber('id')->name('hr.operations.manager.overtime');
     Route::post('/hr/operations/exceptions/{id}/resolve', [\App\Http\Controllers\HrOperationsController::class, 'resolveException'])->whereNumber('id')->name('hr.operations.exception.resolve');
     Route::get('/hr/operations/employee/{id}', [\App\Http\Controllers\HrOperationsController::class, 'employee'])->whereNumber('id')->name('hr.operations.employee');
     Route::get('/hr/operations/inbox', [\App\Http\Controllers\HrOperationsController::class, 'inbox'])->name('hr.operations.inbox');
@@ -130,6 +132,10 @@ Route::middleware('auth')->group(function () {
     Volt::route('/employee/attendance', 'employee.attendance')->name('employee.attendance');
     Volt::route('/employee/payroll', 'employee.payroll')->name('employee.payroll');
     Volt::route('/employee/leave', 'employee.leave')->name('employee.leave');
+    Route::get('/employee/team', [\App\Http\Controllers\HrOperationsController::class, 'manager'])->name('employee.team');
+    Route::get('/employee/team/{id}', [\App\Http\Controllers\HrOperationsController::class, 'employee'])->whereNumber('id')->name('employee.team.employee');
+    Route::post('/employee/team/leave/{id}', [\App\Http\Controllers\HrOperationsController::class, 'managerLeaveDecision'])->whereNumber('id')->name('employee.team.leave');
+    Route::post('/employee/team/overtime/{id}', [\App\Http\Controllers\HrOperationsController::class, 'managerOvertimeDecision'])->whereNumber('id')->name('employee.team.overtime');
 
     // Interviews this person has been given. The component scopes every read
     // and write to the signed-in interviewer, so the gate here is only that

@@ -86,7 +86,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
     {
         $this->pendingLeave = DB::table('leaves')
             ->where('employee_id', $this->employee->employee_id)
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'pending_hr'])
             ->select('leave_id', 'leave_type', 'start_date', 'end_date', 'total_days', 'reason', 'status', 'created_at')
             ->orderBy('start_date', 'asc')
             ->limit(5)

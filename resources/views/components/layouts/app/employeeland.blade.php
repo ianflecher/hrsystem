@@ -106,6 +106,10 @@
                     ['route' => 'people.employee', 'module' => 'overtime', 'icon' => 'stopwatch'],
                     ['route' => 'people.employee', 'module' => 'shifts', 'icon' => 'calendar-days'],
                 ],
+                'My team' => [
+                    ['route' => 'employee.team', 'label' => 'Team Dashboard', 'icon' => 'users-gear',
+                     'when' => in_array(auth()->user()->role ?? '', ['admin', 'hr', 'supervisor', 'leader'], true)],
+                ],
                 'My pay' => [
                     ['route' => 'employee.payroll', 'label' => 'Payroll', 'icon' => 'money-bill-wave'],
                     ['route' => 'people.employee', 'module' => 'loans', 'icon' => 'wallet'],

@@ -13,6 +13,7 @@ class ShiftSchedule
         $row = DB::table('shift_assignments')
             ->where('employee_id', $employee->employee_id)
             ->whereDate('work_date', $date)
+            ->where(fn ($q) => $q->whereNull('status')->orWhere('status', 'approved'))
             ->first();
 
         if ($row) {
@@ -42,6 +43,7 @@ class ShiftSchedule
         return DB::table('shift_assignments')
             ->where('employee_id', $employeeId)
             ->whereIn('work_date', $dates)
+            ->where(fn ($q) => $q->whereNull('status')->orWhere('status', 'approved'))
             ->get()
             ->keyBy(fn ($row) => substr((string) $row->work_date, 0, 10));
     }

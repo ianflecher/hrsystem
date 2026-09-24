@@ -68,14 +68,14 @@ class NavBadges
                 })
                 ->count(),
 
-            // Leave asked for and not yet answered.
-            'hr.leave' => (int) DB::table('leaves')->where('status', 'pending')->count(),
+            // Leave already checked by the team lead and waiting for HR.
+            'hr.leave' => (int) DB::table('leaves')->where('status', 'pending_hr')->count(),
 
             // Payslips calculated and waiting on approval.
             'hr.payroll' => (int) DB::table('hr_payroll')->where('status', 'calculated')->count(),
 
             // Overtime the same.
-            'overtime' => (int) DB::table('overtime_requests')->where('status', 'pending')->count(),
+            'overtime' => (int) DB::table('overtime_requests')->where('status', 'pending_hr')->count(),
         ]);
     }
 
@@ -92,7 +92,23 @@ class NavBadges
             return [];
         }
 
-        return self::remember('staff', fn () => [
+        return self::remember('staff', function () use ($id) {
+            $departmentIds = PeopleAccess::managedDepartmentIds();
+
+            $teamPending = $departmentIds
+                ? (int) DB::table('leaves as l')
+                    ->join('employees as e', 'e.employee_id', '=', 'l.employee_id')
+                    ->where('l.status', 'pending')
+                    ->whereIn('e.department_id', $departmentIds)
+                    ->count()
+                    + (int) DB::table('overtime_requests as o')
+                    ->join('employees as e', 'e.employee_id', '=', 'o.employee_id')
+                    ->where('o.status', 'pending')
+                    ->whereIn('e.department_id', $departmentIds)
+                    ->count()
+                : 0;
+
+            return [
             // Interviews given to them that they have not reported on. Whether
             // the interview has happened yet is not the test: an unanswered
             // one is outstanding either way, and a supervisor should see it
@@ -102,7 +118,11 @@ class NavBadges
                 ->where('status', '!=', 'cancelled')
                 ->whereNull('recommendation')
                 ->count(),
-        ]);
+
+            'hr.operations.manager' => $teamPending,
+            'employee.team' => $teamPending,
+            ];
+        });
     }
 
     /**
