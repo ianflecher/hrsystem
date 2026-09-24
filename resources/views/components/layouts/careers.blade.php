@@ -48,7 +48,7 @@
                 <span>&copy; {{ date('Y') }} Imprint Customs PH</span>
                 <span><i class="fas fa-envelope" style="margin-right:8px"></i>hr@imprintcustoms.ph</span>
                 <a href="{{ route('applicant.login') }}">Track an application</a>
-                <a href="{{ route('portals') }}">Already an employee?</a>
+                <a href="{{ route('employee.login') }}">Already an employee?</a>
             </div>
         </div>
     </div>

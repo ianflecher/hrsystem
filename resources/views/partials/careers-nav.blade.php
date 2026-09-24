@@ -71,7 +71,10 @@
         </div>
 
         <div class="cnav__right">
-            <a href="{{ route('portals') }}" class="cnav__staff">Staff sign-in</a>
+            {{-- Straight to the staff login. It used to point at the portal
+                 chooser, so somebody who had already chosen - by clicking a
+                 link that says "Staff sign-in" - was asked to choose again. --}}
+            <a href="{{ route('employee.login') }}" class="cnav__staff">Staff sign-in</a>
             <a href="{{ route('careers.jobs') }}" class="cnav__apply">Apply now</a>
         </div>
         </div>
