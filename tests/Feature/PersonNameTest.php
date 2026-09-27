@@ -109,7 +109,16 @@ class PersonNameTest extends TestCase
     /** The imported staff keep the login they were given. */
     public function test_the_import_and_the_register_form_agree(): void
     {
-        $imported = DB::table('users')->where('username', 'giankarlo.lasam')->first();
+        // Any account the masterlist created - they all carry their name in
+        // parts. Not a named person: the one this used to check was merged
+        // into the admin account and stopped existing.
+        $imported = DB::table('users as u')
+            ->join('employees as e', 'e.user_id', '=', 'u.user_id')
+            ->where('e.employee_no', 'like', 'IC-%')
+            ->where('u.username', 'like', '%.%')
+            ->whereNotNull('u.first_name')->whereNotNull('u.last_name')
+            ->select('u.*')
+            ->first();
 
         if (! $imported) {
             $this->markTestSkipped('the masterlist has not been imported');

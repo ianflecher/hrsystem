@@ -129,6 +129,26 @@ class HrLoginByEmployeeNumberTest extends TestCase
         $this->assertGuest();
     }
 
+    /**
+     * The hr role existed and nobody could use it: the sign-in only let
+     * 'admin' through, and sent everybody not literally called 'hr' to the
+     * system admin dashboard.
+     */
+    public function test_an_hr_officer_signs_in_and_lands_on_hr(): void
+    {
+        $number = $this->number();
+        $this->account('hr', $number);
+
+        Volt::test('auth.adminlogin')
+            ->set('username', $number)
+            ->set('password', 'correct-horse-9')
+            ->call('login')
+            ->assertHasNoErrors()
+            ->assertRedirect(route('hr.home'));
+
+        $this->assertAuthenticated();
+    }
+
     /** The real account: one person, one login, carrying her number. */
     public function test_the_hr_account_carries_her_employee_number(): void
     {

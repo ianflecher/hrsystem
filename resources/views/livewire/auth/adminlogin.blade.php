@@ -52,7 +52,7 @@ new #[Layout('components.layouts.employee')] class extends Component
     }
 
     // Check if user has admin role
-    if ($user->role !== 'admin') {
+    if (! in_array($user->role, ['admin', 'hr'], true)) {
         throw ValidationException::withMessages([
             'username' => __('Access denied. Administrator credentials required.'),
         ]);
@@ -68,7 +68,7 @@ new #[Layout('components.layouts.employee')] class extends Component
     // Get the authenticated user
     $user = Auth::user();
     
-    if ($user->role !== 'admin') {
+    if (! in_array($user->role, ['admin', 'hr'], true)) {
         Auth::logout();
         throw ValidationException::withMessages([
             'username' => __('Insufficient permissions. Administrator access required.'),
@@ -88,8 +88,14 @@ new #[Layout('components.layouts.employee')] class extends Component
             'hr'    => route('hr.home'),
         ];
 
-        // Default to admin dashboard if username not found
-        return redirect()->to($redirects[$username] ?? route('admin.dashboard'));
+        if (isset($redirects[$username])) {
+            return redirect()->to($redirects[$username]);
+        }
+
+        // By role for everybody else. Going by username alone sent any HR
+        // officer who was not literally called 'hr' to the system admin
+        // dashboard - the hr role existed and nobody could reach HR with it.
+        return redirect()->to(Auth::user()?->role === 'hr' ? route('hr.home') : route('admin.dashboard'));
     }
 }
 ?>
