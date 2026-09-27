@@ -59,7 +59,10 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             'today' => DB::table('hr_attendance')
                 ->where('employee_id', $this->employee->employee_id)
                 ->whereDate('date', $today)
-                ->select('status', 'time_in', 'time_out')
+                // All six, not just the two: the button decides which punch
+                // to make from what is already recorded, and columns it cannot
+                // see read as empty - so it offered the same punch forever.
+                ->select('status', ...array_keys(\App\Support\WorkDay::PUNCHES))
                 ->first(),
             
             'month_stats' => DB::table('hr_attendance')
@@ -117,6 +120,67 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             ->first();
     }
     
+    /**
+     * The next punch this person owes, or null when the day is complete.
+     *
+     * A day is six punches and the button is one, so which punch it makes is
+     * decided by what is already recorded rather than by asking somebody to
+     * pick. Picking is how a lunch gets filed as a coffee break.
+     */
+    public function nextPunch(): ?string
+    {
+        $today = $this->attendanceStats['today'] ?? null;
+
+        foreach (array_keys(\App\Support\WorkDay::PUNCHES) as $column) {
+            if (! ($today->{$column} ?? null)) {
+                return $column;
+            }
+        }
+
+        return null;
+    }
+
+    public function nextPunchLabel(): ?string
+    {
+        $next = $this->nextPunch();
+
+        return $next ? \App\Support\WorkDay::PUNCHES[$next] : null;
+    }
+
+    /**
+     * Records the next punch of the day.
+     *
+     * Only ever fills the next empty slot in order, so a double tap cannot
+     * turn a lunch into a final out and end somebody's day at noon.
+     */
+    public function punch()
+    {
+        $next = $this->nextPunch();
+
+        if (! $next) {
+            session()->flash('error', 'Your day is already complete.');
+
+            return;
+        }
+
+        $today = Carbon::today();
+
+        $update = [$next => now(), 'updated_at' => now()];
+
+        if ($next === 'time_in') {
+            $update['status'] = Tardiness::isLate(now(), $this->employee->shift_start ?? null)
+                ? 'late' : 'present';
+        }
+
+        DB::table('hr_attendance')->updateOrInsert(
+            ['employee_id' => $this->employee->employee_id, 'date' => $today],
+            $update,
+        );
+
+        session()->flash('success', \App\Support\WorkDay::PUNCHES[$next].' recorded at '.now()->format('g:i a').'.');
+        $this->loadAttendanceStats();
+    }
+
     public function clockIn()
     {
         $today = Carbon::today();
@@ -218,16 +282,16 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                     </svg>
                 </div>
             </div>
-            <div class="mt-4 flex space-x-2">
-                @if(!$attendanceStats['today'] || !$attendanceStats['today']->time_in)
-                    <button wire:click="clockIn" class="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700">
-                        Clock In
+            {{-- One button, and it says which of the six punches it will
+                 make. A row of six would let somebody file their lunch as a
+                 final out and end their day at noon. --}}
+            <div class="mt-4">
+                @if($this->nextPunchLabel())
+                    <button wire:click="punch" class="w-full bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700">
+                        {{ $this->nextPunchLabel() }}
                     </button>
-                @endif
-                @if($attendanceStats['today'] && $attendanceStats['today']->time_in && !$attendanceStats['today']->time_out)
-                    <button wire:click="clockOut" class="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700">
-                        Clock Out
-                    </button>
+                @else
+                    <p class="text-sm text-gray-500 text-center py-2">Day complete.</p>
                 @endif
             </div>
         </div>

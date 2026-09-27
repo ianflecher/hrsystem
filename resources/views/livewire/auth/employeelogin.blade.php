@@ -31,14 +31,16 @@ new #[Layout('components.layouts.landing')] class extends Component
     
     // Debug: Let's see what we're looking for
 
-    // Find user by checking both email and username
+    // Find staff by email, username, or the company employee number.
+    // The internal employees.employee_id is a database id; employee_no is the
+    // number HR gives to the person, such as IC-00333.
     $user = DB::table('users')
+        ->leftJoin('employees', 'employees.user_id', '=', 'users.user_id')
+        ->select('users.*')
         ->where(function($query) use ($usernameInput) {
-            // Try email first
-            $query->where('email', $usernameInput);
-            
-            // Also try username (in case user entered username instead of email)
-            $query->orWhere('username', $usernameInput);
+            $query->whereRaw('LOWER(users.email) = ?', [strtolower($usernameInput)])
+                ->orWhereRaw('LOWER(users.username) = ?', [strtolower($usernameInput)])
+                ->orWhereRaw('LOWER(employees.employee_no) = ?', [strtolower($usernameInput)]);
         })
         ->first(); // Remove role filter temporarily for debugging
 

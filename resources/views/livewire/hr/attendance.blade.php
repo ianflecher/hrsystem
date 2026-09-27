@@ -630,8 +630,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         <th>Employee</th>
                         <th>Department</th>
                         <th>Job Title</th>
-                        <th>Time In</th>
-                        <th>Time Out</th>
+                        <th>First in</th>
+                        <th>Lunch in</th>
+                        <th>Lunch out</th>
+                        <th>CB in</th>
+                        <th>CB out</th>
+                        <th>Final out</th>
                         <th>Status</th>
                         <th>Hours</th>
                         <th>Actions</th>
@@ -644,12 +648,19 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 $timeIn = $record->time_in ? date('h:i A', strtotime($record->time_in)) : '--:--';
                                 $timeOut = $record->time_out ? date('h:i A', strtotime($record->time_out)) : '--:--';
                                 
-                                // Calculate hours if both times exist
+                                // Hours actually worked: the breaks that were
+                                // punched come off. This used to be the raw
+                                // span from first in to final out, so an hour
+                                // at lunch was shown as an hour at the machine.
                                 $hours = '--';
                                 if ($record->time_in && $record->time_out) {
-                                    $diff = strtotime($record->time_out) - strtotime($record->time_in);
-                                    $hours = round($diff / 3600, 1) . 'h';
+                                    $hours = \App\Support\WorkDay::workedHours($record) . 'h';
                                 }
+
+                                $breakMinutes = \App\Support\WorkDay::breakMinutes($record);
+                                $dayProblems = \App\Support\WorkDay::problems($record);
+
+                                $punchTime = fn ($value) => $value ? date('h:i A', strtotime($value)) : '--:--';
                                 
                                 // Measured against their own shift. Either can be
                                 // unknowable - no shift set, or no scan - and then
@@ -694,8 +705,20 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         <span class="block text-xs font-sans text-amber-700">{{ $minutesLate }} min late</span>
                                     @endif
                                 </td>
+                                <td class="font-mono">{{ $punchTime($record->lunch_in ?? null) }}</td>
+                                <td class="font-mono">
+                                    {{ $punchTime($record->lunch_out ?? null) }}
+                                    @if($breakMinutes > 0)
+                                        <span class="block text-xs font-sans text-gray-500">{{ $breakMinutes }} min break</span>
+                                    @endif
+                                </td>
+                                <td class="font-mono">{{ $punchTime($record->cb_in ?? null) }}</td>
+                                <td class="font-mono">{{ $punchTime($record->cb_out ?? null) }}</td>
                                 <td class="font-mono">
                                     {{ $timeOut }}
+                                    @if($dayProblems)
+                                        <span class="block text-xs font-sans text-amber-700" title="{{ implode('; ', $dayProblems) }}">{{ $dayProblems[0] }}</span>
+                                    @endif
                                     @if($minutesShort !== null && $minutesShort > \App\Support\Tardiness::GRACE_MINUTES)
                                         <span class="block text-xs font-sans text-amber-700">{{ $minutesShort }} min undertime</span>
                                     @endif

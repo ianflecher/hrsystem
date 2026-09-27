@@ -34,7 +34,7 @@ class CareersVoices
         ['pic' => 'voice-1', 'role' => 'Sales agent, VIP team', 'name' => 'Pau',
          'quote' => 'Most of my clients come back, and that is the part I like - you end up building something with them, not just closing an order.'],
 
-        ['pic' => 'voice-2', 'role' => 'Meta team', 'name' => 'Ysa',
+        ['pic' => 'voice-2', 'role' => 'Sales agent, Meta team', 'name' => 'Ysa',
          'quote' => 'I came in straight out of school with no work experience at all. They taught me the system and then let me run with it.'],
 
         ['pic' => 'voice-3', 'role' => 'Marketing team', 'name' => 'Joey',

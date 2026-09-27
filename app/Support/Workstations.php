@@ -29,7 +29,6 @@ class Workstations
         'Loading the printer',
         'Embroidery line',
         'Laser cutting',
-        'Cutting control station',
         'Finishing and inspection',
         'Sewing station',
         'Materials store',
@@ -38,6 +37,7 @@ class Workstations
         // agent who took the order and the HR desk behind them.
         'Sales desk',
         'The HR desk',
+        'OJT preparation',
     ];
 
     /**

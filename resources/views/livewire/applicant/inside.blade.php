@@ -298,7 +298,7 @@ new #[Layout('components.layouts.applicant')] class extends Component
     </style>
 
     {{-- ------------------------------------------------------------ hero --}}
-    @php $hero = $this->pic('hero'); @endphp
+    @php $hero = $this->pic('welcome-ojt') ?: $this->pic('hero'); @endphp
     <div class="profile__hero">
         <div class="profile__hero-img {{ $hero ? '' : 'profile__hero-img--empty' }}"
              @if ($hero) style="background-image: url('{{ $hero }}')" @endif></div>

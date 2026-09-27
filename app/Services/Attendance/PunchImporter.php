@@ -5,6 +5,7 @@ namespace App\Services\Attendance;
 use App\Support\Tardiness;
 use App\Support\ShiftSchedule;
 use Carbon\Carbon;
+use App\Support\WorkDay;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -77,20 +78,14 @@ class PunchImporter
                     'employee_id' => $ids[$bio],
                     'date'        => $moment->toDateString(),
                     'employee'    => $employees[$bio] ?? null,
-                    'first'       => $moment,
-                    'last'        => $moment,
+                    // Every punch, not just the outer two: the middle ones are
+                    // the breaks, and keeping only first and last was what made
+                    // them invisible.
+                    'punches'     => [],
                 ];
-
-                continue;
             }
 
-            if ($moment->lt($byEmployeeDay[$key]['first'])) {
-                $byEmployeeDay[$key]['first'] = $moment;
-            }
-
-            if ($moment->gt($byEmployeeDay[$key]['last'])) {
-                $byEmployeeDay[$key]['last'] = $moment;
-            }
+            $byEmployeeDay[$key]['punches'][] = $moment;
         }
 
         $days = 0;
@@ -105,35 +100,26 @@ class PunchImporter
 
                 // Incremental exports must retain punches imported earlier.
                 if ($existing && $existing->notes === 'From the biometric scanner') {
-                    foreach ([$existing->time_in, $existing->time_out] as $stamp) {
-                        if ($stamp) {
-                            $moment = Carbon::parse($stamp);
-                            if ($moment->lt($day['first'])) {
-                                $day['first'] = $moment;
-                            }
-                            if ($moment->gt($day['last'])) {
-                                $day['last'] = $moment;
-                            }
+                    foreach (array_keys(WorkDay::PUNCHES) as $column) {
+                        if ($existing->{$column} ?? null) {
+                            $day['punches'][] = Carbon::parse($existing->{$column});
                         }
                     }
                 }
 
-                // A single punch is an arrival, not a whole day - leaving
-                // time_out null is truer than pretending they left when they
-                // arrived.
-                $timeOut = $day['last']->equalTo($day['first']) ? null : $day['last']->toDateTimeString();
+                $slots = self::intoSlots($day['punches']);
+
+                $day['first'] = $slots['time_in'] ? Carbon::parse($slots['time_in']) : null;
 
                 $shift = $day['employee']
                     ? ShiftSchedule::forEmployeeDate($day['employee'], $day['date'])
                     : ['rest' => false, 'start' => null, 'end' => null];
 
-                $status = (! $shift['rest'] && Tardiness::isLate($day['first'], $shift['start']))
+                $status = ($day['first'] && ! $shift['rest'] && Tardiness::isLate($day['first'], $shift['start']))
                     ? 'late'
                     : 'present';
 
-                $row = [
-                    'time_in'    => $day['first']->toDateTimeString(),
-                    'time_out'   => $timeOut,
+                $row = $slots + [
                     'status'     => $status,
                     'updated_at' => now(),
                 ];
@@ -179,5 +165,61 @@ class PunchImporter
             'unknown'   => array_map('strval', array_keys($unknown)),
             'skipped'   => $skipped,
         ];
+    }
+
+    /**
+     * A day's punches, in order, into the six slots a day has.
+     *
+     * The scanner gives a stream with no labels - it records that somebody
+     * touched it, not why - so the order is all there is to go on. Six or more
+     * fills every slot; anything in between fills as far as it reaches and
+     * leaves the rest null rather than guessing which break was skipped.
+     *
+     * A lone punch is an arrival, not a whole day: leaving time_out null is
+     * truer than pretending somebody left the moment they came in.
+     *
+     * @param  list<\Carbon\Carbon>  $punches
+     * @return array<string, ?string>
+     */
+    private static function intoSlots(array $punches): array
+    {
+        $slots = array_fill_keys(array_keys(WorkDay::PUNCHES), null);
+
+        // Sorted and de-duplicated: a scanner double-read a second apart is one
+        // punch, and two rows for it would shift every later slot along by one.
+        $unique = [];
+
+        foreach ($punches as $punch) {
+            $unique[$punch->format('Y-m-d H:i')] = $punch;
+        }
+
+        $ordered = array_values($unique);
+        usort($ordered, fn ($a, $b) => $a <=> $b);
+
+        if (! $ordered) {
+            return $slots;
+        }
+
+        $keys = array_keys(WorkDay::PUNCHES);
+
+        if (count($ordered) === 1) {
+            $slots['time_in'] = $ordered[0]->toDateTimeString();
+
+            return $slots;
+        }
+
+        // The last punch is always the final out, whatever else was recorded.
+        $slots['time_out'] = end($ordered)->toDateTimeString();
+        $middle = array_slice($ordered, 0, -1);
+
+        foreach ($middle as $i => $punch) {
+            if (! isset($keys[$i]) || $keys[$i] === 'time_out') {
+                break;
+            }
+
+            $slots[$keys[$i]] = $punch->toDateTimeString();
+        }
+
+        return $slots;
     }
 }

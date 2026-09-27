@@ -29,4 +29,13 @@ return [
         'comm_key' => env('ZKTECO_COMM_KEY'),
     ],
 
+    /*
+     * ZKTime / Attendance Management Program stores downloaded logs in an
+     * Access database. When direct device pull does not match a scanner model,
+     * HR can download logs in ZKTime first, then HRIS imports this database.
+     */
+    'zktime' => [
+        'mdb_path' => env('ZKTIME_MDB_PATH', 'C:\\Program Files (x86)\\ZKTeco\\att2000.mdb'),
+    ],
+
 ];

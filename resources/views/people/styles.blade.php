@@ -80,16 +80,22 @@
     .people .view-switch {display:flex;padding:4px;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px}
     .people .view-switch button {min-height:34px;padding:6px 12px;background:transparent;color:var(--ink-2);border-color:transparent}
     .people .view-switch button[aria-pressed=true] {background:var(--surface);color:var(--ink);box-shadow:var(--shadow);border-color:var(--border)}
-    .people .calendar {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;min-width:750px}
-    .people .weekday {font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2);padding:0 8px 8px}
-    .people .day {min-height:118px;border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;background:var(--surface);min-width:0}
-    .people .day.today {border-color:var(--accent)}
-    .people .day-number {display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:50%;font-weight:600}
-    .people .today .day-number {background:var(--accent);color:#fff}
+    .people .calendar {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;min-width:750px}
+    .people .weekday {font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#475569;padding:0 10px 2px;font-weight:700}
+    .people .day {min-height:118px;border:1px solid #dbe4ef;border-radius:10px;padding:10px;font-size:12px;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);min-width:0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+    .people .day--work {border-color:#bfdbfe;background:linear-gradient(180deg,#ffffff 0%,#eff6ff 100%)}
+    .people .day--rest {border-color:#cbd5e1;background:linear-gradient(180deg,#ffffff 0%,#f1f5f9 100%)}
+    .people .day--holiday {border-color:#fde68a;background:linear-gradient(180deg,#fff 0%,#fffbeb 100%)}
+    .people .day--assigned {border-color:#c4b5fd;background:linear-gradient(180deg,#fff 0%,#f5f3ff 100%)}
+    .people .day.today {border-color:#dc2626;box-shadow:0 0 0 2px rgba(220,38,38,.12),0 8px 20px rgba(15,23,42,.08)}
+    .people .day-number {display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:999px;font-weight:700;color:#0f172a;background:rgba(255,255,255,.7)}
+    .people .today .day-number {background:#dc2626;color:#fff}
     .people .agenda-date {display:none}
-    .people .shift {background:var(--accent-soft);border-left:3px solid var(--accent);border-radius:5px;padding:7px;margin-top:7px;overflow-wrap:anywhere;line-height:1.6}
-    .people .rest {background:var(--surface-2);border-color:var(--ink-3)}
-    .people .holiday {background:var(--warn-soft);border-color:var(--warn)}
+    .people .shift {background:#e8f1ff;border-left:4px solid #2563eb;border-radius:7px;padding:8px;margin-top:9px;overflow-wrap:anywhere;line-height:1.6;color:#0f172a}
+    .people .shift--work {background:#dbeafe;border-color:#2563eb}
+    .people .shift--assigned {background:#ede9fe;border-color:#7c3aed}
+    .people .rest {background:#e2e8f0;border-color:#64748b;color:#334155}
+    .people .holiday {background:#fef3c7;border-color:#d97706;color:#78350f}
     .people .shift button {font-size:11px;min-height:30px;padding:4px 7px;margin-top:6px}
     .people .schedule[data-view=agenda] .calendar {display:flex;flex-direction:column;min-width:0;gap:10px}
     .people .schedule[data-view=agenda] .weekday, .people .schedule[data-view=agenda] .calendar-blank {display:none}

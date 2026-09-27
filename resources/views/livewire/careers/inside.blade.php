@@ -43,7 +43,7 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
 
 <div>
     {{-- ------------------------------------------------------------ hero --}}
-    @php $insideHero = $this->pic('inside-hero'); @endphp
+    @php $insideHero = $this->pic('welcome-ojt') ?: $this->pic('inside-hero'); @endphp
     <section class="hero hero--story" id="top">
         <div class="hero__img {{ $insideHero ? '' : 'hero__img--empty' }}"
              @if ($insideHero) style="background-image: url('{{ $insideHero }}')" @endif></div>

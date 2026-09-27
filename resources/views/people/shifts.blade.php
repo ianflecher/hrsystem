@@ -45,13 +45,8 @@
     @endif
 @endif
 
-<form method="GET" class="row card">
-    <label>Month <input type="month" name="month" value="{{ $month->format('Y-m') }}" required></label>
-    <button>View calendar</button>
-</form>
-
 <div class="card scroll"><div class="calendar">
-    @foreach(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] as $day)<strong>{{ $day }}</strong>@endforeach
+    @foreach(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] as $day)<strong class="weekday">{{ $day }}</strong>@endforeach
     @for($blank = 1; $blank < $month->dayOfWeekIso; $blank++)<div></div>@endfor
 
     @for($d = 1; $d <= $month->daysInMonth; $d++)
@@ -60,12 +55,13 @@
         @php($holiday = $extra['holidays']->get($date))
         @php($assigned = $extra['assignments']->get($date, collect()))
         @php($working = $extra['staff']->reject(fn ($person) => WorkWeek::restsOn($person->rest_days, $day)))
+        @php($dayClass = $holiday ? 'day--holiday' : ($assigned->isNotEmpty() ? 'day--assigned' : ($working->isEmpty() ? 'day--rest' : 'day--work')))
 
-        <div class="day">
-            <strong>{{ $d }}</strong>
+        <div class="day {{ $dayClass }} {{ $date === now()->toDateString() ? 'today' : '' }}">
+            <span class="day-number">{{ $d }}</span>
 
             @if($holiday)
-                <div class="shift rest">
+                <div class="shift holiday">
                     <strong>{{ $holiday->name }}</strong><br>
                     {{ \App\Services\HolidayPay::describe($holiday->classification ?? $holiday->type) }}
                     @if($hr)
@@ -76,7 +72,7 @@
                 </div>
             @elseif($assigned->isNotEmpty())
                 @foreach($assigned as $shift)
-                    <div class="shift {{ $shift->rest_day ? 'rest' : '' }}">
+                    <div class="shift {{ $shift->rest_day ? 'rest' : 'shift--assigned' }}">
                         <strong>{{ $shift->full_name }}</strong><br>
                         @if($shift->rest_day)
                             Rest day
@@ -100,12 +96,12 @@
                     </div>
                 @endforeach
             @elseif($hr)
-                <div class="shift">{{ $working->count() }} default working · {{ $extra['staff']->count() - $working->count() }} resting</div>
+                <div class="shift shift--work">{{ $working->count() }} default working · {{ $extra['staff']->count() - $working->count() }} resting</div>
             @elseif($working->isEmpty())
                 <div class="shift rest">Rest day</div>
             @else
                 @php($me = $extra['staff']->first())
-                <div class="shift">
+                <div class="shift shift--work">
                     @if($me->shift_start)
                         {{ substr($me->shift_start, 0, 5) }}@if($me->shift_end)–{{ substr($me->shift_end, 0, 5) }}@endif
                     @else
