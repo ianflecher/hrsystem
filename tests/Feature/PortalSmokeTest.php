@@ -159,7 +159,10 @@ class PortalSmokeTest extends TestCase
     #[DataProvider('employeePages')]
     public function test_employee_pages_refuse_an_account_with_no_employee_record(string $uri): void
     {
-        $this->actingAs($this->userWithUsername('hr'))->get($uri)->assertForbidden();
+        // Its own account rather than borrowing 'hr', which had no employee
+        // record until HR's two accounts were merged - and then quietly
+        // stopped being an example of what this test is about.
+        $this->actingAs($this->accountWithNoEmployeeRecord())->get($uri)->assertForbidden();
     }
 
     public function test_applicant_page_renders_for_signed_in_user(): void
@@ -184,6 +187,22 @@ class PortalSmokeTest extends TestCase
      * sample staff in the database: invented people are indistinguishable from
      * real ones once seeded, and they show up in headcounts.
      */
+    private function accountWithNoEmployeeRecord(): User
+    {
+        $n = random_int(100000, 999999);
+
+        $user = User::create([
+            'full_name' => 'Smoke Test Non-Employee',
+            'username'  => "smokenoemp{$n}",
+            'email'     => "smokenoemp{$n}@example.test",
+            'password'  => 'Password!2345',
+            'role'      => 'admin',
+        ]);
+        $this->temporaryUserIds[] = $user->user_id;
+
+        return $user;
+    }
+
     private function temporaryEmployee(): User
     {
         $n = random_int(100000, 999999);

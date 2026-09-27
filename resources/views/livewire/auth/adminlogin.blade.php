@@ -25,28 +25,25 @@ new #[Layout('components.layouts.employee')] class extends Component
 {
     $this->validate();
 
-    // Prepare credentials for authentication
-    $credentials = ['password' => $this->password];
-    
-    // Determine if input is email or username
-    if (filter_var($this->username, FILTER_VALIDATE_EMAIL)) {
-        $credentials['email'] = $this->username;
-    } else {
-        $credentials['username'] = $this->username;
-    }
+    // Email, username, or company employee number - the same three the staff
+    // portal accepts, so HR can sign in with the ID on their card. The number
+    // lives on the employee record, so it is joined rather than stored twice.
+    $input = trim($this->username);
 
-    
-    // Check if user exists
     $user = DB::table('users')
-        ->where(function($query) use ($credentials) {
-            if (isset($credentials['email'])) {
-                $query->where('email', $credentials['email']);
-            } else {
-                $query->where('username', $credentials['username']);
-            }
+        ->leftJoin('employees', 'employees.user_id', '=', 'users.user_id')
+        ->where(function ($query) use ($input) {
+            $query->whereRaw('LOWER(users.email) = ?', [strtolower($input)])
+                ->orWhereRaw('LOWER(users.username) = ?', [strtolower($input)])
+                ->orWhereRaw('LOWER(employees.employee_no) = ?', [strtolower($input)]);
         })
-        ->whereNull('deleted_at')
+        ->whereNull('users.deleted_at')
+        ->select('users.*')
         ->first();
+
+    // Authenticate against the account that was found, whichever identifier
+    // found it. Auth::attempt only knows username and email.
+    $credentials = ['password' => $this->password, 'username' => $user->username ?? $input];
 
     if (!$user) {
         throw ValidationException::withMessages([
