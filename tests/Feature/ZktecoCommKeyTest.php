@@ -51,7 +51,11 @@ class ZktecoCommKeyTest extends TestCase
      */
     public function test_the_same_key_encodes_differently_per_session(): void
     {
-        $this->assertNotSame($this->encode(1234, 7), $this->encode(1234, 8),
+        // Sessions a whole byte apart. The protocol overwrites the third
+        // output byte with the tick, and after the half-swap that is where the
+        // session's lowest byte lands - so 7 and 8 genuinely encode alike. That
+        // is ZK's algorithm, not a bug here: the device accepts it.
+        $this->assertNotSame($this->encode(1234, 7), $this->encode(1234, 7 + 256),
             'the session was not mixed in, so one captured packet would work forever');
     }
 

@@ -69,7 +69,13 @@ class ZktecoPuller
             // Reading is quicker with the keypad disabled, and it stops a scan
             // landing halfway through the transfer.
             $device->disableDevice();
-            $raw = $device->getAttendance();
+
+            // Patient now that we know it is there. The handshake was short on
+            // purpose; the log read must not be, or it truncates silently and
+            // returns nothing at all.
+            $device->setReadTimeout(60);
+            // Our own decoder: the library's misreads this device's records.
+            $raw = $device->readAttendance();
         } finally {
             try {
                 $device->enableDevice();
@@ -85,9 +91,9 @@ class ZktecoPuller
         $punches = [];
 
         foreach ($raw as $row) {
-            // The device reports the enrolment number as 'id'; 'uid' is its own
-            // internal row number and is not stable across a device reset.
-            $bio = (string) ($row['id'] ?? '');
+            // The badge (enrolment number), not the device's internal uid, which
+            // is not stable across a reset.
+            $bio = (string) ($row['biometric_id'] ?? $row['id'] ?? '');
             $stamp = $row['timestamp'] ?? null;
 
             if ($bio === '' || ! $stamp) {

@@ -43,12 +43,26 @@ class ZktecoDevice extends ZKTeco
     ) {
         parent::__construct($ip, $port);
 
-        // The library waits 60 seconds for a reply. A device that is going to
-        // answer answers in milliseconds - it is on the same switch - so the
-        // only thing a minute buys is HR staring at a frozen screen before
-        // being told it did not work. Five seconds is generous.
+        // Short for the handshake: a device that is going to answer does so in
+        // milliseconds, and a minute of waiting only ever means HR staring at a
+        // frozen screen before being told it failed.
+        $this->setReadTimeout($timeoutSeconds);
+    }
+
+    /**
+     * How long to wait for each reply.
+     *
+     * Two different jobs want two different answers. Connecting should give up
+     * fast; reading the log should not. A 107,000-record transfer is hundreds
+     * of replies, and cutting each one off at five seconds did not raise an
+     * error - it made the read come back as an empty array, which is
+     * indistinguishable from a device with no punches on it. That cost an
+     * afternoon of looking in the wrong place.
+     */
+    public function setReadTimeout(int $seconds): void
+    {
         socket_set_option($this->_zkclient, SOL_SOCKET, SO_RCVTIMEO,
-            ['sec' => max(1, $timeoutSeconds), 'usec' => 0]);
+            ['sec' => max(1, $seconds), 'usec' => 0]);
     }
 
     /**
@@ -164,6 +178,115 @@ class ZktecoDevice extends ZKTeco
         $b = unpack('C4', $x);
         $tick = $ticks & 0xFF;
 
-        return pack('C4', $b[1] ^ $tick, $b[2] ^ $tick, $b[3], $b[4] ^ $tick);
+        // The third byte is the tick itself, not the third byte of the key.
+        // Getting that wrong produces a packet the device rejects for a
+        // reason it cannot tell you apart from a wrong key, which is how it
+        // read as "the scanner refused the COM key" when the key was right.
+        return pack('C4', $b[1] ^ $tick, $b[2] ^ $tick, $tick, $b[4] ^ $tick);
+    }
+
+    /**
+     * The attendance log, decoded for this device's record format.
+     *
+     * rats/zkteco reads 40-byte records at fixed offsets. This MB560-VL
+     * (firmware 6.60) writes 49-byte records, so the library read every
+     * timestamp from the wrong four bytes and produced dates from 2000 to
+     * 2133 - and different totals on every pull, as the misalignment drifted.
+     *
+     * The layout was measured, not assumed: three punches known from ZKTime
+     * were located in the raw stream, each badge sitting 25 bytes before its
+     * timestamp and the records spaced a whole multiple of 49 apart. A
+     * 12-byte header precedes them.
+     *
+     *   bytes 0-1   internal uid
+     *   bytes 2-25  badge number, null padded
+     *   byte  26    status
+     *   bytes 27-30 timestamp
+     *   byte  31    punch type
+     *
+     * The record width is still checked rather than trusted: whichever of 49
+     * or 40 produces believable dates for the first records is used, so a
+     * device on the older format is not silently misread the same way.
+     *
+     * @return list<array{biometric_id: string, timestamp: string}>
+     */
+    public function readAttendance(): array
+    {
+        $this->_command(Util::CMD_ATT_LOG_RRQ, '', Util::COMMAND_TYPE_DATA);
+
+        return self::decodeLog((string) Util::recData($this));
+    }
+
+    /**
+     * The raw attendance stream into punches. Separate from the read so it can
+     * be tested against real bytes without a device on the network.
+     *
+     * @return list<array{biometric_id: string, timestamp: string}>
+     */
+    public static function decodeLog(string $raw): array
+    {
+        foreach ([[12, 49, 2, 27], [10, 40, 4, 29]] as [$header, $width, $badgeAt, $timeAt]) {
+            if (! self::looksRight($raw, $header, $width, $timeAt)) {
+                continue;
+            }
+
+            $punches = [];
+
+            for ($o = $header; $o + $width <= strlen($raw); $o += $width) {
+                $badge = rtrim(substr($raw, $o + $badgeAt, 24), "\0");
+                $when = self::decodeTime(unpack('V', substr($raw, $o + $timeAt, 4))[1]);
+
+                // An empty slot decodes to the device's epoch; it is not a punch.
+                if ($badge === '' || str_starts_with($when, '2000-')) {
+                    continue;
+                }
+
+                $punches[] = ['biometric_id' => $badge, 'timestamp' => $when];
+            }
+
+            return $punches;
+        }
+
+        throw new \RuntimeException(
+            'The scanner returned attendance in a format this does not recognise. '
+            .'Nothing was imported rather than risk importing wrong dates.'
+        );
+    }
+
+    /** Do the first few records decode to a date anyone could have punched? */
+    private static function looksRight(string $raw, int $header, int $width, int $timeAt): bool
+    {
+        $checked = 0;
+        $good = 0;
+
+        for ($o = $header; $o + $width <= strlen($raw) && $checked < 20; $o += $width) {
+            $year = (int) substr(self::decodeTime(unpack('V', substr($raw, $o + $timeAt, 4))[1]), 0, 4);
+            $checked++;
+
+            if ($year >= 2015 && $year <= (int) date('Y') + 1) {
+                $good++;
+            }
+        }
+
+        return $checked > 0 && $good >= $checked * 0.8;
+    }
+
+    /**
+     * The device's packed time, in integer arithmetic.
+     *
+     * The library's version divides with floats and relies on PHP truncating
+     * them back, which it now warns about - and float division is exactly the
+     * place a punch could land a second or a day off without anyone noticing.
+     */
+    private static function decodeTime(int $t): string
+    {
+        $second = $t % 60; $t = intdiv($t, 60);
+        $minute = $t % 60; $t = intdiv($t, 60);
+        $hour = $t % 24; $t = intdiv($t, 24);
+        $day = $t % 31 + 1; $t = intdiv($t, 31);
+        $month = $t % 12 + 1; $t = intdiv($t, 12);
+        $year = $t + 2000;
+
+        return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $year, $month, $day, $hour, $minute, $second);
     }
 }
