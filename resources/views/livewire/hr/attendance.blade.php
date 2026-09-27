@@ -25,8 +25,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public $filters = [
         'status' => null,
         'department' => null,
+        'company' => null,
         'search' => null,
     ];
+
+    /** The two businesses, the same list the employee screen offers. */
+    public array $companies = ['GKLASAM OPC', 'Imprint Cafe'];
     public $stats = [];
 
     public function mount()
@@ -55,6 +59,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'u.full_name',
                 'u.username',
                 'u.email',
+                'e.company',
                 'd.department_name'
             )
             ->leftJoin('employees as e', 'a.employee_id', '=', 'e.employee_id')
@@ -68,6 +73,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         if ($this->filters['department']) {
             $query->where('e.department_id', $this->filters['department']);
+        }
+
+        if ($this->filters['company']) {
+            $query->where('e.company', $this->filters['company']);
         }
 
         if ($this->filters['search']) {
@@ -104,6 +113,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         if ($this->filters['department']) {
             $query->where('e.department_id', $this->filters['department']);
+        }
+
+        if ($this->filters['company']) {
+            $query->where('e.company', $this->filters['company']);
         }
 
         if ($this->filters['search']) {
@@ -511,6 +524,17 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 </select>
             </div>
 
+            <!-- Company Filter -->
+            <div>
+                <label class="form-label">Company</label>
+                <select wire:model.live="filters.company" class="form-input">
+                    <option value="">All companies</option>
+                    @foreach($companies as $c)
+                        <option value="{{ $c }}">{{ $c }}</option>
+                    @endforeach
+                </select>
+            </div>
+
             <!-- Department Filter -->
             <div>
                 <label class="form-label">Department</label>
@@ -628,6 +652,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 <thead>
                     <tr>
                         <th>Employee</th>
+                        <th>Company</th>
                         <th>Department</th>
                         <th>Job Title</th>
                         <th>First in</th>
@@ -693,6 +718,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         </div>
                                     </div>
                                 </td>
+                                <td class="text-sm text-gray-700">{{ $record->company ?? '-' }}</td>
                                 <td>
                                     <span class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                         {{ $record->department_name ?? 'No Department' }}

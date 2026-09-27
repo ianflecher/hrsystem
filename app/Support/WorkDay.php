@@ -70,7 +70,10 @@ class WorkDay
             $to = $punches[$end];
 
             if ($from && $to && $to->greaterThan($from)) {
-                $minutes += $from->diffInMinutes($to);
+                // Carbon returns a float here, and adding it to an int is
+                // deprecated - it truncates silently, so a break is rounded
+                // down by up to a minute without anybody being told.
+                $minutes += (int) round($from->diffInMinutes($to));
             }
         }
 
@@ -107,7 +110,7 @@ class WorkDay
             return 0;
         }
 
-        $span = $in->diffInMinutes($out);
+        $span = (int) round($in->diffInMinutes($out));
 
         $break = self::hasPunchedBreak($row)
             ? self::breakMinutes($row)

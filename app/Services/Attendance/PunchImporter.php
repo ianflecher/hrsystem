@@ -85,7 +85,19 @@ class PunchImporter
                 ];
             }
 
-            $byEmployeeDay[$key]['punches'][] = $moment;
+            // The device's own in/out flag when it sends one. It only has
+            // those two keys - no break-in or break-out - so it cannot say
+            // lunch from coffee break, but knowing which way somebody went
+            // through the door survives a missed punch, and counting
+            // positions does not.
+            $direction = strtolower(trim((string) ($punch['type'] ?? '')));
+            $direction = match (true) {
+                in_array($direction, ['i', '0', 'in'], true) => 'in',
+                in_array($direction, ['o', '1', 'out'], true) => 'out',
+                default => null,
+            };
+
+            $byEmployeeDay[$key]['punches'][] = ['at' => $moment, 'direction' => $direction];
         }
 
         $days = 0;
@@ -102,7 +114,11 @@ class PunchImporter
                 if ($existing && $existing->notes === 'From the biometric scanner') {
                     foreach (array_keys(WorkDay::PUNCHES) as $column) {
                         if ($existing->{$column} ?? null) {
-                            $day['punches'][] = Carbon::parse($existing->{$column});
+                            $day['punches'][] = [
+                                'at' => Carbon::parse($existing->{$column}),
+                                // A slot already knows which way it was.
+                                'direction' => in_array($column, ['time_in', 'lunch_out', 'cb_out'], true) ? 'in' : 'out',
+                            ];
                         }
                     }
                 }
@@ -168,56 +184,65 @@ class PunchImporter
     }
 
     /**
-     * A day's punches, in order, into the six slots a day has.
+     * A day's punches into the six slots a day has.
      *
-     * The scanner gives a stream with no labels - it records that somebody
-     * touched it, not why - so the order is all there is to go on. Six or more
-     * fills every slot; anything in between fills as far as it reaches and
-     * leaves the rest null rather than guessing which break was skipped.
+     * Position is the rule, because it is the only thing that holds. The first
+     * punch opens the day, the last closes it, and what falls between is the
+     * lunch and then the coffee break - which is optional, so four punches are
+     * a day with a lunch and no break rather than a day missing two punches.
      *
-     * A lone punch is an arrival, not a whole day: leaving time_out null is
-     * truer than pretending somebody left the moment they came in.
+     * The device's in/out flag is not used to shape the day. It has only two
+     * keys and staff use them loosely - the real export has people punching
+     * out twice in a row and in again the next morning - so reading the shape
+     * from the flags produced days with no complete break at all where the
+     * order plainly showed one.
      *
-     * @param  list<\Carbon\Carbon>  $punches
+     * The flag is still worth one thing: telling an arrival from a departure
+     * when there is a single punch, which order alone cannot do.
+     *
+     * @param  list<array{at: \Carbon\Carbon, direction: ?string}>  $punches
      * @return array<string, ?string>
      */
     private static function intoSlots(array $punches): array
     {
         $slots = array_fill_keys(array_keys(WorkDay::PUNCHES), null);
 
-        // Sorted and de-duplicated: a scanner double-read a second apart is one
-        // punch, and two rows for it would shift every later slot along by one.
+        // A scanner double-read a minute apart is one punch. Two rows for it
+        // would shift every later slot and turn a lunch into a coffee break.
         $unique = [];
 
         foreach ($punches as $punch) {
-            $unique[$punch->format('Y-m-d H:i')] = $punch;
+            $unique[$punch['at']->format('Y-m-d H:i')] = $punch;
         }
 
         $ordered = array_values($unique);
-        usort($ordered, fn ($a, $b) => $a <=> $b);
+        usort($ordered, fn ($a, $b) => $a['at'] <=> $b['at']);
 
         if (! $ordered) {
             return $slots;
         }
 
-        $keys = array_keys(WorkDay::PUNCHES);
-
+        // One punch is half a day. Which half is the one thing the flag can
+        // say that the order cannot: an out on its own is somebody leaving
+        // whose arrival was missed, not somebody arriving.
         if (count($ordered) === 1) {
-            $slots['time_in'] = $ordered[0]->toDateTimeString();
+            $only = $ordered[0];
+            $slots[$only['direction'] === 'out' ? 'time_out' : 'time_in'] = $only['at']->toDateTimeString();
 
             return $slots;
         }
 
-        // The last punch is always the final out, whatever else was recorded.
-        $slots['time_out'] = end($ordered)->toDateTimeString();
-        $middle = array_slice($ordered, 0, -1);
+        // The last punch is the final out, whatever else the day holds.
+        $slots['time_out'] = end($ordered)['at']->toDateTimeString();
 
-        foreach ($middle as $i => $punch) {
-            if (! isset($keys[$i]) || $keys[$i] === 'time_out') {
+        $keys = ['time_in', 'lunch_in', 'lunch_out', 'cb_in', 'cb_out'];
+
+        foreach (array_slice($ordered, 0, -1) as $i => $punch) {
+            if (! isset($keys[$i])) {
                 break;
             }
 
-            $slots[$keys[$i]] = $punch->toDateTimeString();
+            $slots[$keys[$i]] = $punch['at']->toDateTimeString();
         }
 
         return $slots;

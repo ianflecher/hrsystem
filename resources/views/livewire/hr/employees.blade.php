@@ -84,6 +84,21 @@ new #[Layout('components.layouts.humanresource')] class extends Component
      * full-time/part-time/contract and describes a vacancy rather than a
      * person.
      */
+    /**
+     * The two businesses this system carries.
+     *
+     * Kept as a list rather than a table because it is two names that change
+     * about as often as the company does, and a lookup table would be a join
+     * on every screen for no benefit.
+     */
+    public array $companies = [
+        'GKLASAM OPC'  => 'GKLASAM OPC',
+        'Imprint Cafe' => 'Imprint Cafe',
+    ];
+
+    public string $company = 'GKLASAM OPC';
+    public string $companyFilter = 'all';
+
     public array $employmentTypes = [
         'Regular'       => 'Regular',
         'Probation'     => 'Probation',
@@ -129,7 +144,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->whereNull('u.deleted_at')
             ->select(
                 'e.employee_id', 'e.job_title', 'e.status', 'e.hire_date', 'e.salary', 'e.allowance',
-                'e.employment_type',
+                'e.employment_type', 'e.company',
                 'u.user_id', 'u.full_name', 'u.username', 'u.email', 'u.role',
                 'u.must_change_password',
                 'd.department_name'
@@ -137,6 +152,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         if ($this->statusFilter !== 'all') {
             $query->where('e.status', $this->statusFilter);
+        }
+
+        if ($this->companyFilter !== 'all') {
+            $query->where('e.company', $this->companyFilter);
         }
 
         if (trim($this->search) !== '') {
@@ -172,6 +191,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public function updatedSearch(): void
     {
         // Otherwise a search from page 6 lands on page 6 of a shorter list.
+        $this->resetPage();
+    }
+
+    public function setCompanyFilter(string $company): void
+    {
+        $this->companyFilter = $company;
         $this->resetPage();
     }
 
@@ -226,6 +251,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->hire_date     = $row->hire_date;
         $this->salary        = $row->salary;
         $this->employment_type = $this->knownEmploymentType($row->employment_type);
+        $this->company       = array_key_exists((string) $row->company, $this->companies) ? (string) $row->company : 'GKLASAM OPC';
         $this->payWas        = ['salary' => (float) $row->salary, 'allowance' => (float) ($row->allowance ?? 0)];
         $this->allowance     = $row->allowance;
         $this->status        = $row->status;
@@ -429,6 +455,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'allowance'     => ['nullable', 'numeric', 'min:0'],
             'status'        => ['required', Rule::in(array_keys($this->statuses))],
             'employment_type' => ['required', Rule::in(array_keys($this->employmentTypes))],
+            'company'       => ['required', Rule::in(array_keys($this->companies))],
             'role'          => ['required', Rule::in(array_keys($this->roles))],
         ]);
 
@@ -481,6 +508,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     'allowance'     => $allowance,
                     'status'        => $data['status'],
                     'employment_type' => $data['employment_type'],
+                    'company'       => $data['company'],
                     'updated_at'    => now(),
                 ]);
 
@@ -546,6 +574,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'allowance'     => $allowance,
                 'status'        => $data['status'],
                 'employment_type' => $data['employment_type'],
+                'company'       => $data['company'],
                 'created_at'    => now(),
                 'updated_at'    => now(),
             ]);
@@ -727,6 +756,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->last_name     = '';
         $this->salary        = '';
         $this->employment_type = 'Regular';
+        $this->company       = 'GKLASAM OPC';
         $this->payChangeReason = '';
         $this->payWas        = null;
         $this->allowance     = '';
@@ -868,6 +898,18 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     @endif
 
     <div class="flex flex-wrap items-center gap-3 mb-5">
+        {{-- Two businesses share this system, and an HR person is usually
+             looking at one of them. --}}
+        <div class="flex gap-2">
+            @foreach (array_merge(['all' => 'All companies'], $companies) as $key => $label)
+                <button wire:click="setCompanyFilter('{{ $key }}')"
+                        class="px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
+                               {{ $companyFilter === $key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50' }}">
+                    {{ $label }}
+                </button>
+            @endforeach
+        </div>
+
         <div class="flex gap-2">
             @foreach (array_merge(['all' => 'All'], $statuses) as $key => $label)
                 <button wire:click="setStatusFilter('{{ $key }}')"
@@ -889,7 +931,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         @if ($employees->isEmpty())
             <div class="px-6 py-14 text-center">
                 <p class="text-gray-900 font-medium">
-                    {{ trim($search) !== '' || $statusFilter !== 'all' ? 'Nobody matches that' : 'No employees yet' }}
+                    {{ trim($search) !== '' || $statusFilter !== 'all' || $companyFilter !== 'all' ? 'Nobody matches that' : 'No employees yet' }}
                 </p>
                 <p class="text-sm text-gray-600 mt-1">
                     {{ trim($search) !== '' || $statusFilter !== 'all'
@@ -906,6 +948,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             <th>Job title</th>
                             <th>Department</th>
                             <th>Role</th>
+                            <th>Company</th>
                             <th>Type</th>
                             <th>Status</th>
                             <th class="text-right">Actions</th>
@@ -926,6 +969,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <td class="text-gray-700">{{ $employee->job_title }}</td>
                                 <td class="text-gray-600">{{ $employee->department_name ?? '—' }}</td>
                                 <td class="text-gray-600">{{ $roles[$employee->role] ?? $employee->role }}</td>
+                                <td>
+                                    <span class="text-sm text-gray-700">{{ $employee->company ?: '-' }}</span>
+                                </td>
                                 <td>
                                     <span class="text-sm text-gray-700">{{ $employee->employment_type ?: '-' }}</span>
                                 </td>
@@ -1208,6 +1254,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                      different question from whether they are
                                      still here. A regular employee can be
                                      AWOL; an OJT is an OJT until they leave. --}}
+                                <label class="form-label" for="company">Company</label>
+                                <select id="company" wire:model="company" class="form-input">
+                                    @foreach ($companies as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                @error('company') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
                                 <label class="form-label" for="employment_type">Employment type</label>
                                 <select id="employment_type" wire:model="employment_type" class="form-input">
                                     @foreach ($employmentTypes as $value => $label)

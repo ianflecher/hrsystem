@@ -266,6 +266,116 @@ class SixPunchDayTest extends TestCase
         $this->assertSame('2026-06-05 17:00:00', $row->time_out);
     }
 
+    // ------------------------------------------------------- what the day is
+
+    /**
+     * First punch opens the day, last closes it, and the lunch and then the
+     * coffee break fall between. The coffee break is optional.
+     */
+    public function test_the_punches_fall_into_the_day_in_order(): void
+    {
+        (new PunchImporter)->import([
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-01 08:00:00', 'type' => 'i'],
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-01 12:00:00', 'type' => 'o'],
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-01 13:00:00', 'type' => 'i'],
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-01 15:00:00', 'type' => 'o'],
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-01 15:15:00', 'type' => 'i'],
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-01 17:00:00', 'type' => 'o'],
+        ]);
+
+        $row = DB::table('hr_attendance')->where('employee_id', $this->employeeId)
+            ->whereDate('date', '2026-07-01')->first();
+
+        $this->assertSame('2026-07-01 08:00:00', $row->time_in);
+        $this->assertSame('2026-07-01 12:00:00', $row->lunch_in);
+        $this->assertSame('2026-07-01 13:00:00', $row->lunch_out);
+        $this->assertSame('2026-07-01 15:00:00', $row->cb_in);
+        $this->assertSame('2026-07-01 15:15:00', $row->cb_out);
+        $this->assertSame('2026-07-01 17:00:00', $row->time_out);
+
+        $this->assertSame(75, WorkDay::breakMinutes($row));
+    }
+
+    /**
+     * Somebody goes to lunch, forgets to punch back, and punches out at the
+     * end of the day. The last punch is the final out whatever else is
+     * missing, so the day still ends when they left rather than at lunchtime.
+     */
+    public function test_a_missed_punch_does_not_shift_the_day(): void
+    {
+        (new PunchImporter)->import([
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-02 08:00:00', 'type' => 'i'],
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-02 12:00:00', 'type' => 'o'],
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-02 17:00:00', 'type' => 'o'],
+        ]);
+
+        $row = DB::table('hr_attendance')->where('employee_id', $this->employeeId)
+            ->whereDate('date', '2026-07-02')->first();
+
+        $this->assertSame('2026-07-02 08:00:00', $row->time_in);
+        $this->assertSame('2026-07-02 17:00:00', $row->time_out,
+            'the day ended at the last punch, not the first one after lunch');
+        $this->assertSame('2026-07-02 12:00:00', $row->lunch_in);
+        $this->assertNull($row->lunch_out, 'they never punched back from lunch');
+
+        // Half a break deducts nothing rather than guessing at its length.
+        $this->assertSame(0, WorkDay::breakMinutes($row));
+        $this->assertContains('Lunch in with no lunch out', WorkDay::problems($row));
+    }
+
+    /** A punch that opened a break nobody returned from is the final out. */
+    public function test_leaving_for_the_day_is_not_recorded_as_a_break(): void
+    {
+        (new PunchImporter)->import([
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-03 08:00:00', 'type' => 'i'],
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-03 17:00:00', 'type' => 'o'],
+        ]);
+
+        $row = DB::table('hr_attendance')->where('employee_id', $this->employeeId)
+            ->whereDate('date', '2026-07-03')->first();
+
+        $this->assertSame('2026-07-03 17:00:00', $row->time_out);
+        $this->assertNull($row->lunch_in, 'going home was filed as going to lunch');
+        $this->assertSame(9.0, WorkDay::workedHours($row, 0));
+    }
+
+    /**
+     * A break of a few seconds over the minute is not rounded away.
+     *
+     * Carbon hands back a float here and adding it to an int truncates
+     * silently, so a break was being shortened by up to a minute with nobody
+     * told - in the employer's favour, every time.
+     */
+    public function test_break_minutes_are_not_truncated(): void
+    {
+        $row = $this->day([
+            'time_in'   => '2026-06-01 08:00:00',
+            'lunch_in'  => '2026-06-01 12:00:00',
+            'lunch_out' => '2026-06-01 12:44:40',
+            'time_out'  => '2026-06-01 17:00:00',
+        ]);
+
+        $this->assertSame(45, WorkDay::breakMinutes($row),
+            'a 44 minute 40 second break was rounded down rather than to nearest');
+    }
+
+    /** Files without a flag still fall back to plain order. */
+    public function test_unflagged_punches_still_work(): void
+    {
+        (new PunchImporter)->import([
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-04 08:00:00'],
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-04 12:00:00'],
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-04 13:00:00'],
+            ['biometric_id' => $this->bio, 'timestamp' => '2026-07-04 17:00:00'],
+        ]);
+
+        $row = DB::table('hr_attendance')->where('employee_id', $this->employeeId)
+            ->whereDate('date', '2026-07-04')->first();
+
+        $this->assertSame('2026-07-04 12:00:00', $row->lunch_in);
+        $this->assertSame('2026-07-04 17:00:00', $row->time_out);
+    }
+
     // ------------------------------------------------ the employee's button
 
     /**
