@@ -33,10 +33,56 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public array $companies = ['GKLASAM OPC', 'Imprint Cafe'];
     public $stats = [];
 
+    /** Start date of the cutoff the summary shows: the 1st or the 16th. */
+    public string $summaryCutoff = '';
+
+    /** Its own search: finding one person in the cutoff without narrowing the day's table. */
+    public string $summarySearch = '';
+
     public function mount()
     {
         $this->selectedDate = date('Y-m-d');
+        $this->summaryCutoff = \App\Services\AttendanceSummary::cutoffFor(date('Y-m-d'))->start;
         $this->loadData();
+    }
+
+    /** The last few cutoffs, newest first, for the picker. */
+    public function cutoffOptions(): array
+    {
+        return \App\Support\PayPeriod::recent(6);
+    }
+
+    /**
+     * Everybody active, with their counts for the chosen cutoff, following the
+     * same company, department and name filters as the day's table - so
+     * narrowing to Imprint Cafe narrows both.
+     */
+    public function cutoffSummary(): \Illuminate\Support\Collection
+    {
+        $period = \App\Support\PayPeriod::fromStart($this->summaryCutoff ?: date('Y-m-d'));
+
+        $people = DB::table('employees as e')
+            ->join('users as u', 'u.user_id', '=', 'e.user_id')
+            ->leftJoin('departments as d', 'd.department_id', '=', 'e.department_id')
+            ->where('e.status', 'active')
+            ->when($this->filters['company'] ?? null, fn ($q, $c) => $q->where('e.company', $c))
+            ->when($this->filters['department'] ?? null, fn ($q, $d) => $q->where('e.department_id', $d))
+            ->when($this->filters['search'] ?? null, fn ($q, $term) => $q->where('u.full_name', 'like', '%'.$term.'%'))
+            ->when(trim($this->summarySearch) !== '', function ($q) {
+                $term = '%'.trim($this->summarySearch).'%';
+                $q->where(fn ($w) => $w->where('u.full_name', 'like', $term)->orWhere('e.employee_no', 'like', $term));
+            })
+            ->orderByRaw("COALESCE(NULLIF(u.last_name, ''), u.full_name)")
+            ->select('e.employee_id', 'e.employee_no', 'e.company', 'u.full_name', 'd.department_name')
+            ->get();
+
+        $counts = (new \App\Services\AttendanceSummary)
+            ->forEmployees($people->pluck('employee_id')->map(fn ($id) => (int) $id)->all(), $period);
+
+        return $people->map(function ($p) use ($counts) {
+            return (object) ((array) $p + ($counts[$p->employee_id]
+                ?? ['present' => 0, 'late' => 0, 'absent' => 0, 'leave' => 0, 'unpaid_leave' => 0]));
+        });
     }
 
     public function loadData()
@@ -162,37 +208,6 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         ];
     }
 
-    public function markAttendance($employeeId, $status)
-    {
-        // Check if attendance already exists
-        $existing = DB::table('hr_attendance')
-            ->where('employee_id', $employeeId)
-            ->whereDate('date', $this->selectedDate)
-            ->first();
-
-        if ($existing) {
-            DB::table('hr_attendance')
-                ->where('attendance_id', $existing->attendance_id)
-                ->update([
-                    'status' => $status,
-                    'time_in' => $status === 'present' ? now() : null,
-                    'notes' => 'Corrected by HR',
-                    'updated_at' => now()
-                ]);
-        } else {
-            DB::table('hr_attendance')->insert([
-                'employee_id' => $employeeId,
-                'date' => $this->selectedDate,
-                'status' => $status,
-                'time_in' => $status === 'present' ? now() : null,
-                'created_at' => now(),
-                'updated_at' => now()
-            ]);
-        }
-
-        $this->loadData();
-        session()->flash('success', 'Attendance marked successfully!');
-    }
 
     public bool $showTrail = false;
 
@@ -207,25 +222,6 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         return \App\Services\Auditor::recent(['hr_attendance', 'hr_payroll', 'payroll_corrections', 'leaves'], 30);
     }
 
-    public function markTimeOut($attendanceId)
-    {
-        $before = DB::table('hr_attendance')->where('attendance_id', $attendanceId)->first();
-
-        DB::table('hr_attendance')
-            ->where('attendance_id', $attendanceId)
-            ->update([
-                'time_out' => now(),
-                'notes' => 'Corrected by HR',
-                'updated_at' => now()
-            ]);
-
-        // Hours are money now, so who changed them is part of the record.
-        \App\Services\Auditor::record('update', 'hr_attendance', $attendanceId,
-            ['time_out' => $before->time_out ?? null], ['time_out' => now()->toDateTimeString()]);
-
-        $this->loadAttendance();
-        session()->flash('success', 'Time out recorded successfully!');
-    }
 
     public function updateDate($date)
     {
@@ -366,9 +362,6 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                        value="{{ $selectedDate }}">
                 <i class="fas fa-calendar-alt absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
             </div>
-            <button class="btn-primary" onclick="openManualEntry()">
-                <i class="fas fa-plus mr-2"></i>Manual Entry
-            </button>
         </div>
     </div>
 
@@ -384,7 +377,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             <div>
                 <h2 class="text-base font-semibold text-gray-900">Biometric scanner</h2>
                 <p class="text-sm text-gray-600 mt-1">
-                    Scans become attendance days: first of the day in, last of the day out.
+                    Scans become attendance days: first in, lunch in, lunch out, CB in, CB out, and the last scan of the day as final out.
                 </p>
             </div>
 
@@ -638,6 +631,78 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         </div>
     </div>
 
+    {{-- ------------------------------------------------ per-cutoff totals --}}
+    @php
+        $summaryPeriod = \App\Support\PayPeriod::fromStart($summaryCutoff ?: date('Y-m-d'));
+        $summaryRows = $this->cutoffSummary();
+    @endphp
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
+        <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-800">Cutoff summary</h2>
+                <p class="text-sm text-gray-600">
+                    Days present, late and absent per person for {{ $summaryPeriod->label() }}.
+                    Absences and lates are the same ones payroll deducts.
+                </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="relative">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                    <input type="search" wire:model.live.debounce.300ms="summarySearch"
+                           placeholder="Name or employee no."
+                           class="form-input pl-9" style="width: 16rem">
+                </div>
+                <select wire:model.live="summaryCutoff" class="form-input" style="width: 11rem">
+                    @foreach ($this->cutoffOptions() as $option)
+                        <option value="{{ $option->start }}">{{ $option->label() }}</option>
+                    @endforeach
+                </select>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto max-h-[28rem] overflow-y-auto">
+            <table class="w-full text-sm">
+                <thead class="sticky top-0 bg-gray-50">
+                    <tr class="text-left text-xs uppercase tracking-wide text-gray-500">
+                        <th class="px-4 py-3">Employee</th>
+                        <th class="px-4 py-3">Company</th>
+                        <th class="px-4 py-3">Department</th>
+                        <th class="px-4 py-3 text-right">Present</th>
+                        <th class="px-4 py-3 text-right">Late</th>
+                        <th class="px-4 py-3 text-right">Absent</th>
+                        <th class="px-4 py-3 text-right">Leave</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @forelse ($summaryRows as $row)
+                        <tr>
+                            <td class="px-4 py-2">
+                                <div class="font-medium text-gray-900">{{ $row->full_name }}</div>
+                                <div class="text-xs text-gray-500">{{ $row->employee_no }}</div>
+                            </td>
+                            <td class="px-4 py-2 text-gray-700">{{ $row->company ?? '-' }}</td>
+                            <td class="px-4 py-2 text-gray-700">{{ $row->department_name ?? '-' }}</td>
+                            <td class="px-4 py-2 text-right font-medium text-green-700">{{ $row->present }}</td>
+                            <td class="px-4 py-2 text-right {{ $row->late ? 'font-medium text-amber-700' : 'text-gray-400' }}">{{ $row->late }}</td>
+                            <td class="px-4 py-2 text-right {{ $row->absent ? 'font-medium text-red-700' : 'text-gray-400' }}">{{ $row->absent }}</td>
+                            <td class="px-4 py-2 text-right text-gray-700">{{ $row->leave + $row->unpaid_leave }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Nobody matches these filters.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <style>
+        .att-day { width: 100%; }
+        .att-day th, .att-day td { padding-left: .6rem; padding-right: .6rem; }
+        .att-day th.t, .att-day td.font-mono { white-space: nowrap; text-align: center; }
+        .att-day td.font-mono { font-size: .8125rem; }
+        .att-day td.font-mono .block { white-space: normal; max-width: 7rem; margin: 0 auto; line-height: 1.2; }
+    </style>
+
     <!-- Attendance Table -->
     <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
         <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
@@ -647,31 +712,31 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             </div>
         </div>
         
+        {{-- Thirteen columns did not fit, so the table scrolled sideways.
+             Company, department and job title now sit under the name, and the
+             six punches are compact enough to stay on one line each. --}}
         <div class="overflow-x-auto">
-            <table class="data-table">
+            <table class="data-table att-day">
                 <thead>
                     <tr>
                         <th>Employee</th>
-                        <th>Company</th>
-                        <th>Department</th>
-                        <th>Job Title</th>
-                        <th>First in</th>
-                        <th>Lunch in</th>
-                        <th>Lunch out</th>
-                        <th>CB in</th>
-                        <th>CB out</th>
-                        <th>Final out</th>
+                        <th class="t">First in</th>
+                        <th class="t">Lunch in</th>
+                        <th class="t">Lunch out</th>
+                        <th class="t">CB in</th>
+                        <th class="t">CB out</th>
+                        <th class="t">Final out</th>
                         <th>Status</th>
-                        <th>Hours</th>
-                        <th>Actions</th>
+                        <th class="t">Hours</th>
+                        <th class="sr-only">Edit</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if(count($attendanceRecords) > 0)
                         @foreach($attendanceRecords as $record)
                             @php
-                                $timeIn = $record->time_in ? date('h:i A', strtotime($record->time_in)) : '--:--';
-                                $timeOut = $record->time_out ? date('h:i A', strtotime($record->time_out)) : '--:--';
+                                $timeIn = $record->time_in ? date('H:i', strtotime($record->time_in)) : '—';
+                                $timeOut = $record->time_out ? date('H:i', strtotime($record->time_out)) : '—';
                                 
                                 // Hours actually worked: the breaks that were
                                 // punched come off. This used to be the raw
@@ -685,7 +750,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 $breakMinutes = \App\Support\WorkDay::breakMinutes($record);
                                 $dayProblems = \App\Support\WorkDay::problems($record);
 
-                                $punchTime = fn ($value) => $value ? date('h:i A', strtotime($value)) : '--:--';
+                                $punchTime = fn ($value) => $value ? date('H:i', strtotime($value)) : '—';
                                 
                                 // Measured against their own shift. Either can be
                                 // unknowable - no shift set, or no scan - and then
@@ -712,19 +777,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         <div class="w-8 h-8 rounded-full bg-hr-100 flex items-center justify-center mr-3">
                                             <i class="fas fa-user text-hr-600"></i>
                                         </div>
-                                        <div>
+                                        <div class="min-w-0">
                                             <div class="font-medium text-gray-900">{{ $record->full_name ?? 'N/A' }}</div>
-                                            <div class="text-sm text-gray-500">{{ $record->username ?? '' }}</div>
+                                            <div class="text-xs text-gray-500">
+                                                {{ $record->company ?? '' }}@if(($record->company ?? null) && ($record->department_name ?? null)) &middot; @endif{{ $record->department_name ?? '' }}
+                                            </div>
+                                            <div class="text-xs text-gray-400">{{ $record->job_title ?? '' }}</div>
                                         </div>
                                     </div>
                                 </td>
-                                <td class="text-sm text-gray-700">{{ $record->company ?? '-' }}</td>
-                                <td>
-                                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                        {{ $record->department_name ?? 'No Department' }}
-                                    </span>
-                                </td>
-                                <td>{{ $record->job_title ?? 'N/A' }}</td>
                                 <td class="font-mono">
                                     {{ $timeIn }}
                                     @if($minutesLate !== null && $minutesLate > \App\Support\Tardiness::GRACE_MINUTES)
@@ -758,22 +819,17 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <td>
                                     <div class="flex gap-2">
                                         <button onclick="openEditModal('{{ $record->attendance_id }}', '{{ $record->status }}', '{{ $record->time_in }}', '{{ $record->time_out }}', `{{ $record->notes ?? '' }}`)" 
-                                                class="px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors">
-                                            <i class="fas fa-edit mr-1"></i>Edit
+                                                class="p-2 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                                                title="Edit this day" aria-label="Edit {{ $record->full_name }}'s day">
+                                            <i class="fas fa-edit"></i>
                                         </button>
-                                        @if(!$record->time_out && $record->time_in)
-                                            <button wire:click="markTimeOut('{{ $record->attendance_id }}')" 
-                                                    class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100 transition-colors">
-                                                <i class="fas fa-sign-out-alt mr-1"></i>Time Out
-                                            </button>
-                                        @endif
                                     </div>
                                 </td>
                             </tr>
                         @endforeach
                     @else
                         <tr>
-                            <td colspan="8" class="text-center py-8 text-gray-500">
+                            <td colspan="10" class="text-center py-8 text-gray-500">
                                 <div class="flex flex-col items-center">
                                     <i class="fas fa-calendar-times text-4xl text-gray-300 mb-3"></i>
                                     <p class="text-lg">No attendance records found for {{ date('F d, Y', strtotime($selectedDate)) }}</p>
@@ -787,67 +843,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         </div>
     </div>
 
-    <!-- Employee List for Quick Marking -->
-    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4">Mark Attendance for Active Employees</h3>
-        <p class="text-sm text-gray-500 mb-4">Showing {{ count($employees) }} active employees</p>
-        @if(count($employees) > 0)
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                @foreach($employees as $employee)
-                    @php
-                        $statusColors = [
-                            'present' => 'bg-green-100 text-green-800',
-                            'absent' => 'bg-red-100 text-red-800',
-                            'late' => 'bg-yellow-100 text-yellow-800',
-                            'half_day' => 'bg-blue-100 text-blue-800',
-                            'on_leave' => 'bg-purple-100 text-purple-800',
-                            'not_marked' => 'bg-gray-100 text-gray-800',
-                        ];
-                    @endphp
-                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                        <div class="flex items-start justify-between mb-3">
-                            <div class="flex items-center">
-                                <div class="w-10 h-10 rounded-full bg-hr-100 flex items-center justify-center mr-3">
-                                    <i class="fas fa-user text-hr-600"></i>
-                                </div>
-                                <div>
-                                    <div class="font-medium text-gray-900">{{ $employee->full_name }}</div>
-                                    <div class="text-sm text-gray-500">{{ $employee->job_title }}</div>
-                                    <div class="text-xs text-gray-400">{{ $employee->department_name }}</div>
-                                </div>
-                            </div>
-                            <span class="px-2 py-1 rounded text-xs font-medium {{ $statusColors[$employee->attendance_status] }}">
-                                {{ $employee->attendance_status === 'not_marked' ? 'Not Marked' : ucfirst(str_replace('_', ' ', $employee->attendance_status)) }}
-                            </span>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button wire:click="markAttendance('{{ $employee->employee_id }}', 'present')"
-                                    class="px-3 py-2 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100 flex items-center justify-center">
-                                <i class="fas fa-check mr-1"></i>Present
-                            </button>
-                            <button wire:click="markAttendance('{{ $employee->employee_id }}', 'absent')"
-                                    class="px-3 py-2 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100 flex items-center justify-center">
-                                <i class="fas fa-times mr-1"></i>Absent
-                            </button>
-                            <button wire:click="markAttendance('{{ $employee->employee_id }}', 'late')"
-                                    class="px-3 py-2 text-xs bg-yellow-50 text-yellow-600 rounded hover:bg-yellow-100 flex items-center justify-center">
-                                <i class="fas fa-clock mr-1"></i>Late
-                            </button>
-                            <button wire:click="markAttendance('{{ $employee->employee_id }}', 'on_leave')"
-                                    class="px-3 py-2 text-xs bg-purple-50 text-purple-600 rounded hover:bg-purple-100 flex items-center justify-center">
-                                <i class="fas fa-umbrella-beach mr-1"></i>Leave
-                            </button>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        @else
-            <div class="text-center py-8 text-gray-500">
-                <i class="fas fa-users text-3xl text-gray-300 mb-3"></i>
-                <p>No active employees found matching your criteria.</p>
-            </div>
-        @endif
-    </div>
+    {{-- Attendance comes from the scanner. The by-hand controls that used to
+         be here - a Manual Entry button that only ever showed a placeholder
+         alert, a Time Out on every row, and Present / Absent / Late buttons
+         for every employee - are gone. A scanner mistake is corrected with
+         Edit, which is audited; a day is not typed in from nothing. --}}
 
     <!-- Modal for Editing Attendance -->
     <div id="editModal" class="fixed inset-0 z-[70] hidden overflow-y-auto">
@@ -909,10 +909,6 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     </div>
 
     <script>
-        function openManualEntry() {
-            alert('Manual entry feature would be implemented here.');
-        }
-        
         function openEditModal(attendanceId, status, timeIn, timeOut, notes) {
             document.getElementById('editAttendanceId').value = attendanceId;
             document.getElementById('editStatus').value = status;

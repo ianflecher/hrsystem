@@ -376,56 +376,31 @@ class SixPunchDayTest extends TestCase
         $this->assertSame('2026-07-04 17:00:00', $row->time_out);
     }
 
-    // ------------------------------------------------ the employee's button
+    // --------------------------------------------- the employee's own screen
 
     /**
-     * One button that names the punch it will make, advancing through the six.
-     *
-     * A row of six buttons would let somebody file their lunch as a final out
-     * and end their day at noon; picking from a list is how a lunch becomes a
-     * coffee break. What is already recorded decides what comes next.
+     * Punches come from the scanner, not from a button. The dashboard shows
+     * the day's six read-only; there is nothing to press that records a time
+     * somebody was not physically at the scanner for.
      */
-    public function test_the_button_walks_through_the_six_punches(): void
+    public function test_employees_see_their_punches_but_cannot_record_them(): void
     {
+        DB::table('hr_attendance')->insert([
+            'employee_id' => $this->employeeId, 'date' => now()->toDateString(),
+            'time_in' => now()->setTime(7, 58)->toDateTimeString(),
+            'status' => 'present', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
         $user = \App\Models\User::find($this->userId);
+        $html = \Livewire\Volt\Volt::actingAs($user)->test('employee.index')->html();
 
-        foreach (['First in', 'Lunch in', 'Lunch out', 'CB in', 'CB out', 'Final out'] as $label) {
-            $page = \Livewire\Volt\Volt::actingAs($user)->test('employee.index');
+        $this->assertStringContainsString('07:58', $html, 'their first in is not shown');
+        $this->assertStringNotContainsString('wire:click="punch"', $html);
+        $this->assertStringNotContainsString('wire:click="clockIn"', $html);
 
-            $this->assertSame($label, $page->instance()->nextPunchLabel(),
-                "the button offered the wrong punch; expected {$label}");
-
-            $page->call('punch');
-        }
-
-        // Six punches in, the day is done and the button is gone.
-        $this->assertNull(
-            \Livewire\Volt\Volt::actingAs($user)->test('employee.index')->instance()->nextPunchLabel(),
-            'the day never completes',
-        );
-
-        $row = DB::table('hr_attendance')->where('employee_id', $this->employeeId)
-            ->whereDate('date', now()->toDateString())->first();
-
-        foreach (array_keys(WorkDay::PUNCHES) as $column) {
-            $this->assertNotNull($row->{$column}, "{$column} was never recorded");
-        }
-    }
-
-    /** A second tap does not skip ahead and close the day early. */
-    public function test_punching_twice_does_not_jump_a_slot(): void
-    {
-        $user = \App\Models\User::find($this->userId);
-
-        \Livewire\Volt\Volt::actingAs($user)->test('employee.index')->call('punch');
-        \Livewire\Volt\Volt::actingAs($user)->test('employee.index')->call('punch');
-
-        $row = DB::table('hr_attendance')->where('employee_id', $this->employeeId)
-            ->whereDate('date', now()->toDateString())->first();
-
-        $this->assertNotNull($row->time_in);
-        $this->assertNotNull($row->lunch_in);
-        $this->assertNull($row->time_out, 'two taps ended the day');
+        $attendance = \Livewire\Volt\Volt::actingAs($user)->test('employee.attendance')->html();
+        $this->assertStringNotContainsString('Manual Time Out', $attendance);
+        $this->assertStringNotContainsString('syncClockWithAttendance', $attendance);
     }
 
     /** A later export adds the afternoon without losing the morning. */

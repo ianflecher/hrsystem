@@ -166,140 +166,8 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
         session()->flash('success', 'Time In recorded successfully!');
     }
     
-    // Manual Time Out (for backup)
-    public function manualTimeOut()
-    {
-        $today = now()->format('Y-m-d');
-        $employeeId = $this->employee->employee_id;
-        
-        if (!$this->attendance || !$this->attendance->time_in) {
-            session()->flash('error', 'Please time in first!');
-            return;
-        }
-        
-        if ($this->attendance->time_out) {
-            session()->flash('error', 'You have already timed out today!');
-            return;
-        }
-        
-        $currentTime = now();
-        
-        // Update attendance record
-        DB::table('hr_attendance')
-            ->where('attendance_id', $this->attendance->attendance_id)
-            ->update([
-                'time_out' => $currentTime,
-                'updated_at' => now(),
-            ]);
-        
-        // Update clock log if table exists
-        $tableExists = DB::select("SHOW TABLES LIKE 'clock_logs'");
-        if (!empty($tableExists)) {
-            DB::table('clock_logs')
-                ->where('employee_id', $employeeId)
-                ->whereDate('date', $today)
-                ->whereNull('clock_out')
-                ->update([
-                    'clock_out' => $currentTime,
-                    'updated_at' => now(),
-                ]);
-        }
-        
-        $this->loadData();
-        session()->flash('success', 'Time Out recorded successfully!');
-    }
     
     // Sync clock with attendance
-    public function syncClockWithAttendance()
-    {
-        $today = now()->format('Y-m-d');
-        $employeeId = $this->employee->employee_id;
-        
-        // Check if clock_logs table exists
-        $tableExists = DB::select("SHOW TABLES LIKE 'clock_logs'");
-        
-        if (empty($tableExists)) {
-            session()->flash('error', 'Clock system not available. Please use manual time in/out.');
-            return;
-        }
-        
-        // Get latest clock log
-        $clockLog = DB::table('clock_logs')
-            ->where('employee_id', $employeeId)
-            ->whereDate('date', $today)
-            ->orderBy('created_at', 'desc')
-            ->first();
-        
-        if (!$clockLog) {
-            session()->flash('error', 'No clock records found for today.');
-            return;
-        }
-        
-        // Check attendance record
-        $attendance = DB::table('hr_attendance')
-            ->where('employee_id', $employeeId)
-            ->whereDate('date', $today)
-            ->first();
-        
-        if (!$attendance && $clockLog->clock_in) {
-            // Create attendance record from clock log
-            $status = 'present';
-            $clockInTime = Carbon::parse($clockLog->clock_in);
-            
-            // Check if late (after 9:00 AM)
-            $lateThreshold = Carbon::createFromTime(9, 0, 0);
-            if ($clockInTime->gt($lateThreshold)) {
-                $status = 'late';
-            }
-            
-            DB::table('hr_attendance')->insert([
-                'employee_id' => $employeeId,
-                'date' => $today,
-                'time_in' => $clockLog->clock_in,
-                'time_out' => $clockLog->clock_out,
-                'status' => $status,
-                'notes' => 'Synced from clock system',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            
-            session()->flash('success', 'Attendance synced from clock system!');
-        } else if ($attendance && $clockLog->clock_out && !$attendance->time_out) {
-            // Update time out
-            DB::table('hr_attendance')
-                ->where('attendance_id', $attendance->attendance_id)
-                ->update([
-                    'time_out' => $clockLog->clock_out,
-                    'updated_at' => now(),
-                ]);
-            
-            session()->flash('success', 'Time out updated from clock system!');
-        } else if ($attendance && $clockLog->clock_in && !$attendance->time_in) {
-            // Update time in
-            $status = 'present';
-            $clockInTime = Carbon::parse($clockLog->clock_in);
-            
-            // Check if late (after 9:00 AM)
-            $lateThreshold = Carbon::createFromTime(9, 0, 0);
-            if ($clockInTime->gt($lateThreshold)) {
-                $status = 'late';
-            }
-            
-            DB::table('hr_attendance')
-                ->where('attendance_id', $attendance->attendance_id)
-                ->update([
-                    'time_in' => $clockLog->clock_in,
-                    'status' => $status,
-                    'updated_at' => now(),
-                ]);
-            
-            session()->flash('success', 'Time in updated from clock system!');
-        } else {
-            session()->flash('info', 'Attendance is already up to date.');
-        }
-        
-        $this->loadData();
-    }
     
     public function refreshData()
     {
@@ -385,15 +253,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                     </p>
                 @elseif($attendance && $attendance->time_in)
                     <p class="text-xl text-gray-400 italic mb-3">Not recorded</p>
-                    <button 
-                        wire:click="manualTimeOut"
-                        class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition flex items-center justify-center space-x-2"
-                    >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                        </svg>
-                        <span>Manual Time Out</span>
-                    </button>
+
                 @else
                     <p class="text-xl text-gray-400 italic">Time in required first</p>
                 @endif
@@ -457,17 +317,9 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
         </div>
         
         <!-- Sync Button -->
-        <div class="mt-6 flex justify-center">
-            <button 
-                wire:click="syncClockWithAttendance"
-                class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-gray-800 border border-gray-200 rounded-lg font-medium flex items-center space-x-2 transition"
-            >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>Sync with Clock System</span>
-            </button>
-        </div>
+        {{-- Manual Time Out and Sync with Clock System were here. Times come
+             from the scanner; a mistake is for HR to correct, with a record
+             of who did. --}}
     </div>
     
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">

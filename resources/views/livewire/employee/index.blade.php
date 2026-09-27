@@ -120,135 +120,10 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             ->first();
     }
     
-    /**
-     * The next punch this person owes, or null when the day is complete.
-     *
-     * A day is six punches and the button is one, so which punch it makes is
-     * decided by what is already recorded rather than by asking somebody to
-     * pick. Picking is how a lunch gets filed as a coffee break.
-     */
-    public function nextPunch(): ?string
-    {
-        $today = $this->attendanceStats['today'] ?? null;
 
-        foreach (array_keys(\App\Support\WorkDay::PUNCHES) as $column) {
-            if (! ($today->{$column} ?? null)) {
-                return $column;
-            }
-        }
 
-        return null;
-    }
 
-    public function nextPunchLabel(): ?string
-    {
-        $next = $this->nextPunch();
-
-        return $next ? \App\Support\WorkDay::PUNCHES[$next] : null;
-    }
-
-    /**
-     * Records the next punch of the day.
-     *
-     * Only ever fills the next empty slot in order, so a double tap cannot
-     * turn a lunch into a final out and end somebody's day at noon.
-     */
-    public function punch()
-    {
-        $next = $this->nextPunch();
-
-        if (! $next) {
-            session()->flash('error', 'Your day is already complete.');
-
-            return;
-        }
-
-        $today = Carbon::today();
-
-        $update = [$next => now(), 'updated_at' => now()];
-
-        if ($next === 'time_in') {
-            $update['status'] = Tardiness::isLate(now(), $this->employee->shift_start ?? null)
-                ? 'late' : 'present';
-        }
-
-        DB::table('hr_attendance')->updateOrInsert(
-            ['employee_id' => $this->employee->employee_id, 'date' => $today],
-            $update,
-        );
-
-        session()->flash('success', \App\Support\WorkDay::PUNCHES[$next].' recorded at '.now()->format('g:i a').'.');
-        $this->loadAttendanceStats();
-    }
-
-    public function clockIn()
-    {
-        $today = Carbon::today();
-        
-        // Check if already clocked in
-        $existing = DB::table('hr_attendance')
-            ->where('employee_id', $this->employee->employee_id)
-            ->whereDate('date', $today)
-            ->first();
-        
-        if ($existing && $existing->time_in) {
-            session()->flash('error', 'You have already clocked in today!');
-            return;
-        }
-        
-        DB::table('hr_attendance')->updateOrInsert(
-            [
-                'employee_id' => $this->employee->employee_id,
-                'date' => $today
-            ],
-            [
-                'time_in' => now(),
-                // Measured against this employee's own shift with the five
-                // minute grace. The old rule only bit from 10:00, so a 9:45
-                // arrival was recorded as on time.
-                'status' => Tardiness::isLate(now(), $this->employee->shift_start ?? null) ? 'late' : 'present',
-                'updated_at' => now()
-            ]
-        );
-        
-        session()->flash('success', 'Clocked in successfully!');
-        $this->loadAttendanceStats();
-    }
     
-    public function clockOut()
-    {
-        $today = Carbon::today();
-        
-        // For overnight shifts, the open attendance row belongs to the
-        // shift's start date, so do not restrict clock-out to today's date.
-        $attendance = DB::table('hr_attendance')
-            ->where('employee_id', $this->employee->employee_id)
-            ->whereNotNull('time_in')
-            ->whereNull('time_out')
-            ->orderByDesc('date')
-            ->first();
-        
-        if (!$attendance || !$attendance->time_in) {
-            session()->flash('error', 'You need to clock in first!');
-            return;
-        }
-        
-        if ($attendance->time_out) {
-            session()->flash('error', 'You have already clocked out today!');
-            return;
-        }
-        
-        DB::table('hr_attendance')
-            ->where('employee_id', $this->employee->employee_id)
-            ->whereDate('date', $today)
-            ->update([
-                'time_out' => now(),
-                'updated_at' => now()
-            ]);
-        
-        session()->flash('success', 'Clocked out successfully!');
-        $this->loadAttendanceStats();
-    }
     
 }
 ?>
@@ -282,17 +157,17 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                     </svg>
                 </div>
             </div>
-            {{-- One button, and it says which of the six punches it will
-                 make. A row of six would let somebody file their lunch as a
-                 final out and end their day at noon. --}}
-            <div class="mt-4">
-                @if($this->nextPunchLabel())
-                    <button wire:click="punch" class="w-full bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700">
-                        {{ $this->nextPunchLabel() }}
-                    </button>
-                @else
-                    <p class="text-sm text-gray-500 text-center py-2">Day complete.</p>
-                @endif
+            {{-- Read-only. Punches come from the scanner; a button here let
+                 people record a time they were not physically at the
+                 scanner for. --}}
+            @php $todayRow = $attendanceStats['today'] ?? null; @endphp
+            <div class="mt-4 grid grid-cols-3 gap-x-3 gap-y-1 text-xs">
+                @foreach (\App\Support\WorkDay::PUNCHES as $column => $label)
+                    <div class="text-gray-500">{{ $label }}</div>
+                    <div class="col-span-2 font-mono text-gray-900">
+                        {{ ($todayRow->{$column} ?? null) ? \Carbon\Carbon::parse($todayRow->{$column})->format('H:i') : '—' }}
+                    </div>
+                @endforeach
             </div>
         </div>
 
