@@ -37,18 +37,18 @@ class AttendanceSummary
             ->groupBy('employee_id')
             ->pluck('n', 'employee_id');
 
+        $employees = DB::table('employees')
+            ->whereIn('employee_id', $employeeIds)
+            ->get()
+            ->keyBy('employee_id');
+
         $workedMinutes = DB::table('hr_attendance')
             ->whereIn('employee_id', $employeeIds)
             ->whereBetween('date', [$period->start, $period->end])
             ->orderBy('date')
             ->get()
             ->groupBy('employee_id')
-            ->map(fn ($rows) => $rows->sum(fn ($row) => WorkDay::workedMinutes($row)));
-
-        $employees = DB::table('employees')
-            ->whereIn('employee_id', $employeeIds)
-            ->get()
-            ->keyBy('employee_id');
+            ->map(fn ($rows, $id) => $rows->sum(fn ($row) => WorkDay::workedMinutes($row, 60, $employees->get($id))));
 
         $deductions = new TimeDeductions;
         $out = [];

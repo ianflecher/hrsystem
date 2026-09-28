@@ -26,14 +26,18 @@ class WorkTimePayroll
                 $workedDays++;
                 if($row->time_out){
                     $in=Carbon::parse($row->time_in); $out=Carbon::parse($row->time_out);
+                    $capHours = ShiftSchedule::dailyCapMinutes($employee) / 60;
+                    $break = ShiftSchedule::isGuard($employee) ? 0 : 60;
 
-                    // A shift that ends past midnight: the final out belongs to
-                    // the next day, and WorkDay reads the columns as stored.
+                    // A night duty is stored with its real morning time-out,
+                    // so the span is already right. An older row that kept
+                    // only the time of day still reads as the next morning.
                     if($out->lte($in)){
-                        $hours += min(8, max(0, ($in->diffInMinutes($out->addDay()) - 60) / 60));
+                        $hours += min($capHours, max(0, ($in->diffInMinutes($out->addDay()) - $break) / 60));
                     } else {
-                        // Deduct the fixed lunch hour, not the scanned lunch duration.
-                        $hours += \App\Support\WorkDay::workedHours($row);
+                        // Deduct the fixed lunch hour, not the scanned lunch
+                        // duration - and none for a guard, who stays on post.
+                        $hours += \App\Support\WorkDay::workedHours($row, 60, $employee);
                     }
                 }
                 continue;

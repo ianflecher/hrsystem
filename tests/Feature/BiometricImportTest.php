@@ -53,7 +53,7 @@ class BiometricImportTest extends TestCase
         return $candidate;
     }
 
-    private function employee(string $biometricId, ?string $shift = '08:00:00'): int
+    private function employee(string $biometricId, ?string $shift = '08:00:00', string $title = 'Subject', ?string $shiftEnd = null): int
     {
         $n = random_int(100000, 999999);
 
@@ -68,9 +68,10 @@ class BiometricImportTest extends TestCase
 
         return DB::table('employees')->insertGetId([
             'user_id'      => $user->user_id,
-            'job_title'    => 'Subject',
+            'job_title'    => $title,
             'hire_date'    => '2020-01-01',
             'shift_start'  => $shift,
+            'shift_end'    => $shiftEnd,
             'biometric_id' => $biometricId,
             'status'       => 'active',
             'created_at'   => now(),
@@ -133,7 +134,83 @@ class BiometricImportTest extends TestCase
         $this->assertStringContainsString('17:05:00', $row->time_out);
     }
 
-    /** The same key twice is a slip; the day falls back to position. */
+    /** A guard's night duty is one day: the night it started. */
+    public function test_a_guard_night_duty_is_one_day(): void
+    {
+        $bio = $this->freeBiometricId();
+        $id = $this->employee($bio, null, 'SECURITY GUARD');
+
+        (new PunchImporter)->import([
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-24 18:44:58', 'state' => 0],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-25 07:00:07', 'state' => 1],
+        ]);
+
+        $rows = DB::table('hr_attendance')->where('employee_id', $id)->get();
+
+        $this->assertCount(1, $rows, 'the morning time-out is not a day of its own');
+        $this->assertSame('2020-06-24', substr((string) $rows[0]->date, 0, 10));
+        $this->assertSame('2020-06-24 18:44:58', (string) $rows[0]->time_in);
+        $this->assertSame('2020-06-25 07:00:07', (string) $rows[0]->time_out, 'the real timestamp is kept');
+        $this->assertSame(720, \App\Support\WorkDay::workedMinutes($rows[0], 60,
+            DB::table('employees')->where('employee_id', $id)->first()), 'twelve hours, no break taken off');
+    }
+
+    /** A guard on the morning duty checks in on the morning's own date. */
+    public function test_a_guard_morning_duty_is_its_own_day(): void
+    {
+        $bio = $this->freeBiometricId();
+        $id = $this->employee($bio, null, 'SECURITY GUARD');
+
+        (new PunchImporter)->import([
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-26 07:01:00', 'state' => 1],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-26 18:58:00', 'state' => 1],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-27 06:55:00', 'state' => 0],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-27 19:02:00', 'state' => 1],
+        ]);
+
+        $dates = DB::table('hr_attendance')->where('employee_id', $id)->orderBy('date')->pluck('date')
+            ->map(fn ($d) => substr((string) $d, 0, 10))->all();
+
+        $this->assertSame(['2020-06-26', '2020-06-27'], $dates, 'a check-in the next morning starts a new day');
+    }
+
+    /** With the shift set, the shift decides: 22:00 to 06:00 ends the next morning. */
+    public function test_an_overnight_shift_set_on_the_employee(): void
+    {
+        $bio = $this->freeBiometricId();
+        $id = $this->employee($bio, '22:00:00', 'Machine operator', '06:00:00');
+
+        (new PunchImporter)->import([
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-28 21:55:00'],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-29 06:03:00'],
+        ]);
+
+        $row = DB::table('hr_attendance')->where('employee_id', $id)->sole();
+
+        $this->assertSame('2020-06-28', substr((string) $row->date, 0, 10));
+        $this->assertSame('2020-06-29 06:03:00', (string) $row->time_out);
+        $this->assertSame(428, \App\Support\WorkDay::workedMinutes($row), '8h 8m across midnight, less the hour break');
+    }
+
+    /** Mid-day: in and out to lunch so far. The lunch is not the day's end. */
+    public function test_a_lunch_scan_is_the_lunch_not_the_final_out(): void
+    {
+        $bio = $this->freeBiometricId();
+        $id = $this->employee($bio);
+
+        (new PunchImporter)->import([
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-04 07:58:00', 'state' => 0],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-04 12:02:00', 'state' => 2],
+        ]);
+
+        $row = DB::table('hr_attendance')->where('employee_id', $id)->first();
+
+        $this->assertStringContainsString('07:58:00', $row->time_in);
+        $this->assertStringContainsString('12:02:00', $row->lunch_in, 'the lunch key is the lunch');
+        $this->assertNull($row->time_out, 'nobody has left for the day yet');
+    }
+
+    /** The same key twice is a slip; the extra punch fills what is missing. */
     public function test_a_repeated_key_falls_back_to_the_order(): void
     {
         $bio = $this->freeBiometricId();

@@ -100,7 +100,10 @@ class ZktecoPuller
                 continue;
             }
 
-            $punches[] = ['biometric_id' => $bio, 'timestamp' => $stamp];
+            // The key pressed goes along with it: dropping it here meant every
+            // punch was placed by counting, whatever the person chose.
+            $punches[] = ['biometric_id' => $bio, 'timestamp' => $stamp]
+                + (isset($row['state']) ? ['state' => (int) $row['state']] : []);
         }
 
         return $punches;

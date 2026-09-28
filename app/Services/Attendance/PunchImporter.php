@@ -36,6 +36,57 @@ class PunchImporter
         4 => 'cb_in', 5 => 'cb_out',
     ];
 
+    /** How long after a night shift's end a late time-out still closes that night. */
+    private const NIGHT_OUT_GRACE_HOURS = 4;
+
+    /**
+     * Which work day a punch belongs to. Usually the date on the clock; for a
+     * shift that runs past midnight, the early-morning scans are the end of
+     * the previous night.
+     *
+     * With a shift set, it is decided by that shift. A security guard with no
+     * shift set works 07:00-19:00 or 19:00-07:00, so a morning scan is only
+     * the end of a night duty when there was an evening scan before it - and
+     * never when the key pressed was check in, which is a morning duty
+     * starting.
+     */
+    public static function workDateForPunch(?object $employee, Carbon $moment, ?Carbon $previousPunch = null, ?int $state = null): string
+    {
+        $today = $moment->toDateString();
+        if (! $employee || $state === 0) {
+            return $today;
+        }
+
+        $yesterday = $moment->copy()->subDay()->toDateString();
+        $shift = ShiftSchedule::forEmployeeDate($employee, $yesterday);
+
+        if ($shift['start'] && $shift['end']) {
+            if ($shift['rest'] || ! ShiftSchedule::isOvernight($shift['start'], $shift['end'])) {
+                return $today;
+            }
+            $cutoff = $moment->copy()->setTimeFromTimeString($shift['end'])->addHours(self::NIGHT_OUT_GRACE_HOURS);
+
+            return $moment->lt($cutoff) ? $yesterday : $today;
+        }
+
+        if (! ShiftSchedule::isGuard($employee) || $moment->hour >= 12) {
+            return $today;
+        }
+
+        // The evening scan that began the duty: in this batch, or already
+        // stored from an earlier sync.
+        $evening = $previousPunch && $previousPunch->toDateString() === $yesterday && $previousPunch->hour >= 17
+            ? $previousPunch
+            : null;
+        if (! $evening) {
+            $storedIn = DB::table('hr_attendance')->where('employee_id', $employee->employee_id)
+                ->whereDate('date', $yesterday)->value('time_in');
+            $evening = $storedIn && Carbon::parse($storedIn)->hour >= 17 ? Carbon::parse($storedIn) : null;
+        }
+
+        return $evening && $evening->diffInHours($moment) <= 16 ? $yesterday : $today;
+    }
+
     public function import(array $punches, bool $overwriteManual = false): array
     {
         if (! $punches) {
@@ -45,7 +96,7 @@ class PunchImporter
         // Everyone the device could be talking about, by enrolment number.
         $employees = DB::table('employees')
             ->whereNotNull('biometric_id')
-            ->get(['employee_id', 'biometric_id', 'shift_start', 'shift_end', 'rest_days'])
+            ->get(['employee_id', 'biometric_id', 'shift_start', 'shift_end', 'rest_days', 'job_title'])
             ->keyBy('biometric_id');
 
         $ids = DB::table('employees')
@@ -55,6 +106,19 @@ class PunchImporter
         $byEmployeeDay = [];
         $unknown = [];
         $skipped = 0;
+
+        // In time order, so a morning scan can see the evening one before it:
+        // that is how a night duty's time-out finds the night it ends.
+        usort($punches, fn ($a, $b) => strcmp((string) ($a['timestamp'] ?? ''), (string) ($b['timestamp'] ?? '')));
+        $previous = [];
+
+        // A pull from the scanner carries its keys and is the device's whole
+        // log from its first punch on. Within that reach it is the truth: what
+        // was stored there before is replaced, not merged - a morning time-out
+        // once filed under the wrong day must not come back. A file upload may
+        // be partial, so it only ever adds.
+        $fromDevice = (bool) array_filter($punches, fn ($p) => isset($p['state']));
+        $reachStart = $fromDevice ? Carbon::parse((string) ($punches[0]['timestamp'] ?? '')) : null;
 
         foreach ($punches as $punch) {
             $bio = (string) ($punch['biometric_id'] ?? '');
@@ -81,12 +145,18 @@ class PunchImporter
                 continue;
             }
 
-            $key = $ids[$bio].'|'.$moment->toDateString();
+            // The day the work belongs to, not the day on the clock: a night
+            // duty's morning time-out is the previous night's. The punch keeps
+            // its real timestamp either way.
+            $workDate = self::workDateForPunch($employees[$bio] ?? null, $moment, $previous[$bio] ?? null, $punch['state'] ?? null);
+            $previous[$bio] = $moment;
+
+            $key = $ids[$bio].'|'.$workDate;
 
             if (! isset($byEmployeeDay[$key])) {
                 $byEmployeeDay[$key] = [
                     'employee_id' => $ids[$bio],
-                    'date'        => $moment->toDateString(),
+                    'date'        => $workDate,
                     'employee'    => $employees[$bio] ?? null,
                     // Every punch, not just the outer two: the middle ones are
                     // the breaks, and keeping only first and last was what made
@@ -114,13 +184,13 @@ class PunchImporter
                 $direction = in_array($slot, ['time_in', 'lunch_out', 'cb_out'], true) ? 'in' : 'out';
             }
 
-            $byEmployeeDay[$key]['punches'][] = ['at' => $moment, 'direction' => $direction, 'slot' => $slot];
+            $byEmployeeDay[$key]['punches'][] = ['at' => $moment, 'direction' => $direction, 'slot' => $slot, 'keyed' => $slot !== null];
         }
 
         $days = 0;
         $touchedEmployees = [];
 
-        DB::transaction(function () use ($byEmployeeDay, $overwriteManual, &$days, &$touchedEmployees) {
+        DB::transaction(function () use ($byEmployeeDay, $overwriteManual, $reachStart, &$days, &$touchedEmployees) {
             foreach ($byEmployeeDay as $day) {
                 $existing = DB::table('hr_attendance')
                     ->where('employee_id', $day['employee_id'])
@@ -130,7 +200,7 @@ class PunchImporter
                 // Incremental exports must retain punches imported earlier.
                 if ($existing && $existing->notes === 'From the biometric scanner') {
                     foreach (array_keys(WorkDay::PUNCHES) as $column) {
-                        if ($existing->{$column} ?? null) {
+                        if (($existing->{$column} ?? null) && ! ($reachStart && Carbon::parse($existing->{$column})->gte($reachStart))) {
                             $day['punches'][] = [
                                 'at' => Carbon::parse($existing->{$column}),
                                 // A slot already knows which way it was.
@@ -187,6 +257,25 @@ class PunchImporter
 
                 $days++;
                 $touchedEmployees[$day['employee_id']] = true;
+            }
+
+            // A day the scanner made that no longer has a punch of its own -
+            // the morning after a night duty, filed separately before night
+            // shifts were understood - would read as a day worked. Within the
+            // pull's reach, and only rows the scanner wrote, it goes.
+            if ($reachStart) {
+                $kept = [];
+                foreach ($byEmployeeDay as $day) {
+                    $kept[$day['employee_id']][] = $day['date'];
+                }
+                foreach ($kept as $employeeId => $dates) {
+                    DB::table('hr_attendance')
+                        ->where('employee_id', $employeeId)
+                        ->where('notes', 'From the biometric scanner')
+                        ->whereDate('date', '>', $reachStart->toDateString())
+                        ->whereNotIn(DB::raw('DATE(date)'), $dates)
+                        ->delete();
+                }
             }
         });
 
@@ -253,21 +342,41 @@ class PunchImporter
             return $slots;
         }
 
-        // What the person pressed, when every punch has a key and no key was
-        // pressed twice: that says lunch from coffee break even on a day with
-        // a punch missing, which counting cannot. Any doubt, and the day is
-        // read by position as before.
-        $byKey = [];
-        foreach ($ordered as $punch) {
-            $slot = $punch['slot'] ?? null;
-            if (! $slot || isset($byKey[$slot])) {
-                $byKey = null;
-                break;
+        // What the person pressed decides where a punch goes. A lunch scan is
+        // the lunch whatever else the day holds - an unfinished day is not
+        // read as ending at lunch, and a missed punch does not shift the rest.
+        // A key pressed twice keeps its first (its last, for check out), and
+        // the extra punches fill whatever the day is still missing, in order,
+        // so a slip on the keypad loses nothing.
+        // Only when the scanner itself said which key: a stored day's slots
+        // may have been counted into place, and a file export has no keys.
+        if (array_filter($ordered, fn ($punch) => ! empty($punch['keyed']))) {
+            $spare = [];
+            foreach ($ordered as $punch) {
+                $slot = $punch['slot'] ?? null;
+                $at = $punch['at']->toDateTimeString();
+                if (! $slot) {
+                    $spare[] = $at;
+                } elseif ($slots[$slot] === null) {
+                    $slots[$slot] = $at;
+                } elseif ($slot === 'time_out') {
+                    $spare[] = $slots['time_out'];
+                    $slots['time_out'] = $at;
+                } else {
+                    $spare[] = $at;
+                }
             }
-            $byKey[$slot] = $punch['at']->toDateTimeString();
-        }
-        if ($byKey) {
-            return array_merge($slots, $byKey);
+            sort($spare);
+            foreach ($spare as $at) {
+                foreach (['time_in', 'lunch_in', 'lunch_out', 'cb_in', 'cb_out'] as $slot) {
+                    if ($slots[$slot] === null && ($slot === 'time_in' || $at > ($slots['time_in'] ?? ''))) {
+                        $slots[$slot] = $at;
+                        continue 2;
+                    }
+                }
+            }
+
+            return $slots;
         }
 
         // The last punch is the final out, whatever else the day holds.

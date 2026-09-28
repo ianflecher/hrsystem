@@ -97,8 +97,13 @@ class WorkDay
     /**
      * Minutes worked: the span from first in to final out, less a fixed break,
      * capped at eight hours.
+     *
+     * Pass the employee and a security guard is read on their own terms: a
+     * twelve-hour post with no break taken off - they do not leave it - and
+     * the cap at twelve. The timestamps are real ones, so a night duty that
+     * ends the next morning is simply a longer span.
      */
-    public static function workedMinutes(?object $row, int $assumedBreakMinutes = 60): int
+    public static function workedMinutes(?object $row, int $assumedBreakMinutes = 60, ?object $employee = null): int
     {
         $punches = self::punches($row);
         $in = $punches['time_in'];
@@ -109,13 +114,15 @@ class WorkDay
         }
 
         $span = (int) round($in->diffInMinutes($out));
+        $guard = ShiftSchedule::isGuard($employee);
+        $break = $guard ? 0 : max(0, $assumedBreakMinutes);
 
-        return min(480, (int) max(0, $span - max(0, $assumedBreakMinutes)));
+        return min(ShiftSchedule::dailyCapMinutes($employee), (int) max(0, $span - $break));
     }
 
-    public static function workedHours(?object $row, int $assumedBreakMinutes = 60): float
+    public static function workedHours(?object $row, int $assumedBreakMinutes = 60, ?object $employee = null): float
     {
-        return round(self::workedMinutes($row, $assumedBreakMinutes) / 60, 2);
+        return round(self::workedMinutes($row, $assumedBreakMinutes, $employee) / 60, 2);
     }
 
     /**
