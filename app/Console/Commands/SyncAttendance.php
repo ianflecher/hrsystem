@@ -27,6 +27,28 @@ class SyncAttendance extends Command
 
     public function handle(PunchImporter $importer): int
     {
+        // One pull at a time: the device serves one connection, and the
+        // button and the hourly task could otherwise start together.
+        if (! $this->option('file')) {
+            if (Cache::has('attendance.sync.running')) {
+                $this->warn('A sync is already running.');
+
+                return self::SUCCESS;
+            }
+            Cache::put('attendance.sync.running', now()->toDateTimeString(), now()->addMinutes(20));
+        }
+
+        try {
+            return $this->sync($importer);
+        } finally {
+            if (! $this->option('file')) {
+                Cache::forget('attendance.sync.running');
+            }
+        }
+    }
+
+    private function sync(PunchImporter $importer): int
+    {
         try {
             if ($file = $this->option('file')) {
                 $this->info("Reading {$file}...");

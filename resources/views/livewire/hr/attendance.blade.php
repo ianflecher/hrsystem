@@ -16,6 +16,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public $punchFile;
     public ?array $syncSummary = null;
     public ?string $syncError = null;
+    public ?string $syncStarted = null;
     public bool $overwriteManual = false;
 
     public $selectedDate;
@@ -346,25 +347,39 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     /**
      * Fetch straight from the scanner over the network.
      */
-    public function syncFromDevice(PunchImporter $importer): void
+    /**
+     * Starts the same sync the hourly task runs, in the background.
+     *
+     * Reading the scanner takes minutes - its whole log comes every time - and
+     * the web server here answers one request at a time, so doing it inside
+     * the click froze the site for everybody until it finished or timed out.
+     * The command writes its outcome where the hourly run does, and a failure
+     * shows as the red alert above.
+     */
+    public function syncFromDevice(): void
     {
         $this->syncError = null;
         $this->syncSummary = null;
+        $this->syncStarted = null;
 
-        try {
-            $punches = ZktecoPuller::fromConfig()->punches();
-        } catch (\Throwable $e) {
-            // The causes are mundane - device off, wrong address, different
-            // subnet - so the message says which rather than "sync failed".
-            $this->syncError = $e->getMessage();
+        if (\Illuminate\Support\Facades\Cache::has('attendance.sync.running')) {
+            $this->syncStarted = 'A sync is already running. Attendance will update when it finishes.';
 
             return;
         }
 
-        $this->syncSummary = $importer->import($punches, $this->overwriteManual) + ['source' => 'the scanner'];
-        \Illuminate\Support\Facades\Cache::forever('attendance.sync.last', ['ok' => true, 'at' => now()->toDateTimeString(), 'message' => null]);
-        $this->loadAttendance();
-        $this->loadStats();
+        $command = '"'.PHP_BINARY.'" "'.base_path('artisan').'" attendance:sync'
+            .($this->overwriteManual ? ' --overwrite' : '')
+            .' >> "'.storage_path('logs/scanner-sync.log').'" 2>&1';
+
+        // Detached, so this request returns at once.
+        if (PHP_OS_FAMILY === 'Windows') {
+            pclose(popen('start "" /B cmd /C "'.$command.'"', 'r'));
+        } else {
+            exec($command.' &');
+        }
+
+        $this->syncStarted = 'Sync started. Attendance will update in a few minutes - reload the page to see it.';
     }
 
     /**
@@ -451,7 +466,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         <span wire:loading.remove wire:target="syncFromDevice">
                             <i class="fas fa-rotate"></i> Sync from device
                         </span>
-                        <span wire:loading wire:target="syncFromDevice">Reading the scanner...</span>
+                        <span wire:loading wire:target="syncFromDevice">Starting...</span>
                     </button>
                 @else
                     <span class="text-sm text-gray-500">
@@ -519,6 +534,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 <i class="fas fa-briefcase"></i> Mark official business
             </button>
         </div>
+
+        @if ($syncStarted)
+            <div class="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800" role="status">
+                <i class="fas fa-rotate"></i> {{ $syncStarted }}
+            </div>
+        @endif
 
         @if ($syncError)
             <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
