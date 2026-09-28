@@ -927,12 +927,19 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <td class="font-mono">{{ $punchTime($record->lunch_in ?? null) }}</td>
                                 <td class="font-mono">
                                     {{ $punchTime($record->lunch_out ?? null) }}
-                                    @if($breakMinutes > 0)
-                                        <span class="block text-xs font-sans text-gray-500">{{ $breakMinutes }} min break</span>
+                                    {{-- Each break under its own column: the total of both
+                                         under lunch read as one long lunch. --}}
+                                    @if(($record->lunch_in ?? null) && ($record->lunch_out ?? null) && \Carbon\Carbon::parse($record->lunch_out)->gt(\Carbon\Carbon::parse($record->lunch_in)))
+                                        <span class="block text-xs font-sans text-gray-500">{{ (int) round(\Carbon\Carbon::parse($record->lunch_in)->diffInSeconds(\Carbon\Carbon::parse($record->lunch_out)) / 60) }} min lunch</span>
                                     @endif
                                 </td>
                                 <td class="font-mono">{{ $punchTime($record->cb_in ?? null) }}</td>
-                                <td class="font-mono">{{ $punchTime($record->cb_out ?? null) }}</td>
+                                <td class="font-mono">
+                                    {{ $punchTime($record->cb_out ?? null) }}
+                                    @if(($record->cb_in ?? null) && ($record->cb_out ?? null) && \Carbon\Carbon::parse($record->cb_out)->gt(\Carbon\Carbon::parse($record->cb_in)))
+                                        <span class="block text-xs font-sans text-gray-500">{{ (int) round(\Carbon\Carbon::parse($record->cb_in)->diffInSeconds(\Carbon\Carbon::parse($record->cb_out)) / 60) }} min CB</span>
+                                    @endif
+                                </td>
                                 <td class="font-mono">
                                     {{ $timeOut }}
                                     @if($dayProblems)
