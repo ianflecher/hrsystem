@@ -132,7 +132,7 @@ class PayrollControlCenter
         $end = min($period->end, today()->toDateString());
         if ($end < $period->start) return 0;
         $employees = DB::table('employees')->where('status', 'active')->where(function($q){$q->where('salary','>',0)->orWhere('daily_rate','>',0);})->get(['employee_id', 'rest_days', 'hire_date']);
-        $present = DB::table('hr_attendance')->whereBetween('date', [$period->start, $end])->whereNotNull('time_in')
+        $present = DB::table('hr_attendance')->whereBetween('date', [$period->start, $end])->where(fn ($q) => $q->whereNotNull('time_in')->orWhere('status', 'official_business'))
             ->get(['employee_id', 'date'])->mapWithKeys(fn ($r) => [$r->employee_id.'|'.substr((string) $r->date, 0, 10) => true]);
         $holidays = DB::table('holidays')->whereBetween('date', [$period->start, $end])->pluck('date')->map(fn ($d) => substr((string) $d, 0, 10))->all();
         $leaves = DB::table('leaves')->where('status', 'approved')->where('start_date', '<=', $end)->where('end_date', '>=', $period->start)->get();

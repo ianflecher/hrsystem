@@ -241,7 +241,10 @@ class ZktecoDevice extends ZKTeco
                     continue;
                 }
 
-                $punches[] = ['biometric_id' => $badge, 'timestamp' => $when];
+                // Byte 31 on this format is the key pressed: 0 check in, 1
+                // check out, 2 break out, 3 break in, 4 and 5 the second break.
+                $punches[] = ['biometric_id' => $badge, 'timestamp' => $when]
+                    + ($width === 49 ? ['state' => ord($raw[$o + 31])] : []);
             }
 
             return $punches;

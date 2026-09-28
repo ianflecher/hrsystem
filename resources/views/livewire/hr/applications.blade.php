@@ -1101,13 +1101,22 @@ public function updateApplicationStatus($applicationId, $status)
 
     <!-- Applications Table -->
     <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
-        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+        <div class="px-4 sm:px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
             <h2 class="text-lg font-semibold text-gray-800">Job Applications</h2>
-            <div class="text-sm text-gray-600">
-                Showing {{ count($applications) }} applications
-            </div>
+            @if(count($applications) > 0)
+                <div class="text-sm text-gray-600">Showing {{ count($applications) }} {{ \Illuminate\Support\Str::plural('application', count($applications)) }}</div>
+            @endif
         </div>
-        
+
+        {{-- Empty: a message, not a table - on a phone the table is wider
+             than the screen and the message was centred off the edge. --}}
+        @if(count($applications) === 0)
+            <div class="flex flex-col items-center px-6 py-12 text-center text-gray-500">
+                <i class="fas fa-file-alt text-4xl text-gray-300 mb-3"></i>
+                <p class="text-lg text-gray-700">No applications found</p>
+                <p class="text-sm mt-1">Try adjusting your filters or check back later.</p>
+            </div>
+        @else
         <div class="overflow-x-auto">
             <table class="data-table">
                 <thead>
@@ -1348,6 +1357,7 @@ public function updateApplicationStatus($applicationId, $status)
                 </tbody>
             </table>
         </div>
+        @endif
     </div>
 
     {{-- The employee roster used to sit here, in the middle of the

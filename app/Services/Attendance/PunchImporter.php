@@ -26,6 +26,16 @@ class PunchImporter
      * @param  array<int, array{biometric_id: string, timestamp: string}>  $punches
      * @return array{days: int, employees: int, unknown: array<int, string>, skipped: int}
      */
+    /**
+     * The scanner's punch-state keys, as it stores them, to the day's slots.
+     * Break out/in are the lunch; the second pair is the coffee break.
+     */
+    private const STATE_SLOTS = [
+        0 => 'time_in', 1 => 'time_out',
+        2 => 'lunch_in', 3 => 'lunch_out',
+        4 => 'cb_in', 5 => 'cb_out',
+    ];
+
     public function import(array $punches, bool $overwriteManual = false): array
     {
         if (! $punches) {
@@ -97,7 +107,14 @@ class PunchImporter
                 default => null,
             };
 
-            $byEmployeeDay[$key]['punches'][] = ['at' => $moment, 'direction' => $direction];
+            // The key pressed, where the device sends one: which of the six
+            // slots the person said this punch was.
+            $slot = self::STATE_SLOTS[$punch['state'] ?? -1] ?? null;
+            if ($slot && ! $direction) {
+                $direction = in_array($slot, ['time_in', 'lunch_out', 'cb_out'], true) ? 'in' : 'out';
+            }
+
+            $byEmployeeDay[$key]['punches'][] = ['at' => $moment, 'direction' => $direction, 'slot' => $slot];
         }
 
         $days = 0;
@@ -118,6 +135,7 @@ class PunchImporter
                                 'at' => Carbon::parse($existing->{$column}),
                                 // A slot already knows which way it was.
                                 'direction' => in_array($column, ['time_in', 'lunch_out', 'cb_out'], true) ? 'in' : 'out',
+                                'slot' => $column,
                             ];
                         }
                     }
@@ -211,8 +229,11 @@ class PunchImporter
         // would shift every later slot and turn a lunch into a coffee break.
         $unique = [];
 
+        // The first seen wins: the device's punches come before the ones read
+        // back from the stored day, and the device knows which key was
+        // pressed where a stored slot may only have been counted into place.
         foreach ($punches as $punch) {
-            $unique[$punch['at']->format('Y-m-d H:i')] = $punch;
+            $unique[$punch['at']->format('Y-m-d H:i')] ??= $punch;
         }
 
         $ordered = array_values($unique);
@@ -230,6 +251,23 @@ class PunchImporter
             $slots[$only['direction'] === 'out' ? 'time_out' : 'time_in'] = $only['at']->toDateTimeString();
 
             return $slots;
+        }
+
+        // What the person pressed, when every punch has a key and no key was
+        // pressed twice: that says lunch from coffee break even on a day with
+        // a punch missing, which counting cannot. Any doubt, and the day is
+        // read by position as before.
+        $byKey = [];
+        foreach ($ordered as $punch) {
+            $slot = $punch['slot'] ?? null;
+            if (! $slot || isset($byKey[$slot])) {
+                $byKey = null;
+                break;
+            }
+            $byKey[$slot] = $punch['at']->toDateTimeString();
+        }
+        if ($byKey) {
+            return array_merge($slots, $byKey);
         }
 
         // The last punch is the final out, whatever else the day holds.

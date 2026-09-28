@@ -28,7 +28,7 @@ class ZktecoAttendanceDecodeTest extends TestCase
     /** Confirmed in ZKTime, which reads this device correctly. */
     public function test_known_punches_decode_to_the_right_person_and_time(): void
     {
-        $punches = $this->punches();
+        $punches = array_map(fn ($p) => ["biometric_id" => $p["biometric_id"], "timestamp" => $p["timestamp"]], $this->punches());
 
         $this->assertContains(
             ['biometric_id' => '197', 'timestamp' => '2026-09-27 08:55:28'],
@@ -76,5 +76,14 @@ class ZktecoAttendanceDecodeTest extends TestCase
         $this->expectException(\RuntimeException::class);
 
         ZktecoDevice::decodeLog(str_repeat("\xFF", 12 + 49 * 20));
+    }
+
+    /** The key pressed on the device comes through with every punch. */
+    public function test_every_punch_carries_the_key_that_was_pressed(): void
+    {
+        foreach ($this->punches() as $punch) {
+            $this->assertArrayHasKey("state", $punch);
+            $this->assertContains($punch["state"], [0, 1, 2, 3, 4, 5], "a punch carried state {$punch["state"]}");
+        }
     }
 }

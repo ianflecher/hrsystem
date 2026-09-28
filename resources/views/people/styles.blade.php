@@ -156,3 +156,51 @@
 .people .sg-legend span { display: inline-block; padding: 1px 6px; border-radius: 4px; margin: 0 4px 0 10px; }
 .people .sg-legend span:first-child { margin-left: 0; }
 </style>
+<style>
+.people .leave-agenda { display: none; list-style: none; margin: 12px 0 0; padding: 0; }
+.people .leave-agenda li { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid #e2e8f0; }
+.people .leave-agenda li:first-child { border-top: 0; }
+.people .leave-agenda li.today .agenda-date strong { background: #dc2626; color: #fff; }
+.people .leave-agenda .agenda-date { flex: 0 0 44px; text-align: center; }
+.people .leave-agenda .agenda-date strong { display: grid; place-items: center; width: 36px; height: 36px; margin: 0 auto; border-radius: 999px; background: #f1f5f9; font-size: 15px; }
+.people .leave-agenda .agenda-date span { display: block; margin-top: 3px; font-size: 11px; color: #64748b; text-transform: uppercase; }
+.people .leave-agenda .agenda-items { flex: 1; min-width: 0; }
+.people .leave-agenda .agenda-items .shift:first-child { margin-top: 0; }
+.people .leave-agenda .agenda-empty { display: block; color: #64748b; text-align: center; padding: 20px 8px; }
+@media (max-width: 767px) {
+    .people .leave-agenda { display: block; }
+    .people .leave-agenda + .calendar { display: none; }
+}
+</style>
+<style>
+/* Department labels stay in view while the dates scroll sideways. */
+.people .shift-grid .sg-dept td { padding: 0; }
+.people .shift-grid .sg-dept span { position: sticky; left: 0; display: inline-block; padding: 6px 10px; }
+@media (max-width: 767px) {
+    .people .shift-grid { min-width: 0; width: max-content; font-size: 12px; }
+    .people .shift-grid .sg-name { min-width: 0; width: 112px; max-width: 112px; white-space: normal; line-height: 1.25; font-size: 12px; padding: 6px 8px; box-shadow: 1px 0 0 #e2e8f0; }
+    .people .shift-grid th, .people .shift-grid td { padding: 6px 3px; }
+    .people .shift-grid td:not(.sg-name) { min-width: 34px; }
+    .people .sg-leave { font-size: 9px; }
+}
+</style>
+<style>
+/* Sticky cells in a border-collapse table are redrawn out of line with their
+   rows on mobile browsers as the page scrolls. Separate borders keep the
+   pinned name column attached to its row. */
+.people .shift-grid { border-collapse: separate; border-spacing: 0; }
+.people .shift-grid th, .people .shift-grid td { border-width: 0 1px 1px 0; }
+.people .shift-grid .sg-name { background-clip: padding-box; }
+</style>
+<style>
+/* Phones: nothing pinned - a pinned column drifts off its row on mobile
+   browsers. Each name gets its own line above that person's shifts. */
+.people .shift-grid .sg-name-row { display: none; }
+@media (max-width: 767px) {
+    .people .shift-grid .sg-name { display: none; }
+    .people .shift-grid .sg-name-row { display: table-row; }
+    .people .shift-grid .sg-name-row td { text-align: left; font-weight: 600; background: #f8fafc; padding: 6px 8px 4px; border-bottom: 0; }
+    .people .shift-grid .sg-dept span { position: static; }
+    .people .shift-grid { width: 100%; }
+}
+</style>

@@ -487,7 +487,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $employees = DB::table('employees')->where('status', 'active')->where('salary', '>', 0)
             ->select('employee_id', 'rest_days', 'hire_date')->get();
 
-        $present = DB::table('hr_attendance')->whereBetween('date', [$start, $end])->whereNotNull('time_in')
+        $present = DB::table('hr_attendance')->whereBetween('date', [$start, $end])->where(fn ($q) => $q->whereNotNull('time_in')->orWhere('status', 'official_business'))
             ->get(['employee_id', 'date'])
             ->map(fn ($row) => $row->employee_id.'|'.substr((string) $row->date, 0, 10))->flip();
 

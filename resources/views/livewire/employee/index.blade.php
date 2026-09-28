@@ -27,6 +27,8 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             ->select(
                 'employees.*',
                 'users.full_name',
+                'users.first_name',
+                'users.last_name',
                 'users.email',
                 'users.role',
                 'departments.department_name'
@@ -146,12 +148,17 @@ new #[Layout('components.layouts.employeeland')] class extends Component
     @endphp
 
     <!-- Welcome Section -->
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    @php
+        // Phones only get the first name: the full legal name made the
+        // greeting three lines long there. Desktop is unchanged.
+        $firstName = trim((string) ($employee->first_name ?? '')) ?: (explode(' ', trim((string) ($employee->full_name ?? 'Employee')))[0] ?: 'Employee');
+    @endphp
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
+            <div class="min-w-0">
                 <p class="text-xs font-bold uppercase tracking-[0.18em] text-red-600">Employee Portal</p>
-                <h1 class="mt-2 text-2xl font-bold text-slate-950 md:text-3xl">
-                    Welcome back, {{ $employee->full_name ?? 'Employee' }}
+                <h1 class="mt-2 text-xl font-bold text-slate-950 md:text-3xl">
+                    Welcome back, <span class="md:hidden">{{ $firstName }}</span><span class="hidden md:inline">{{ $employee->full_name ?? 'Employee' }}</span>
                 </h1>
                 <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
                     {{ $employee->department_name ?: 'No department assigned' }}
@@ -161,7 +168,8 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                     @endif
                 </p>
             </div>
-            <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+            <p class="text-sm text-slate-500 md:hidden">{{ now()->format('l, F j, Y') }}</p>
+            <div class="hidden rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm md:block">
                 <p class="text-slate-500">Today</p>
                 <p class="font-semibold text-slate-950">{{ now()->format('l, F j, Y') }}</p>
             </div>

@@ -27,6 +27,44 @@
 <div class="card scroll">
     <h2>{{ $extra['period']->label() }}</h2>
     <p class="muted">Current payroll cutoff: who is on leave, and the holidays. Shifts and rest days are set on each person under Employees.</p>
+{{-- Phones: only the days something happens, as a list. A seven-column
+     grid of mostly empty boxes does not fit a phone. --}}
+<ul class="leave-agenda">
+    @php($agendaDays = 0)
+    @for($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay())
+        @php($date = $day->toDateString())
+        @php($holiday = $extra['holidays']->get($date))
+        @php($onLeave = $extra['leaves']->get($date, collect()))
+        @if($holiday || $onLeave->isNotEmpty())
+            @php($agendaDays++)
+            <li class="{{ $date === now()->toDateString() ? 'today' : '' }}">
+                <div class="agenda-date"><strong>{{ $day->day }}</strong><span>{{ $day->format('D') }}</span></div>
+                <div class="agenda-items">
+                    @if($holiday)
+                        <div class="shift holiday">
+                            <strong>{{ $holiday->name }}</strong><br>
+                            {{ \App\Services\HolidayPay::describe($holiday->classification ?? $holiday->type) }}
+                            @if($hr)
+                                <form method="POST" action="{{ $base }}/{{ $holiday->id }}">@csrf
+                                    <button class="secondary" name="action" value="delete-holiday" aria-label="Remove {{ $holiday->name }} on {{ $date }}">Remove</button>
+                                </form>
+                            @endif
+                        </div>
+                    @endif
+                    @foreach($onLeave as $leave)
+                        <div class="shift rest">
+                            <strong>{{ $leave->full_name }}</strong> · {{ ucwords(str_replace('_', ' ', (string) $leave->leave_type)) }}
+                            @if($leave->status !== 'approved') <span class="badge">Pending</span>@endif
+                        </div>
+                    @endforeach
+                </div>
+            </li>
+        @endif
+    @endfor
+    @if($agendaDays === 0)
+        <li class="agenda-empty">Nobody is on leave and there are no holidays this cutoff.</li>
+    @endif
+</ul>
 <div class="calendar">
     @foreach(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] as $day)<strong class="weekday">{{ $day }}</strong>@endforeach
     @for($blank = 1; $blank < $periodStart->dayOfWeekIso; $blank++)<div></div>@endfor
@@ -103,9 +141,10 @@
     <tbody>
         @forelse($shiftStaff->groupBy(fn ($p) => $p->department_name ?: 'No department')->sortKeys() as $department => $people)
             @if(! $pickedDepartment && $shiftStaff->pluck('department_name')->unique()->count() > 1)
-                <tr class="sg-dept"><td colspan="{{ $periodStart->diffInDays($periodEnd) + 2 }}">{{ $department }}</td></tr>
+                <tr class="sg-dept"><td colspan="{{ $periodStart->diffInDays($periodEnd) + 2 }}"><span>{{ $department }}</span></td></tr>
             @endif
             @foreach($people as $person)
+                <tr class="sg-name-row"><td colspan="{{ $periodStart->diffInDays($periodEnd) + 1 }}">{{ $person->full_name }}</td></tr>
                 <tr>
                     <td class="sg-name">{{ $person->full_name }}</td>
                     @for($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay())

@@ -108,6 +108,52 @@ class BiometricImportTest extends TestCase
         $this->assertStringContainsString('17:32:00', $rows[0]->time_out, 'latest scan is the departure');
     }
 
+    /**
+     * No lunch punched, only the coffee break. By position the break would be
+     * read as the lunch; the keys pressed say otherwise.
+     */
+    public function test_the_key_pressed_places_a_punch_when_one_is_missing(): void
+    {
+        $bio = $this->freeBiometricId();
+        $id = $this->employee($bio);
+
+        (new PunchImporter)->import([
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-02 07:58:00', 'state' => 0],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-02 15:30:00', 'state' => 4],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-02 15:44:00', 'state' => 5],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-02 17:05:00', 'state' => 1],
+        ]);
+
+        $row = DB::table('hr_attendance')->where('employee_id', $id)->first();
+
+        $this->assertNull($row->lunch_in, 'no lunch was punched');
+        $this->assertNull($row->lunch_out, 'no lunch was punched');
+        $this->assertStringContainsString('15:30:00', $row->cb_in, 'CB out key is the coffee break');
+        $this->assertStringContainsString('15:44:00', $row->cb_out, 'CB in key is the end of it');
+        $this->assertStringContainsString('17:05:00', $row->time_out);
+    }
+
+    /** The same key twice is a slip; the day falls back to position. */
+    public function test_a_repeated_key_falls_back_to_the_order(): void
+    {
+        $bio = $this->freeBiometricId();
+        $id = $this->employee($bio);
+
+        (new PunchImporter)->import([
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-03 07:58:00', 'state' => 0],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-03 12:00:00', 'state' => 0],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-03 13:00:00', 'state' => 0],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-03 17:00:00', 'state' => 1],
+        ]);
+
+        $row = DB::table('hr_attendance')->where('employee_id', $id)->first();
+
+        $this->assertStringContainsString('07:58:00', $row->time_in);
+        $this->assertStringContainsString('12:00:00', $row->lunch_in, 'read by position');
+        $this->assertStringContainsString('13:00:00', $row->lunch_out, 'read by position');
+        $this->assertStringContainsString('17:00:00', $row->time_out);
+    }
+
     public function test_a_single_scan_leaves_the_departure_empty(): void
     {
         $bio102 = $this->freeBiometricId();

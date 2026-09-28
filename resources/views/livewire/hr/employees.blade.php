@@ -964,33 +964,34 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         </div>
     @endif
 
-    <div class="flex flex-wrap items-center gap-3 mb-5">
+    <div class="flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-3 mb-5">
+        <div class="order-first lg:order-last flex-1 min-w-0 lg:min-w-[14rem]">
+            <input type="search" wire:model.live.debounce.300ms="search" class="form-input w-full"
+                   placeholder="Search by name, username, email or job title...">
+        </div>
         {{-- Two businesses share this system, and an HR person is usually
-             looking at one of them. --}}
-        <div class="flex gap-2">
+             looking at one of them. On a phone the buttons wrap to a new
+             line whole, never squeezed into two-line boxes. --}}
+        <div class="flex flex-wrap gap-2">
             @foreach (array_merge(['all' => 'All companies'], $companies) as $key => $label)
                 <button wire:click="setCompanyFilter('{{ $key }}')"
-                        class="px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
+                        class="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
                                {{ $companyFilter === $key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50' }}">
                     {{ $label }}
                 </button>
             @endforeach
         </div>
 
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
             @foreach (array_merge(['all' => 'All'], $statuses) as $key => $label)
                 <button wire:click="setStatusFilter('{{ $key }}')"
-                        class="px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
+                        class="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
                             {{ $statusFilter === $key
                                 ? 'bg-red-600 border-red-600 text-white'
                                 : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300' }}">
                     {{ $label }}
                 </button>
             @endforeach
-        </div>
-        <div class="flex-1 min-w-[14rem]">
-            <input type="search" wire:model.live.debounce.300ms="search" class="form-input"
-                   placeholder="Search by name, username, email or job title...">
         </div>
     </div>
 
@@ -1007,7 +1008,48 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 </p>
             </div>
         @else
-            <div class="overflow-x-auto">
+            {{-- Phones get one card per person: eight columns do not fit. --}}
+            <ul class="md:hidden divide-y divide-gray-200">
+                @foreach ($employees as $employee)
+                    <li wire:key="emp-card-{{ $employee->employee_id }}" class="p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="font-semibold text-gray-900">{{ $employee->full_name }}</div>
+                                <div class="text-sm text-gray-700 truncate">{{ $employee->job_title ?: '—' }}</div>
+                                <div class="text-xs text-gray-500 truncate">{{ $employee->email }}</div>
+                            </div>
+                            <span class="status-badge shrink-0
+                                @if ($employee->status === 'active') status-active
+                                @elseif ($employee->status === 'on_leave') status-onleave
+                                @elseif ($employee->status === 'terminated') status-terminated
+                                @else status-inactive @endif">
+                                {{ $statuses[$employee->status] ?? $employee->status }}
+                            </span>
+                        </div>
+                        <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
+                            <span>{{ $employee->department_name ?? 'No department' }}</span>
+                            <span>· {{ $roles[$employee->role] ?? $employee->role }}</span>
+                            @if ($employee->company)<span>· {{ $employee->company }}</span>@endif
+                            @if ($employee->employment_type)<span>· {{ $employee->employment_type }}</span>@endif
+                        </div>
+                        @if ($employee->must_change_password)
+                            <div class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-700">
+                                <i class="fas fa-key"></i> Has not set their own password yet
+                            </div>
+                        @endif
+                        <div class="mt-3 flex gap-2">
+                            <button wire:click="edit({{ $employee->employee_id }})" class="flex-1 btn-secondary text-sm py-2"><i class="fas fa-pen mr-1"></i> Edit</button>
+                            <button wire:click="resetPassword({{ $employee->employee_id }})"
+                                    wire:confirm="Issue a new first password? The current one stops working immediately."
+                                    class="btn-secondary text-sm py-2 px-3" title="Issue a new password" aria-label="Issue a new password"><i class="fas fa-key"></i></button>
+                            <button wire:click="confirmRemove({{ $employee->employee_id }})"
+                                    class="btn-secondary text-sm py-2 px-3 hover:text-red-600" title="Remove" aria-label="Remove"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </li>
+                @endforeach
+            </ul>
+
+            <div class="hidden md:block overflow-x-auto">
                 <table class="data-table">
                     <thead>
                         <tr>

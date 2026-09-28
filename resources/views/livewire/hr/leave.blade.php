@@ -714,13 +714,24 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
     <!-- Leaves Table -->
     <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+        <div class="px-4 sm:px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
             <h2 class="text-lg font-semibold text-gray-800">All Leave Requests</h2>
-            <div class="text-sm text-gray-600">
-                Showing {{ $this->leaves->firstItem() ?? 0 }}-{{ $this->leaves->lastItem() ?? 0 }} of {{ $this->leaves->total() }} leave requests
-            </div>
+            @if($this->leaves->total() > 0)
+                <div class="text-sm text-gray-600">
+                    Showing {{ $this->leaves->firstItem() }}–{{ $this->leaves->lastItem() }} of {{ $this->leaves->total() }}
+                </div>
+            @endif
         </div>
-        
+
+        {{-- Empty: a message, not a table - on a phone the table is wider
+             than the screen and the message was centred off the edge. --}}
+        @if($this->leaves->count() === 0)
+            <div class="flex flex-col items-center px-6 py-12 text-center text-gray-500">
+                <i class="fas fa-calendar-times text-4xl text-gray-300 mb-3"></i>
+                <p class="text-lg text-gray-700">No leave requests found</p>
+                <p class="text-sm mt-1">Try adjusting your filters or check back later.</p>
+            </div>
+        @else
         <div class="overflow-x-auto">
             <table class="data-table">
                 <thead>
@@ -867,6 +878,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 </tbody>
             </table>
         </div>
+        @endif
         
         <!-- Pagination -->
         @if($this->leaves->hasPages())

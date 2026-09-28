@@ -98,6 +98,12 @@ class TimeDeductions
 
             $row = $attendance->get($date);
 
+            // Official business: worked, away from the scanner. Whatever it did
+            // or did not see, the day is not late, short or absent.
+            if ($row && $row->status === 'official_business') {
+                continue;
+            }
+
             if ($row && $row->time_in) {
                 $this->chargeWorkedDay($totals, $row, $shift, $salary);
 

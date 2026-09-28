@@ -39,6 +39,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     /** Its own search: finding one person in the cutoff without narrowing the day's table. */
     public string $summarySearch = '';
 
+    /** Official business: who, which days, and where. */
+    public string $obEmployee = '';
+    public string $obFrom = '';
+    public string $obTo = '';
+    public string $obNote = '';
+
     public function mount()
     {
         $this->selectedDate = date('Y-m-d');
@@ -267,6 +273,56 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         session()->flash('success', 'Attendance updated successfully!');
     }
 
+    /**
+     * Official business: working away from the office, where there is no
+     * scanner. Each day becomes a worked day - not absent, late or short -
+     * and the sync leaves it alone, since the row is no longer the scanner's.
+     * Any scans the day already has are kept, only the status changes.
+     */
+    public function markOfficialBusiness(): void
+    {
+        $data = $this->validate([
+            'obEmployee' => 'required|integer|exists:employees,employee_id',
+            'obFrom' => 'required|date_format:Y-m-d',
+            'obTo' => 'nullable|date_format:Y-m-d|after_or_equal:obFrom',
+            'obNote' => 'required|string|max:120',
+        ], [
+            'obEmployee.required' => 'Choose who was on official business.',
+            'obNote.required' => 'Say where - an event name or place.',
+        ]);
+
+        $from = \Carbon\Carbon::parse($data['obFrom']);
+        $to = \Carbon\Carbon::parse($data['obTo'] ?: $data['obFrom']);
+        if ($from->diffInDays($to) > 31) {
+            $this->addError('obTo', 'At most a month at a time.');
+            return;
+        }
+
+        $note = 'Official business: '.trim($data['obNote']);
+        for ($day = $from->copy(); $day->lte($to); $day->addDay()) {
+            $existing = DB::table('hr_attendance')->where('employee_id', $data['obEmployee'])->whereDate('date', $day)->first();
+            if ($existing) {
+                DB::table('hr_attendance')->where('attendance_id', $existing->attendance_id)
+                    ->update(['status' => 'official_business', 'notes' => $note, 'updated_at' => now()]);
+            } else {
+                $existing = null;
+                DB::table('hr_attendance')->insert([
+                    'employee_id' => $data['obEmployee'], 'date' => $day->toDateString(),
+                    'status' => 'official_business', 'notes' => $note,
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+            \App\Services\Auditor::record('update', 'hr_attendance', $existing->attendance_id ?? null,
+                $existing ? ['status' => $existing->status] : null,
+                ['status' => 'official_business', 'date' => $day->toDateString(), 'notes' => $note]);
+        }
+
+        $days = $from->diffInDays($to) + 1;
+        $this->reset('obEmployee', 'obFrom', 'obTo', 'obNote');
+        $this->loadData();
+        session()->flash('success', "Marked {$days} day(s) as official business.");
+    }
+
     // Add these methods to handle real-time updates
     public function updatedFilters()
     {
@@ -428,6 +484,42 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             </p>
         </div>
 
+        {{-- Events, client sites: worked, but nowhere near the scanner. --}}
+        <div class="mt-4 pt-4 border-t border-gray-200">
+            <p class="form-label">Official business</p>
+            <p class="text-xs text-gray-500 mb-2">For people working away from the office, like at an event. Those days count as full working days - not absent, late or short - and the scanner sync will not change them.</p>
+            @php
+                $obPeople = \Illuminate\Support\Facades\DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
+                    ->where('e.status', 'active')->orderBy('u.full_name')->get(['e.employee_id', 'u.full_name']);
+            @endphp
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-start">
+                <div class="lg:col-span-2">
+                    <select wire:model="obEmployee" class="form-input" aria-label="Employee">
+                        <option value="">Choose employee…</option>
+                        @foreach($obPeople as $person)
+                            <option value="{{ $person->employee_id }}">{{ $person->full_name }}</option>
+                        @endforeach
+                    </select>
+                    @error('obEmployee') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <input type="date" wire:model="obFrom" class="form-input" aria-label="From">
+                    @error('obFrom') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <input type="date" wire:model="obTo" class="form-input" aria-label="To (leave blank for one day)" title="To - leave blank for one day">
+                    @error('obTo') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <input type="text" wire:model="obNote" class="form-input" maxlength="120" placeholder="Where, e.g. MMDA event" aria-label="Where">
+                    @error('obNote') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                </div>
+            </div>
+            <button wire:click="markOfficialBusiness" wire:loading.attr="disabled" class="btn-secondary mt-3">
+                <i class="fas fa-briefcase"></i> Mark official business
+            </button>
+        </div>
+
         @if ($syncError)
             <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
                 <p class="text-sm text-red-800">{{ $syncError }}</p>
@@ -522,6 +614,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     <option value="late">Late</option>
                     <option value="half_day">Half Day</option>
                     <option value="on_leave">On Leave</option>
+                    <option value="official_business">Official business</option>
                 </select>
             </div>
 
@@ -786,6 +879,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     'late' => 'bg-yellow-100 text-yellow-800',
                                     'half_day' => 'bg-blue-100 text-blue-800',
                                     'on_leave' => 'bg-purple-100 text-purple-800',
+                                    'official_business' => 'bg-cyan-100 text-cyan-800',
                                 ];
                             @endphp
                             <tr>
@@ -889,6 +983,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     <option value="late">Late</option>
                                     <option value="half_day">Half Day</option>
                                     <option value="on_leave">On Leave</option>
+                                    <option value="official_business">Official business</option>
                                 </select>
                             </div>
                             

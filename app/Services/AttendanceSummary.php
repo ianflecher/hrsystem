@@ -32,7 +32,7 @@ class AttendanceSummary
         $present = DB::table('hr_attendance')
             ->whereIn('employee_id', $employeeIds)
             ->whereBetween('date', [$period->start, $period->end])
-            ->whereNotNull('time_in')
+            ->where(fn ($q) => $q->whereNotNull('time_in')->orWhere('status', 'official_business'))
             ->selectRaw('employee_id, COUNT(*) n')
             ->groupBy('employee_id')
             ->pluck('n', 'employee_id');
