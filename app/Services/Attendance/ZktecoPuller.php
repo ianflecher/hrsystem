@@ -44,9 +44,28 @@ class ZktecoPuller
     }
 
     /**
+     * One retry on a fresh connection: a download cut off halfway, or a
+     * device still finishing the last session, usually answers the second
+     * time. Two failures in a row are reported as they are.
+     *
      * @return array<int, array{biometric_id: string, timestamp: string}>
      */
     public function punches(): array
+    {
+        try {
+            return $this->pullOnce();
+        } catch (RuntimeException $e) {
+            // A wrong or missing COM key will not fix itself.
+            if (str_contains($e->getMessage(), 'COM key')) {
+                throw $e;
+            }
+            sleep(5);
+
+            return $this->pullOnce();
+        }
+    }
+
+    private function pullOnce(): array
     {
         if (! extension_loaded('sockets')) {
             throw new RuntimeException('Enable the PHP sockets extension to connect to the scanner, or upload an export.');
@@ -70,10 +89,11 @@ class ZktecoPuller
             // landing halfway through the transfer.
             $device->disableDevice();
 
-            // Patient now that we know it is there. The handshake was short on
-            // purpose; the log read must not be, or it truncates silently and
-            // returns nothing at all.
-            $device->setReadTimeout(60);
+            // Longer than the handshake's wait, or the log read truncates
+            // silently and returns nothing at all - but ten seconds of silence per packet, not sixty: the library retries
+            // ten times, so a stalled device used to hold the sync for over ten
+            // minutes. A healthy one never pauses that long mid-download.
+            $device->setReadTimeout(10);
             // Our own decoder: the library's misreads this device's records.
             $raw = $device->readAttendance();
         } finally {

@@ -36,6 +36,12 @@ class PunchImporter
         4 => 'cb_in', 5 => 'cb_out',
     ];
 
+    /** @var array<string, array{rest: bool, start: ?string, end: ?string}> */
+    private static array $shiftMemo = [];
+
+    /** @var array<string, string> */
+    private static array $storedInMemo = [];
+
     /** How long after a night shift's end a late time-out still closes that night. */
     private const NIGHT_OUT_GRACE_HOURS = 4;
 
@@ -58,7 +64,10 @@ class PunchImporter
         }
 
         $yesterday = $moment->copy()->subDay()->toDateString();
-        $shift = ShiftSchedule::forEmployeeDate($employee, $yesterday);
+        // Asked once per person per day: a full pull is a hundred thousand
+        // punches, and a query each made the import crawl.
+        $shift = self::$shiftMemo[$employee->employee_id.'|'.$yesterday]
+            ??= ShiftSchedule::forEmployeeDate($employee, $yesterday);
 
         if ($shift['start'] && $shift['end']) {
             if ($shift['rest'] || ! ShiftSchedule::isOvernight($shift['start'], $shift['end'])) {
@@ -79,8 +88,9 @@ class PunchImporter
             ? $previousPunch
             : null;
         if (! $evening) {
-            $storedIn = DB::table('hr_attendance')->where('employee_id', $employee->employee_id)
-                ->whereDate('date', $yesterday)->value('time_in');
+            $storedIn = self::$storedInMemo[$employee->employee_id.'|'.$yesterday]
+                ??= (string) DB::table('hr_attendance')->where('employee_id', $employee->employee_id)
+                    ->whereDate('date', $yesterday)->value('time_in');
             $evening = $storedIn && Carbon::parse($storedIn)->hour >= 17 ? Carbon::parse($storedIn) : null;
         }
 
@@ -92,6 +102,8 @@ class PunchImporter
         if (! $punches) {
             return ['days' => 0, 'employees' => 0, 'unknown' => [], 'skipped' => 0];
         }
+        self::$shiftMemo = [];
+        self::$storedInMemo = [];
 
         // Everyone the device could be talking about, by enrolment number.
         $employees = DB::table('employees')

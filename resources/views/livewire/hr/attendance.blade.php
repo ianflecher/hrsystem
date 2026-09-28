@@ -362,7 +362,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->syncSummary = null;
         $this->syncStarted = null;
 
-        if (\Illuminate\Support\Facades\Cache::has('attendance.sync.running')) {
+        if (\App\Console\Commands\SyncAttendance::isRunning()) {
             $this->syncStarted = 'A sync is already running. Attendance will update when it finishes.';
 
             return;

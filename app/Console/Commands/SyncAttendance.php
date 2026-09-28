@@ -30,12 +30,12 @@ class SyncAttendance extends Command
         // One pull at a time: the device serves one connection, and the
         // button and the hourly task could otherwise start together.
         if (! $this->option('file')) {
-            if (Cache::has('attendance.sync.running')) {
+            if (self::isRunning()) {
                 $this->warn('A sync is already running.');
 
                 return self::SUCCESS;
             }
-            Cache::put('attendance.sync.running', now()->toDateTimeString(), now()->addMinutes(20));
+            Cache::put('attendance.sync.running', ['pid' => getmypid(), 'at' => now()->toDateTimeString()], now()->addMinutes(20));
         }
 
         try {
@@ -45,6 +45,32 @@ class SyncAttendance extends Command
                 Cache::forget('attendance.sync.running');
             }
         }
+    }
+
+    /**
+     * Whether a sync is really running. The mark names the process holding
+     * it, so one left behind by a run that was killed - it never got to clear
+     * its mark - does not hold every later sync off until it expires.
+     */
+    public static function isRunning(): bool
+    {
+        $mark = Cache::get('attendance.sync.running');
+        $pid = is_array($mark) ? (int) ($mark['pid'] ?? 0) : 0;
+        if (! $mark) {
+            return false;
+        }
+        if ($pid <= 0) {
+            return true;
+        }
+
+        $alive = PHP_OS_FAMILY === 'Windows'
+            ? str_contains((string) shell_exec('tasklist /FI "PID eq '.$pid.'" /NH 2>NUL'), (string) $pid)
+            : file_exists("/proc/{$pid}");
+        if (! $alive) {
+            Cache::forget('attendance.sync.running');
+        }
+
+        return $alive;
     }
 
     private function sync(PunchImporter $importer): int
