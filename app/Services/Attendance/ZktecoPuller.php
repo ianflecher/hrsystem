@@ -89,11 +89,12 @@ class ZktecoPuller
             // landing halfway through the transfer.
             $device->disableDevice();
 
-            // Longer than the handshake's wait, or the log read truncates
-            // silently and returns nothing at all - but ten seconds of silence per packet, not sixty: the library retries
-            // ten times, so a stalled device used to hold the sync for over ten
-            // minutes. A healthy one never pauses that long mid-download.
-            $device->setReadTimeout(10);
+            // Sixty seconds of silence per packet. This device pauses mid-way
+            // through a large log - ten and then thirty both cut the download
+            // off, and only sixty has brought all hundred thousand punches
+            // home (in about two minutes). A device that has truly stopped
+            // still ends the run, only slowly.
+            $device->setReadTimeout(60);
             // Our own decoder: the library's misreads this device's records.
             $raw = $device->readAttendance();
         } finally {

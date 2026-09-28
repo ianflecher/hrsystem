@@ -78,6 +78,25 @@ class ZktecoAttendanceDecodeTest extends TestCase
         ZktecoDevice::decodeLog(str_repeat("\xFF", 12 + 49 * 20));
     }
 
+    /**
+     * The log comes over UDP. A piece that never arrives must cost only the
+     * punches in it - never shift the rest into dates nobody punched.
+     */
+    public function test_a_lost_piece_of_the_download_invents_nothing(): void
+    {
+        $raw = file_get_contents(base_path('tests/Fixtures/zkteco-mb560-attendance.bin'));
+        $real = array_map(fn ($p) => $p['biometric_id'].'|'.$p['timestamp'], ZktecoDevice::decodeLog($raw));
+
+        foreach ([[1000, 1300], [500, 540], [12, 200]] as [$from, $to]) {
+            $got = ZktecoDevice::decodeLog(substr($raw, 0, $from).substr($raw, $to));
+
+            $this->assertGreaterThan(count($real) * 0.8, count($got), "most punches survive losing bytes {$from}-{$to}");
+            foreach ($got as $p) {
+                $this->assertContains($p['biometric_id'].'|'.$p['timestamp'], $real, "bytes {$from}-{$to} lost: a punch was invented");
+            }
+        }
+    }
+
     /** The key pressed on the device comes through with every punch. */
     public function test_every_punch_carries_the_key_that_was_pressed(): void
     {

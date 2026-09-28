@@ -204,3 +204,13 @@
     .people .shift-grid { width: 100%; }
 }
 </style>
+<style>
+.people .schedule-upload { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: end; margin-top: 12px; }
+.people .schedule-upload-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.people .schedule-upload-actions form { margin: 0; }
+.people .secondary-link { font-size: 14px; color: #b91c1c; text-decoration: underline; }
+.people .schedule-preview { margin-top: 18px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
+.people .schedule-preview h3 { margin: 0 0 4px; font-size: 16px; }
+.people .schedule-preview .alert { margin-top: 12px; }
+.people .schedule-preview .alert ul { margin: 6px 0 0 18px; }
+</style>

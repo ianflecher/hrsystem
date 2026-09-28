@@ -225,7 +225,27 @@ class ZktecoDevice extends ZKTeco
      */
     public static function decodeLog(string $raw): array
     {
-        foreach ([[12, 49, 2, 27], [10, 40, 4, 29]] as [$header, $width, $badgeAt, $timeAt]) {
+        // Nothing, or less than one record: the download timed out or was cut
+        // off - not a format problem, and not worth sending anyone to check one.
+        if (strlen($raw) < 12 + 40) {
+            throw new \RuntimeException(
+                'The scanner did not send its attendance log in time - the download came back empty. '
+                .'If this keeps happening, restart the scanner and sync again.'
+            );
+        }
+
+        // This device's 49-byte records, read one by one and each one checked.
+        // The log comes over UDP in pieces, and a piece that never arrives
+        // shifts every record after it: read blindly, those decode to dates
+        // from nowhere. A record that does not look like a punch is skipped
+        // byte by byte until the records line up again, so one lost piece
+        // costs only the punches in it - the next sync brings those back.
+        $punches = self::decodeChecked($raw);
+        if ($punches !== null) {
+            return $punches;
+        }
+
+        foreach ([[10, 40, 4, 29]] as [$header, $width, $badgeAt, $timeAt]) {
             if (! self::looksRight($raw, $header, $width, $timeAt)) {
                 continue;
             }
@@ -254,6 +274,76 @@ class ZktecoDevice extends ZKTeco
             'The scanner returned attendance in a format this does not recognise. '
             .'Nothing was imported rather than risk importing wrong dates.'
         );
+    }
+
+    /**
+     * The 49-byte layout, record by record, keeping only records that are
+     * plainly punches. Null when the stream is not this layout at all.
+     *
+     * @return list<array{biometric_id: string, timestamp: string, state: int}>|null
+     */
+    private static function decodeChecked(string $raw): ?array
+    {
+        $width = 49;
+        $length = strlen($raw);
+        $punches = [];
+        $skipped = 0;
+        $o = 12;
+
+        while ($o + $width <= $length) {
+            if (self::isRecord($raw, $o) || self::isEmptyRecord($raw, $o)) {
+                if (self::isRecord($raw, $o)) {
+                    $punches[] = [
+                        'biometric_id' => rtrim(substr($raw, $o + 2, 24), "\0"),
+                        'timestamp' => self::decodeTime(unpack('V', substr($raw, $o + 27, 4))[1]),
+                        'state' => ord($raw[$o + 31]),
+                    ];
+                }
+                $o += $width;
+                continue;
+            }
+
+            // Out of step: find where two records in a row read true again.
+            $o++;
+            $skipped++;
+            while ($o + 2 * $width <= $length && ! (self::isRecord($raw, $o) && self::isRecord($raw, $o + $width))) {
+                $o++;
+                $skipped++;
+            }
+            if ($o + 2 * $width > $length) {
+                break;
+            }
+        }
+
+        // Mostly unreadable is a different format, or a broken download -
+        // not something to import from.
+        if (! $punches || $skipped > $length / 4) {
+            return null;
+        }
+
+        return $punches;
+    }
+
+    /** A badge of letters and digits, a date somebody could punch, a key 0-5. */
+    private static function isRecord(string $raw, int $o): bool
+    {
+        $badge = substr($raw, $o + 2, 24);
+        if (! preg_match('/^[0-9A-Za-z]{1,24}\0*$/', $badge)) {
+            return false;
+        }
+        if (ord($raw[$o + 31]) > 5) {
+            return false;
+        }
+        $year = (int) substr(self::decodeTime(unpack('V', substr($raw, $o + 27, 4))[1]), 0, 4);
+
+        return $year >= 2015 && $year <= (int) date('Y') + 1;
+    }
+
+    /** A slot the device keeps empty: no badge and its epoch for a date. */
+    private static function isEmptyRecord(string $raw, int $o): bool
+    {
+        return trim(substr($raw, $o + 2, 24), "\0") === ''
+            && str_starts_with(self::decodeTime(unpack('V', substr($raw, $o + 27, 4))[1]), '2000-');
     }
 
     /** Do the first few records decode to a date anyone could have punched? */

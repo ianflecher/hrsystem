@@ -3,6 +3,67 @@
 @if($hr || $teamShiftManager)
 
     @if($hr)
+    @php($thisCutoff = \App\Support\PayPeriod::fromStart(now()->toDateString()))
+    @php($nextCutoff = \App\Support\PayPeriod::fromStart(\Carbon\Carbon::parse($thisCutoff->end)->addDay()->toDateString()))
+    @php($plan = session('schedule_upload'))
+    <div class="card">
+        <h2>Upload a cutoff's schedule</h2>
+        <p class="muted">Your schedule spreadsheet as you keep it: names down the side, the days across the top, and in each cell <strong>8-5</strong>, <strong>12NN-9PM</strong>, <strong>RD</strong>, <strong>S</strong> (suspension), <strong>LEAVE</strong>, <strong>LEAVE WITH PAY</strong>, an <strong>EVENT</strong> or <strong>OB</strong>, or <strong>SCHOOL</strong>. You see what was read before anything is saved.</p>
+        <form method="POST" action="{{ $base }}" enctype="multipart/form-data" class="schedule-upload">@csrf
+            <input type="hidden" name="kind" value="schedule-upload">
+            <label class="people-field"><span>Cutoff</span>
+                <select name="cutoff">
+                    @foreach([$nextCutoff, $thisCutoff] as $option)
+                        <option value="{{ $option->start }}" @selected(old('cutoff', $nextCutoff->start) === $option->start)>{{ $option->label() }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <label class="people-field"><span>Spreadsheet (.xlsx or .csv)</span>
+                <input type="file" name="schedule_file" accept=".xlsx,.csv" required>
+            </label>
+            <div class="schedule-upload-actions">
+                <button><i class="fas fa-upload"></i> Read schedule</button>
+                <a class="secondary-link" href="{{ request()->url() }}?download=schedule-template&cutoff={{ $nextCutoff->start }}">Download a blank template for {{ $nextCutoff->label() }}</a>
+            </div>
+        </form>
+
+        @if($plan)
+            @php($counts = fn ($days, $type) => collect($days)->where('type', $type)->count())
+            <div class="schedule-preview">
+                <h3>Check before saving · {{ $plan['period']['label'] }}</h3>
+                <p class="muted">{{ count($plan['people']) }} {{ \Illuminate\Support\Str::plural('person', count($plan['people'])) }} read. Nothing is saved until you confirm; blank cells change nothing.</p>
+                <div class="scroll"><table>
+                    <thead><tr><th>Employee</th><th>Shifts</th><th>Rest</th><th>Suspension</th><th>Leave</th><th>OB</th><th>School</th></tr></thead>
+                    <tbody>
+                        @foreach($plan['people'] as $person)
+                            <tr>
+                                <td>{{ $person['name'] }}@if(mb_strtolower($person['sheet_name']) !== mb_strtolower($person['name']))<br><span class="muted">as "{{ $person['sheet_name'] }}"</span>@endif</td>
+                                <td>{{ $counts($person['days'], 'shift') }}</td>
+                                <td>{{ $counts($person['days'], 'rest') }}</td>
+                                <td>{{ $counts($person['days'], 'suspension') }}</td>
+                                <td>{{ $counts($person['days'], 'leave_paid') + $counts($person['days'], 'leave_unpaid') }}</td>
+                                <td>{{ $counts($person['days'], 'ob') }}</td>
+                                <td>{{ $counts($person['days'], 'school') }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table></div>
+                @if($plan['unmatched'])
+                    <div class="alert error"><strong>Not matched to anybody - these rows will be skipped:</strong> {{ implode(', ', $plan['unmatched']) }}.
+                        Put their employee number (like IC-00235 or CAFE-00016) in a column before the dates, or write the name as it is in Employees.</div>
+                @endif
+                @if($plan['unknown'])
+                    <div class="alert error"><strong>Cells that were not understood - left unchanged:</strong>
+                        <ul>@foreach($plan['unknown'] as $cell)<li>{{ $cell }}</li>@endforeach</ul></div>
+                @endif
+                <div class="schedule-upload-actions">
+                    <form method="POST" action="{{ $base }}">@csrf<input type="hidden" name="kind" value="schedule-confirm"><button @disabled(! $plan['people'])>Confirm and save</button></form>
+                    <form method="POST" action="{{ $base }}">@csrf<input type="hidden" name="kind" value="schedule-cancel"><button class="secondary">Cancel</button></form>
+                </div>
+            </div>
+        @endif
+    </div>
+
     <details class="card"><summary>Add a holiday</summary>
         <form method="POST" action="{{ $base }}" class="grid divider">@csrf
             <input type="hidden" name="kind" value="holiday">

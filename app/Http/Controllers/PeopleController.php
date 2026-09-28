@@ -87,10 +87,45 @@ class PeopleController extends Controller
         );
     }
 
+    /**
+     * A blank schedule for a cutoff, as a spreadsheet: every active person with
+     * their employee number, one column per day. Filled in and uploaded back.
+     */
+    private function scheduleTemplate(Request $request)
+    {
+        $period = PayPeriod::fromStart($request->query('cutoff') ?: now()->toDateString());
+        $days = [];
+        for ($d = Carbon::parse($period->start); $d->lte(Carbon::parse($period->end)); $d->addDay()) {
+            $days[] = $d->copy();
+        }
+        $people = DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
+            ->leftJoin('departments as dp', 'dp.department_id', '=', 'e.department_id')
+            ->where('e.status', 'active')
+            ->when($request->query('company'), fn ($q, $c) => $q->where('e.company', $c))
+            ->orderBy('dp.department_name')->orderBy('u.full_name')
+            ->get(['e.employee_no', 'u.full_name', 'dp.department_name']);
+
+        $name = 'schedule-'.$period->start.'.csv';
+
+        return response()->streamDownload(function () use ($days, $people) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, array_merge(['Employee No', 'Name', 'Department'], array_map(fn ($d) => $d->format('D'), $days)));
+            fputcsv($out, array_merge(['', '', ''], array_map(fn ($d) => $d->toDateString(), $days)));
+            foreach ($people as $p) {
+                fputcsv($out, array_merge([$p->employee_no, $p->full_name, $p->department_name ?? ''], array_fill(0, count($days), '')));
+            }
+            fclose($out);
+        }, $name, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
     public function index(Request $request, string $module)
     {
         [$hr, $employeeId] = $this->context($request);
         abort_unless(isset(self::MODULES[$module]), 404);
+        if ($module === 'shifts' && $hr && $request->query('download') === 'schedule-template') {
+            return $this->scheduleTemplate($request);
+        }
         $requestStatuses = match ($module) {
             'overtime' => ['pending', 'approved', 'rejected', 'cancelled'],
             'loans' => ['pending', 'approved', 'active', 'repaid', 'rejected', 'cancelled'],
@@ -336,6 +371,40 @@ class PeopleController extends Controller
                 break;
             case 'shifts':
                 $teamPortal = $this->isTeamPortal($module);
+
+                // A cutoff's schedule from HR's spreadsheet: read and shown
+                // first, written only once confirmed.
+                if (in_array($request->input('kind'), ['schedule-upload', 'schedule-confirm', 'schedule-cancel'], true)) {
+                    PeopleAccess::hr();
+                    if ($request->input('kind') === 'schedule-cancel') {
+                        session()->forget('schedule_upload');
+
+                        return back();
+                    }
+                    if ($request->input('kind') === 'schedule-confirm') {
+                        $plan = session('schedule_upload');
+                        abort_unless(is_array($plan), 422, 'Upload the schedule again - the preview has expired.');
+                        $done = (new \App\Services\ScheduleUpload)->apply($plan, auth()->id());
+                        session()->forget('schedule_upload');
+
+                        return back()->with('success', "Schedule for {$plan['period']['label']} saved: {$done['shifts']} shift day(s), {$done['rest']} rest day(s), "
+                            ."{$done['suspensions']} suspension day(s), {$done['leave']} leave request(s), {$done['ob']} official business day(s).");
+                    }
+                    $request->validate([
+                        'schedule_file' => 'required|file|max:10240|mimes:xlsx,csv,txt',
+                        'cutoff' => 'required|date_format:Y-m-d',
+                    ], ['schedule_file.mimes' => 'Upload the schedule as .xlsx or .csv.']);
+                    $file = $request->file('schedule_file');
+                    try {
+                        $rows = \App\Support\SpreadsheetReader::rows($file->getRealPath(), $file->getClientOriginalName());
+                        $plan = (new \App\Services\ScheduleUpload)->read($rows, PayPeriod::fromStart($request->input('cutoff')));
+                    } catch (\RuntimeException $e) {
+                        throw ValidationException::withMessages(['schedule_file' => $e->getMessage()]);
+                    }
+                    session(['schedule_upload' => $plan]);
+
+                    return back();
+                }
                 if ($request->input('kind') === 'holiday' || $request->filled(['date', 'name', 'type'])) {
                     PeopleAccess::hr();
                     $data = $request->validate([
