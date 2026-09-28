@@ -306,6 +306,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         }
 
         $this->syncSummary = $importer->import($punches, $this->overwriteManual) + ['source' => 'the scanner'];
+        \Illuminate\Support\Facades\Cache::forever('attendance.sync.last', ['ok' => true, 'at' => now()->toDateTimeString(), 'message' => null]);
         $this->loadAttendance();
         $this->loadStats();
     }
@@ -372,6 +373,13 @@ new #[Layout('components.layouts.humanresource')] class extends Component
          depends on the device being reachable from this server - and when it is
          not, attendance still has to get in somehow, so an export from the
          scanner's own software can be uploaded instead. --}}
+    @if (! (\Illuminate\Support\Facades\Cache::get('attendance.sync.last')['ok'] ?? true))
+        <div class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+            <p class="font-semibold"><i class="fas fa-triangle-exclamation"></i> The hourly scanner sync failed at {{ \Carbon\Carbon::parse(\Illuminate\Support\Facades\Cache::get('attendance.sync.last')['at'])->format('M j, g:i A') }}.</p>
+            <p class="mt-1">{{ \Illuminate\Support\Facades\Cache::get('attendance.sync.last')['message'] }}</p>
+            <p class="mt-1 text-red-700">Attendance since then is not in yet. This clears on its own after the next successful sync.</p>
+        </div>
+    @endif
     <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5 mb-6">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -635,6 +643,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     @php
         $summaryPeriod = \App\Support\PayPeriod::fromStart($summaryCutoff ?: date('Y-m-d'));
         $summaryRows = $this->cutoffSummary();
+        $summaryWorkedMinutes = $summaryRows->sum('worked_minutes');
+        $summaryWorkedHours = intdiv($summaryWorkedMinutes, 60);
+        $summaryWorkedRemainder = $summaryWorkedMinutes % 60;
     @endphp
     <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
         <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
@@ -671,10 +682,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         <th class="px-4 py-3 text-right">Late</th>
                         <th class="px-4 py-3 text-right">Absent</th>
                         <th class="px-4 py-3 text-right">Leave</th>
+                        <th class="px-4 py-3 text-right">Hours</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     @forelse ($summaryRows as $row)
+                        @php
+                            $rowHours = intdiv((int) $row->worked_minutes, 60);
+                            $rowMinutes = ((int) $row->worked_minutes) % 60;
+                        @endphp
                         <tr>
                             <td class="px-4 py-2">
                                 <div class="font-medium text-gray-900">{{ $row->full_name }}</div>
@@ -686,9 +702,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             <td class="px-4 py-2 text-right {{ $row->late ? 'font-medium text-amber-700' : 'text-gray-400' }}">{{ $row->late }}</td>
                             <td class="px-4 py-2 text-right {{ $row->absent ? 'font-medium text-red-700' : 'text-gray-400' }}">{{ $row->absent }}</td>
                             <td class="px-4 py-2 text-right text-gray-700">{{ $row->leave + $row->unpaid_leave }}</td>
+                            <td class="px-4 py-2 text-right font-medium text-slate-900">{{ $rowHours }}h {{ $rowMinutes }}m</td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Nobody matches these filters.</td></tr>
+                        <tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">Nobody matches these filters.</td></tr>
                     @endforelse
                 </tbody>
             </table>

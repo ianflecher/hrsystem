@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Support\PayPeriod;
+use App\Support\WorkDay;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -20,7 +21,7 @@ class AttendanceSummary
 {
     /**
      * @param  list<int>  $employeeIds
-     * @return array<int, array{present: int, late: int, absent: int, leave: int, unpaid_leave: int}>
+     * @return array<int, array{present: int, late: int, absent: int, leave: int, unpaid_leave: int, worked_minutes: int}>
      */
     public function forEmployees(array $employeeIds, PayPeriod $period): array
     {
@@ -35,6 +36,14 @@ class AttendanceSummary
             ->selectRaw('employee_id, COUNT(*) n')
             ->groupBy('employee_id')
             ->pluck('n', 'employee_id');
+
+        $workedMinutes = DB::table('hr_attendance')
+            ->whereIn('employee_id', $employeeIds)
+            ->whereBetween('date', [$period->start, $period->end])
+            ->orderBy('date')
+            ->get()
+            ->groupBy('employee_id')
+            ->map(fn ($rows) => $rows->sum(fn ($row) => WorkDay::workedMinutes($row)));
 
         $employees = DB::table('employees')
             ->whereIn('employee_id', $employeeIds)
@@ -59,6 +68,7 @@ class AttendanceSummary
                 'absent'       => (int) ($t['absentDays'] ?? 0),
                 'leave'        => (int) ($t['leaveDays'] ?? 0),
                 'unpaid_leave' => (int) ($t['unpaidLeaveDays'] ?? 0),
+                'worked_minutes' => (int) ($workedMinutes[$id] ?? 0),
             ];
         }
 

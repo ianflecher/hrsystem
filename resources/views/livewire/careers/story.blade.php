@@ -33,7 +33,7 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
 <div>
     {{-- The words sit on the photograph rather than under it: a band of image
          with the heading below reads as a decorative stripe, not a hero. --}}
-    @php $storyHero = $this->pic('story-hero'); @endphp
+    @php $storyHero = $this->pic('team-group-1') ?: $this->pic('story-hero'); @endphp
     <section class="hero hero--story" id="top">
         <div class="hero__img {{ $storyHero ? '' : 'hero__img--empty' }}"
              @if ($storyHero) style="background-image: url('{{ $storyHero }}')" @endif></div>

@@ -30,13 +30,10 @@ class WorkTimePayroll
                     // A shift that ends past midnight: the final out belongs to
                     // the next day, and WorkDay reads the columns as stored.
                     if($out->lte($in)){
-                        $hours += max(0, ($in->diffInMinutes($out->addDay()) - (int)($shift['break_minutes'] ?? 0)) / 60);
+                        $hours += min(8, max(0, ($in->diffInMinutes($out->addDay()) - 60) / 60));
                     } else {
-                        // The break that was punched, or the shift's assumed one
-                        // when nobody punched it. A fixed deduction applied to
-                        // somebody who worked through their lunch takes an hour
-                        // off a day they spent at the machine.
-                        $hours += \App\Support\WorkDay::workedHours($row, (int)($shift['break_minutes'] ?? 0));
+                        // Deduct the fixed lunch hour, not the scanned lunch duration.
+                        $hours += \App\Support\WorkDay::workedHours($row);
                     }
                 }
                 continue;

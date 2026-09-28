@@ -97,6 +97,10 @@
     .people .rest {background:#e2e8f0;border-color:#64748b;color:#334155}
     .people .holiday {background:#fef3c7;border-color:#d97706;color:#78350f}
     .people .shift button {font-size:11px;min-height:30px;padding:4px 7px;margin-top:6px}
+    .people .shift-picker {max-width:420px;margin-top:14px}
+    .people .current-rest-day {display:inline-flex;margin-top:12px;padding:8px 11px;border-radius:999px;background:#f1f5f9;color:#334155;font-size:13px;font-weight:600}
+    .people .quick-rest-form {margin-top:8px}
+    .people .quick-rest-form button {font-size:11px;min-height:30px;padding:4px 8px}
     .people .schedule[data-view=agenda] .calendar {display:flex;flex-direction:column;min-width:0;gap:10px}
     .people .schedule[data-view=agenda] .weekday, .people .schedule[data-view=agenda] .calendar-blank {display:none}
     .people .schedule[data-view=agenda] .day {display:grid;grid-template-columns:140px minmax(0,1fr);gap:12px;min-height:0;padding:14px}
@@ -121,4 +125,34 @@
         .people .table-cards td[data-label]::before {display:block;content:attr(data-label);color:var(--ink-2);font-weight:500;text-align:left}
     }
     @media(prefers-reduced-motion:reduce) {.people * {scroll-behavior:auto!important;transition:none!important}}
+</style>
+<style>
+.people-dialog { border: 0; border-radius: 14px; padding: 24px; max-width: 380px; width: calc(100% - 32px); box-shadow: 0 20px 50px rgba(15, 23, 42, .25); }
+.people-dialog::backdrop { background: rgba(15, 23, 42, .45); }
+.people-dialog h3 { margin: 0 0 8px; font-size: 1.05rem; }
+.people-dialog p { margin: 0 0 18px; color: #475569; line-height: 1.5; }
+.people-dialog button { float: right; }
+</style>
+<style>
+.rest-save-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.rest-save-bar [data-rest-pending] { flex: 1 1 220px; }
+.people button.is-picked { background: #fee2e2; border-color: #dc2626; color: #991b1b; font-weight: 600; }
+</style>
+<style>
+.people .shift-grid-wrap { overflow-x: auto; margin-top: 12px; border: 1px solid #cbd5e1; border-radius: 10px; }
+.people .shift-grid { border-collapse: collapse; width: 100%; min-width: 900px; font-size: 13px; }
+.people .shift-grid th, .people .shift-grid td { border: 1px solid #e2e8f0; padding: 7px 4px; text-align: center; white-space: nowrap; }
+.people .shift-grid thead th { background: #f8fafc; font-weight: 700; color: #0f172a; }
+.people .shift-grid thead th span { display: block; font-size: 10px; color: #64748b; letter-spacing: .04em; }
+.people .shift-grid .sg-name { text-align: left; padding-left: 10px; font-weight: 600; position: sticky; left: 0; background: #fff; min-width: 190px; z-index: 1; }
+.people .shift-grid thead .sg-name { background: #f8fafc; }
+.people .shift-grid .sg-weekend { background: #fdf2f2; }
+.people .shift-grid .sg-holiday { background: #fef3c7; }
+.people .shift-grid .sg-today { box-shadow: inset 0 -3px 0 #dc2626; }
+.people .shift-grid .sg-dept td { background: #eef2ff; text-align: left; font-weight: 700; color: #3730a3; padding-left: 10px; }
+.people .sg-rest { background: #dc2626 !important; color: #fff; font-weight: 700; }
+.people .sg-leave { background: #fde047 !important; color: #713f12; font-weight: 700; font-size: 11px; }
+.people .sg-none { color: #94a3b8; }
+.people .sg-legend span { display: inline-block; padding: 1px 6px; border-radius: 4px; margin: 0 4px 0 10px; }
+.people .sg-legend span:first-child { margin-left: 0; }
 </style>

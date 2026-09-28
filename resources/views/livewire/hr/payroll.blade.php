@@ -82,6 +82,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             })
             ->select(
                 'employees.employee_id',
+                'employees.employee_no',
                 'employees.user_id',
                 'users.full_name',
                 'users.email',
@@ -162,7 +163,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 DB::raw('COUNT(DISTINCT CASE WHEN hr_payroll.status = "paid" THEN employees.employee_id END) as total_paid'),
                 DB::raw('COALESCE(SUM(hr_payroll.gross_pay), 0) as total_gross'),
                 DB::raw('COALESCE(SUM(hr_payroll.deductions), 0) as total_deductions'),
-                DB::raw('COALESCE(SUM(hr_payroll.net_pay), 0) as total_net')
+                DB::raw('COALESCE(SUM(hr_payroll.net_pay), 0) as total_net'),
+                DB::raw('COALESCE(SUM(hr_payroll.employer_total_cost), 0) as total_company_cost')
             )
             ->first();
     }
@@ -178,6 +180,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             })
             ->select(
                 'employees.employee_id',
+                'employees.employee_no',
                 'employees.user_id',
                 'users.full_name',
                 'users.email',
@@ -1348,15 +1351,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     <div class="text-sm text-gray-600">Total Net Pay</div>
                 </div>
                 <div class="text-center p-3 bg-white rounded shadow">
-                    <div class="text-2xl font-bold text-gray-600">
-                        @php
-                            $gross = $this->payrollStats?->total_gross ?? 0;
-                            $deductions = $this->payrollStats?->total_deductions ?? 0;
-                            $rate = $gross > 0 ? ($deductions / $gross * 100) : 0;
-                        @endphp
-                        {{ round($rate, 1) }}%
+                    <div class="text-2xl font-bold text-red-600">
+                        ₱{{ number_format($this->payrollStats?->total_company_cost ?? 0, 2) }}
                     </div>
-                    <div class="text-sm text-gray-600">Average Deduction Rate</div>
+                    <div class="text-sm text-gray-600">Company Total Payroll Cost</div>
                 </div>
             </div>
         </div>
@@ -1420,7 +1418,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             <div class="space-y-2">
                                 <div>
                                     <span class="text-xs text-gray-500">Employee ID:</span>
-                                    <p class="text-sm">{{ $selectedEmployee->employee_id }}</p>
+                                    <p class="text-sm">{{ ($selectedEmployee->employee_no ?? null) ?: 'Not assigned' }}</p>
                                 </div>
                                 <div>
                                     <span class="text-xs text-gray-500">Department:</span>

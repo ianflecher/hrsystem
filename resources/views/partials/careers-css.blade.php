@@ -206,6 +206,27 @@
         @media (max-width: 860px) {
             .cnav__inner { height: 68px; gap: 12px; justify-content: space-between; }
 
+            .cnav.is-open {
+                bottom: 0;
+                background: transparent;
+                -webkit-backdrop-filter: none;
+                backdrop-filter: none;
+                box-shadow: none;
+                pointer-events: none;
+            }
+
+            .cnav.is-open .cnav__inner {
+                height: 100%;
+                align-items: stretch;
+                justify-content: flex-end;
+                pointer-events: none;
+            }
+
+            .cnav.is-open .cnav__brand,
+            .cnav.is-open .cnav__burger {
+                display: none;
+            }
+
             .cnav__burger {
                 display: inline-flex;
                 flex-direction: column;
@@ -247,17 +268,17 @@
 
             .cnav__menu {
                 display: flex;
-                position: fixed;
+                position: absolute;
                 top: 0;
                 right: 0;
                 bottom: 0;
-                z-index: 1;
+                z-index: 2;
                 width: 88%;
                 max-width: 24rem;
                 flex-direction: column;
                 align-items: stretch;
                 gap: 0;
-                padding: 22px 22px 28px;
+                padding: calc(env(safe-area-inset-top, 0px) + 18px) 22px calc(env(safe-area-inset-bottom, 0px) + 28px);
                 overflow-y: auto;
                 /* Solid white whatever the bar is doing. Over a photograph the
                    drawer would otherwise inherit the transparent bar and put
@@ -268,6 +289,7 @@
                 transform: translateX(100%);
                 transition: transform .28s ease;
                 visibility: hidden;
+                pointer-events: auto;
             }
 
             .cnav.is-open .cnav__menu { transform: translateX(0); visibility: visible; }
@@ -1158,7 +1180,11 @@
         @media (max-width: 860px) {
             .careers__wrap { padding: 0 20px; }
             .hero { min-height: 0; padding: 88px 0 48px; }
-            .section { padding: 68px 0; }
+            .section { padding: 76px 0 68px; }
+            .section__head,
+            .explore__head {
+                scroll-margin-top: 92px;
+            }
             .cta { padding: 76px 0; }
             .search__go { flex: 1 1 100%; }
 
@@ -1538,7 +1564,15 @@
 
         @media (max-width: 860px) {
             .founder { grid-template-columns: 1fr; gap: 24px; }
-            .founder__pic { aspect-ratio: 16 / 10; }
+            .founder__pic {
+                aspect-ratio: 4 / 5;
+                border-radius: 10px;
+                background-position: center top;
+            }
+            .founder__headline {
+                font-size: 1.25rem;
+                line-height: 1.35;
+            }
         }
 
         /* ---------------------------------------------------------- day one */

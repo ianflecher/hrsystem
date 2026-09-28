@@ -134,6 +134,9 @@
                                 <div class="mt-3 text-xs font-semibold">{{ ucfirst(str_replace('_', ' ', $record->status)) }}</div>
                                 <div class="mt-1 text-[11px] leading-4 opacity-80">
                                     {{ $record->time_in ? \Carbon\Carbon::parse($record->time_in)->format('g:i A') : 'No in' }}
+                                    @foreach(['lunch_in' => 'Lunch in', 'lunch_out' => 'Lunch out', 'cb_in' => 'CB in', 'cb_out' => 'CB out'] as $punch => $punchLabel)
+                                        @if($record->{$punch} ?? null)<br>{{ $punchLabel }} {{ \Carbon\Carbon::parse($record->{$punch})->format('g:i A') }}@endif
+                                    @endforeach
                                     <br>
                                     {{ $record->time_out ? \Carbon\Carbon::parse($record->time_out)->format('g:i A') : 'No out' }}
                                 </div>

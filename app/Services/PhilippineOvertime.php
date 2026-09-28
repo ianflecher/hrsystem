@@ -20,13 +20,13 @@ class PhilippineOvertime
         $end = Carbon::parse($endsAt);
         if ($end->lessThanOrEqualTo($start)) $end->addDay();
 
-        $minutes = max(0, $start->diffInMinutes($end));
+        $hours = intdiv(max(0, (int) $start->diffInMinutes($end)), 60);
+        $minutes = $hours * 60;
         $date = $start->toDateString();
         $shift = ShiftSchedule::forEmployeeDate($employee, $date);
         $holiday = DB::table('holidays')->whereDate('date', $date)->first();
         $classification = $holiday ? (string) ($holiday->classification ?? ($holiday->type === 'special' ? 'special_non_working' : 'regular')) : null;
 
-        $hours = $minutes / 60;
         $base = Tardiness::hourlyRate((float) $employee->salary);
         $multiplier = match (true) {
             $classification === 'regular' && $shift['rest'] => 3.38,

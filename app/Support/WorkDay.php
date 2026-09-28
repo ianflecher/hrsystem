@@ -12,10 +12,10 @@ use Carbon\Carbon;
  * here, so the attendance table, the payslip and the employee's own screen
  * cannot disagree about how long somebody worked.
  *
- * The breaks are read from the punches when they exist and fall back to the
- * shift's fixed break_minutes when they do not. That order matters: a fixed
- * deduction is an assumption about a break somebody may not have taken, and
- * once there is a real pair of punches the assumption should stop being used.
+ * Work hours are counted from first in to final out, then a fixed lunch break
+ * is deducted and the paid day is capped at eight hours. Lunch and CB punches
+ * are kept for display and checking, but their exact scanned duration does not
+ * change the payable total.
  */
 class WorkDay
 {
@@ -95,12 +95,10 @@ class WorkDay
     }
 
     /**
-     * Minutes worked: the span from first in to final out, less the breaks.
-     *
-     * $assumedBreakMinutes is the shift's fixed deduction, used only when
-     * nobody punched a break.
+     * Minutes worked: the span from first in to final out, less a fixed break,
+     * capped at eight hours.
      */
-    public static function workedMinutes(?object $row, int $assumedBreakMinutes = 0): int
+    public static function workedMinutes(?object $row, int $assumedBreakMinutes = 60): int
     {
         $punches = self::punches($row);
         $in = $punches['time_in'];
@@ -112,14 +110,10 @@ class WorkDay
 
         $span = (int) round($in->diffInMinutes($out));
 
-        $break = self::hasPunchedBreak($row)
-            ? self::breakMinutes($row)
-            : max(0, $assumedBreakMinutes);
-
-        return (int) max(0, $span - $break);
+        return min(480, (int) max(0, $span - max(0, $assumedBreakMinutes)));
     }
 
-    public static function workedHours(?object $row, int $assumedBreakMinutes = 0): float
+    public static function workedHours(?object $row, int $assumedBreakMinutes = 60): float
     {
         return round(self::workedMinutes($row, $assumedBreakMinutes) / 60, 2);
     }

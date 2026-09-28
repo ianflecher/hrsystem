@@ -399,7 +399,7 @@ class DemoData extends Command
 
             DB::table('employee_loans')->insert([
                 'employee_id' => $person->employee_id,
-                'type'        => $i % 2 ? 'loan' : 'cash_advance',
+                'type'        => 'loan',
                 'amount'      => $amount,
                 'installment' => round($amount / random_int(2, 6), 2),
                 // Before the cutoffs payroll generates below, so repayments

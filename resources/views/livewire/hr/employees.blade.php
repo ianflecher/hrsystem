@@ -41,6 +41,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public string $shift_start = '';
     public string $shift_end = '';
     public array $rest_days = [];
+    /** This cutoff's days, 'Ymd' => rest?, as the shift calendar has them. */
+    public array $cutoff_rest = [];
     public string $immersion_until = '';
     public string $biometric_id = '';
     public $department_id = '';
@@ -116,6 +118,66 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         'hr'         => 'HR',
         'admin'      => 'Admin',
     ];
+
+    /** The current payroll cutoff, whose rest days Edit employee shows. */
+    public function cutoffPeriod(): \App\Support\PayPeriod
+    {
+        return \App\Support\PayPeriod::recent(1)[0];
+    }
+
+    private function loadCutoffRest(object $employee): array
+    {
+        $period = $this->cutoffPeriod();
+        $assigned = DB::table('shift_assignments')->where('employee_id', $employee->employee_id)
+            ->whereBetween('work_date', [$period->start, $period->end])
+            ->get()->keyBy(fn ($row) => substr((string) $row->work_date, 0, 10));
+
+        $out = [];
+        for ($day = \Carbon\Carbon::parse($period->start); $day->lte(\Carbon\Carbon::parse($period->end)); $day->addDay()) {
+            $shift = $assigned->get($day->toDateString());
+            $out[$day->format('Ymd')] = $shift ? (bool) $shift->rest_day : WorkWeek::restsOn($employee->rest_days, $day);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Writes this cutoff's ticks as calendar marks - the same records Mark
+     * rest makes - so they change this cutoff only, never the weekly default.
+     */
+    private function saveCutoffRest(int $employeeId, ?string $weeklyRest): void
+    {
+        $assigned = DB::table('shift_assignments')->where('employee_id', $employeeId)
+            ->whereIn('work_date', array_map(fn ($key) => \Carbon\Carbon::createFromFormat('Ymd', (string) $key)->toDateString(), array_keys($this->cutoff_rest)))
+            ->get()->keyBy(fn ($row) => substr((string) $row->work_date, 0, 10));
+
+        foreach ($this->cutoff_rest as $key => $rest) {
+            $day = \Carbon\Carbon::createFromFormat('Ymd', (string) $key)->startOfDay();
+            $date = $day->toDateString();
+            $rest = (bool) $rest;
+            $shift = $assigned->get($date);
+            $defaultRest = WorkWeek::restsOn($weeklyRest, $day);
+            $current = $shift ? (bool) $shift->rest_day : $defaultRest;
+
+            if ($rest === $current) {
+                continue;
+            }
+
+            if ($rest === $defaultRest) {
+                // Back to the weekly default: the mark is no longer needed.
+                DB::table('shift_assignments')->where('employee_id', $employeeId)->where('work_date', $date)->delete();
+                continue;
+            }
+
+            DB::table('shift_assignments')->updateOrInsert(
+                ['employee_id' => $employeeId, 'work_date' => $date],
+                ['starts_at' => null, 'ends_at' => null, 'rest_day' => $rest,
+                    'label' => $rest ? 'Rest day' : 'Working day', 'status' => 'approved',
+                    'created_by' => auth()->id(), 'approved_by' => auth()->id(), 'approved_at' => now(),
+                    'created_at' => now(), 'updated_at' => now()]
+            );
+        }
+    }
 
     public function mount(): void
     {
@@ -245,6 +307,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->shift_start   = $row->shift_start ? substr($row->shift_start, 0, 5) : '';
         $this->shift_end     = $row->shift_end ? substr($row->shift_end, 0, 5) : '';
         $this->rest_days     = WorkWeek::days($row->rest_days);
+        $this->cutoff_rest   = $this->loadCutoffRest($row);
         $this->immersion_until = $row->immersion_until ? substr((string) $row->immersion_until, 0, 10) : '';
         $this->biometric_id  = (string) ($row->biometric_id ?? '');
         $this->department_id = $row->department_id ?? '';
@@ -446,6 +509,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'shift_end'     => ['nullable', 'date_format:H:i'],
             'rest_days'     => ['array'],
             'rest_days.*'   => ['integer', 'between:1,7'],
+            'cutoff_rest'   => ['array'],
             'immersion_until' => ['nullable', 'date'],
             'biometric_id'  => ['nullable', 'string', 'max:50',
                                 Rule::unique('employees', 'biometric_id')->ignore($this->editingId, 'employee_id')],
@@ -492,6 +556,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     'role'       => $data['role'],
                     'updated_at' => now(),
                 ]);
+
+                $this->saveCutoffRest((int) $this->editingId, $restDays);
 
                 DB::table('employees')->where('employee_id', $this->editingId)->update([
                     'job_title'     => $data['job_title'],
@@ -747,6 +813,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->shift_start   = '';
         $this->shift_end     = '';
         $this->rest_days     = [];
+        $this->cutoff_rest   = [];
         $this->immersion_until = '';
         $this->biometric_id  = '';
         $this->department_id = '';
@@ -1142,7 +1209,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 @error('shift_end') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
                             <div class="sm:col-span-2 lg:col-span-3">
-                                <span class="form-label">Rest days</span>
+                                <span class="form-label">Rest days (every week)</span>
                                 <div class="flex flex-wrap gap-3 mt-1">
                                     @foreach (WorkWeek::DAYS as $number => $name)
                                         <label class="flex items-center gap-2 text-sm text-gray-700">
@@ -1152,8 +1219,28 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     @endforeach
                                 </div>
                                 <p class="mt-1 text-xs text-gray-500">
-                                    The shift calendar is drawn from these.
+                                    Their usual rest day, used for every cutoff unless changed below.
                                 </p>
+
+                                @if ($editingId && $cutoff_rest)
+                                    <span class="form-label mt-4 block">Rest days this cutoff ({{ $this->cutoffPeriod()->label() }})</span>
+                                    @foreach (collect(array_keys($cutoff_rest))->groupBy(fn ($key) => \Carbon\Carbon::createFromFormat('Ymd', (string) $key)->startOfWeek()->format('Y-m-d')) as $monday => $keys)
+                                        <div class="flex flex-wrap items-center gap-3 mt-1" wire:key="cutoff-week-{{ $monday }}">
+                                            <span class="w-24 text-xs font-semibold text-gray-500">
+                                                {{ \Carbon\Carbon::parse($monday)->format('M j') }}–{{ \Carbon\Carbon::parse($monday)->endOfWeek()->format('M j') }}
+                                            </span>
+                                            @foreach ($keys as $key)
+                                                <label class="flex items-center gap-2 text-sm text-gray-700">
+                                                    <input type="checkbox" wire:model="cutoff_rest.{{ $key }}" class="rounded border-gray-300">
+                                                    {{ \Carbon\Carbon::createFromFormat('Ymd', (string) $key)->format('D j') }}
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    @endforeach
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        Starts as the weekly default. Change a day here only when this cutoff is different - the weekly default above stays as it is.
+                                    </p>
+                                @endif
                                 @error('rest_days') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
                             <div class="sm:col-span-2">

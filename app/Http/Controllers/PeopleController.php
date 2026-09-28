@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Support\PeopleAccess;
+use App\Support\PayPeriod;
+use App\Support\WorkWeek;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +17,7 @@ class PeopleController extends Controller
     public const MODULES = [
         'documents' => 'Document vault', 'overtime' => 'Overtime', 'shifts' => 'Shift calendar',
         'announcements' => 'Announcements', 'checklists' => 'Onboarding & offboarding',
-        'reviews' => 'Performance reviews', 'loans' => 'Loans & cash advances', 'reports' => 'Reports',
+        'reviews' => 'Performance reviews', 'loans' => 'Government loans', 'reports' => 'Reports',
     ];
 
     /** Employment statuses that mean the person is on their way out. */
@@ -40,6 +42,49 @@ class PeopleController extends Controller
         return ! PeopleAccess::isHr()
             && in_array(auth()->user()->role, ['supervisor', 'leader'], true)
             && in_array($module, ['overtime', 'shifts'], true);
+    }
+
+    /**
+     * A cutoff carries at most three rest days. Marking a fourth
+     * moves an existing rest day back to work rather
+     * than stacking more days off onto the payroll.
+     */
+    private function makeRoomForRestDay(int $employeeId, Carbon $day, string $status, bool $hr): void
+    {
+        $start = $day->day <= 15 ? $day->copy()->startOfMonth() : $day->copy()->day(16);
+        $end = $day->day <= 15 ? $day->copy()->day(15) : $day->copy()->endOfMonth();
+        $limit = 3;
+
+        $employee = DB::table('employees')->where('employee_id', $employeeId)->first();
+        $assigned = DB::table('shift_assignments')->where('employee_id', $employeeId)
+            ->whereBetween('work_date', [$start->toDateString(), $end->toDateString()])
+            ->get()->keyBy(fn ($row) => substr((string) $row->work_date, 0, 10));
+
+        $rest = [];
+        for ($d = $start->copy(); $d->lte($end); $d->addDay()) {
+            $date = $d->toDateString();
+            if ($date === $day->toDateString()) continue;
+            $shift = $assigned->get($date);
+            if ($shift ? $shift->rest_day : WorkWeek::restsOn($employee->rest_days, $d)) {
+                $rest[$date] = ! $shift;
+            }
+        }
+
+        if (count($rest) < $limit) return;
+
+        // A default rest day moves first (same week, then nearest); if every
+        // rest day was marked by hand, the nearest of those moves instead.
+        $movable = collect($rest)->keys()
+            ->sortBy(fn ($date) => [$rest[$date] ? 0 : 1, Carbon::parse($date)->isoWeek() === $day->isoWeek() ? 0 : 1, abs(Carbon::parse($date)->diffInDays($day))])
+            ->values();
+
+        DB::table('shift_assignments')->updateOrInsert(
+            ['employee_id' => $employeeId, 'work_date' => $movable->first()],
+            ['starts_at' => $employee->shift_start ? substr($employee->shift_start, 0, 5) : null, 'ends_at' => $employee->shift_end ? substr($employee->shift_end, 0, 5) : null,
+                'rest_day' => false, 'label' => 'Rest day moved to '.$day->format('M j'), 'status' => $status,
+                'created_by' => auth()->id(), 'approved_by' => $hr ? auth()->id() : null, 'approved_at' => $hr ? now() : null,
+                'created_at' => now(), 'updated_at' => now()]
+        );
     }
 
     public function index(Request $request, string $module)
@@ -106,24 +151,43 @@ class PeopleController extends Controller
             }
         }
         if ($module === 'shifts') {
+            $period = PayPeriod::recent(1)[0];
+            $extra['period'] = $period;
             $extra['holidays'] = DB::table('holidays')
-                ->whereBetween('date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+                ->whereBetween('date', [$period->start, $period->end])
                 ->orderBy('date')->get()->keyBy('date');
             $extra['staff'] = DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
+                ->leftJoin('departments as dp', 'dp.department_id', '=', 'e.department_id')
                 ->when($hr, fn ($q) => $q->where('e.status', 'active'))
                 ->when(! $hr && $teamPortal, fn ($q) => $q->where('e.status', 'active')->whereIn('e.department_id', $managedDepartmentIds))
                 ->when(! $hr && ! $teamPortal, fn ($q) => $q->where('e.employee_id', $employeeId))
-                ->select('e.employee_id', 'e.shift_start', 'e.shift_end', 'e.rest_days', 'u.full_name')
+                ->select('e.employee_id', 'e.department_id', 'dp.department_name', 'e.shift_start', 'e.shift_end', 'e.rest_days', 'u.full_name')
                 ->orderBy('u.full_name')->get();
             $extra['assignments'] = DB::table('shift_assignments as s')
                 ->join('employees as e', 'e.employee_id', '=', 's.employee_id')
                 ->join('users as u', 'u.user_id', '=', 'e.user_id')
-                ->whereBetween('s.work_date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+                ->whereBetween('s.work_date', [$period->start, $period->end])
                 ->when(! $hr && $teamPortal, fn ($q) => $q->whereIn('e.department_id', $managedDepartmentIds))
                 ->when(! $hr && ! $teamPortal, fn ($q) => $q->where('s.employee_id', $employeeId))
                 ->select('s.*', 'u.full_name')
                 ->orderBy('s.work_date')->orderBy('u.full_name')->get()
                 ->groupBy(fn ($row) => substr((string) $row->work_date, 0, 10));
+            // The calendar shows who is away: every leave touching the
+            // cutoff, spread onto each of its days.
+            $staffIds = $extra['staff']->pluck('employee_id');
+            $extra['leaves'] = collect();
+            foreach (DB::table('leaves as l')->join('employees as e', 'e.employee_id', '=', 'l.employee_id')
+                ->join('users as u', 'u.user_id', '=', 'e.user_id')
+                ->whereIn('l.employee_id', $staffIds)
+                ->whereIn('l.status', ['approved', 'pending', 'pending_hr', 'pending_manager'])
+                ->where('l.start_date', '<=', $period->end)->where('l.end_date', '>=', $period->start)
+                ->select('l.*', 'u.full_name')->orderBy('u.full_name')->get() as $leave) {
+                $from = Carbon::parse($leave->start_date)->max(Carbon::parse($period->start));
+                $to = Carbon::parse($leave->end_date)->min(Carbon::parse($period->end));
+                for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
+                    $extra['leaves']->put($d->toDateString(), $extra['leaves']->get($d->toDateString(), collect())->push($leave));
+                }
+            }
         }
         // Onboarding and offboarding is a roster, not a queue: HR is looking at
         // people, so everybody is listed - including whoever has no checklist
@@ -227,9 +291,11 @@ class PeopleController extends Controller
         abort_unless(isset(self::MODULES[$module]), 404);
         // Documents, overtime and loans come from the person they are about.
         if (! in_array($module, ['overtime', 'loans', 'documents'], true) && ! ($module === 'shifts' && $this->isTeamPortal($module))) PeopleAccess::hr();
-        // Loans are requested from the employee portal only - see the view.
-        abort_if($hr && in_array($module, ['loans', 'overtime'], true), 403, 'This is requested by the employee.');
-        if (in_array($module, ['documents', 'checklists', 'reviews'], true) && $hr) {
+        // Overtime is requested by the employee. Government loans are recorded
+        // by HR from SSS/Pag-IBIG notices and only displayed to employees.
+        abort_if($hr && $module === 'overtime', 403, 'This is requested by the employee.');
+        abort_if(! $hr && $module === 'loans', 403, 'Government loans are recorded by HR.');
+        if (in_array($module, ['documents', 'checklists', 'reviews', 'loans'], true) && $hr) {
             $request->validate(['employee_id' => 'required|integer|exists:employees,employee_id']);
             $employeeId = (int) $request->input('employee_id');
         }
@@ -255,6 +321,9 @@ class PeopleController extends Controller
                 $start = Carbon::parse($data['starts_at']);
                 $end = Carbon::parse($data['ends_at']);
                 $minutes = (int) $start->diffInMinutes($end);
+                if ($minutes < 60 || $minutes % 60 !== 0) {
+                    throw ValidationException::withMessages(['ends_at' => 'Overtime must be requested in whole-hour blocks.']);
+                }
                 if ($minutes > 960) throw ValidationException::withMessages(['ends_at' => 'Submit at most 16 hours per request.']);
                 DB::transaction(function () use ($employeeId, $start, $end, $base, $data, $minutes) {
                     DB::table('employees')->where('employee_id', $employeeId)->lockForUpdate()->first();
@@ -279,6 +348,33 @@ class PeopleController extends Controller
                     break;
                 }
 
+                // Rest days picked on the calendar arrive together, saved in
+                // one go when HR presses Save - never one per click.
+                if ($request->has('rest_dates')) {
+                    $data = $request->validate([
+                        'employee_id' => 'required|integer|exists:employees,employee_id',
+                        'rest_dates' => 'required|array|min:1|max:31',
+                        'rest_dates.*' => 'date_format:Y-m-d',
+                    ], ['rest_dates.required' => 'Click Mark rest on at least one day first.']);
+                    if ($teamPortal) {
+                        PeopleAccess::managerForEmployee((int) $data['employee_id']);
+                    }
+                    $status = $hr ? 'approved' : 'pending_hr';
+                    foreach (collect($data['rest_dates'])->unique()->sort() as $date) {
+                        $day = Carbon::parse($date);
+                        $this->makeRoomForRestDay((int) $data['employee_id'], $day->copy(), $status, $hr);
+                        DB::table('shift_assignments')->updateOrInsert(
+                            ['employee_id' => (int) $data['employee_id'], 'work_date' => $date],
+                            ['starts_at' => null, 'ends_at' => null, 'rest_day' => true, 'label' => 'Rest day',
+                                'status' => $status, 'created_by' => auth()->id(),
+                                'approved_by' => $hr ? auth()->id() : null, 'approved_at' => $hr ? now() : null,
+                                'created_at' => now(), 'updated_at' => now()]
+                        );
+                    }
+
+                    return back()->with('success', 'Rest days saved.')->with('shift_employee', (int) $data['employee_id']);
+                }
+
                 $data = $request->validate([
                     'employee_id' => 'required|integer|exists:employees,employee_id',
                     'from' => 'required|date_format:Y-m-d',
@@ -296,6 +392,9 @@ class PeopleController extends Controller
                 if ($from->diffInDays($to) > 93) throw ValidationException::withMessages(['to' => 'Schedule at most 93 days at a time.']);
                 $status = $hr ? 'approved' : 'pending_hr';
                 for ($day = $from->copy(); $day->lte($to); $day->addDay()) {
+                    if ($request->boolean('rest_day')) {
+                        $this->makeRoomForRestDay((int) $data['employee_id'], $day->copy(), $status, $hr);
+                    }
                     DB::table('shift_assignments')->updateOrInsert(
                         ['employee_id' => (int) $data['employee_id'], 'work_date' => $day->toDateString()],
                         ['starts_at' => $request->boolean('rest_day') ? null : $data['starts_at'],
@@ -328,9 +427,19 @@ class PeopleController extends Controller
                 DB::table('performance_reviews')->insert($base + $data);
                 break;
             case 'loans':
-                $data = $request->validate(['type' => ['required', Rule::in(['loan', 'cash_advance'])], 'amount' => 'required|numeric|min:1|max:1000000',
-                    'installment' => 'required|numeric|min:1|lte:amount', 'starts_on' => 'required|date_format:Y-m-d', 'reason' => 'required|string|min:5|max:3000']);
-                DB::table('employee_loans')->insert($base + $data);
+                PeopleAccess::hr();
+                $data = $request->validate([
+                    'type' => ['required', Rule::in(['sss', 'pagibig', 'government'])],
+                    'amount' => 'required|numeric|min:1|max:1000000',
+                    'installment' => 'required|numeric|min:1|lte:amount',
+                    'starts_on' => 'required|date_format:Y-m-d',
+                    'reason' => 'required|string|min:5|max:3000',
+                ]);
+                DB::table('employee_loans')->insert($base + $data + [
+                    'status' => 'active',
+                    'reviewed_by' => auth()->id(),
+                    'disbursed_at' => now(),
+                ]);
                 break;
             case 'announcements':
                 $data = $request->validate([
@@ -389,9 +498,17 @@ class PeopleController extends Controller
                     abort_unless($shift->status === 'pending_hr', 403);
                 }
                 $deleted = DB::table('shift_assignments')->where('id', $id)->delete();
+                if ($deleted && $shift && $shift->rest_day) {
+                    // The default rest day this one displaced comes back.
+                    DB::table('shift_assignments')->where('employee_id', $shift->employee_id)
+                        ->where('label', 'Rest day moved to '.Carbon::parse($shift->work_date)->format('M j'))->delete();
+                }
                 if (! $deleted) {
                     PeopleAccess::hr();
                     DB::table('holidays')->where('id', $id)->delete();
+                } elseif ($shift) {
+                    // Stay on the same person after the reload.
+                    session()->flash('shift_employee', (int) $shift->employee_id);
                 }
             } elseif ($action === 'approve') {
                 PeopleAccess::hr();

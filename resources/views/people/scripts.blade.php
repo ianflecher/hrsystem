@@ -61,6 +61,23 @@
             });
         });
     });
+    // A calendar "Mark rest" is one button in a small tile; its refusal reads
+    // as a dialog rather than squeezed text beside the button.
+    if (errorForm?.classList.contains('rest-save-form') && Object.keys(errors).length) {
+        errorForm.querySelectorAll('.field-error').forEach(el => el.remove());
+        document.getElementById('people-errors')?.remove();
+        const dialog = document.createElement('dialog');
+        dialog.className = 'people-dialog';
+        const text = document.createElement('p');
+        text.textContent = Object.values(errors).map(m => m[0]).join(' ');
+        const close = document.createElement('button');
+        close.type = 'button'; close.textContent = 'OK';
+        close.addEventListener('click', () => dialog.close());
+        dialog.append(Object.assign(document.createElement('h3'), { textContent: 'Rest days not saved' }), text, close);
+        page.append(dialog);
+        dialog.addEventListener('close', () => dialog.remove());
+        dialog.showModal();
+    }
     if (errorForm) {
         let ancestor = errorForm.parentElement;
         while (ancestor && ancestor !== page) { if (ancestor.tagName === 'DETAILS') ancestor.open = true; ancestor = ancestor.parentElement; }
@@ -87,6 +104,70 @@
         // scripting to avoid a wide calendar.
         setView(window.matchMedia('(max-width: 700px)').matches ? 'agenda' : 'calendar');
         controls.forEach(button => button.addEventListener('click', () => setView(button.dataset.scheduleView)));
+    }
+
+    const restEmployee = page.querySelector('[data-shift-rest-employee]');
+    if (restEmployee) {
+        const currentRestDay = page.querySelector('[data-current-rest-day]');
+        const updateRestTargets = () => {
+            page.querySelectorAll('[data-shift-rest-target]').forEach(input => {
+                input.value = restEmployee.value;
+            });
+            if (currentRestDay) {
+                const option = restEmployee.selectedOptions[0];
+                currentRestDay.textContent = 'Weekly rest day: ' + (option?.dataset.restDays || 'None set')
+                    + ' · Marked this cutoff: ' + (option?.dataset.cutoffRest || 'none');
+            }
+            page.querySelectorAll('[data-shift-day-state]').forEach(node => {
+                const states = JSON.parse(node.dataset.states || '{}');
+                node.textContent = states[restEmployee.value] || 'Default working day';
+                node.classList.toggle('rest', node.textContent.includes('rest day'));
+                node.classList.toggle('shift--work', ! node.textContent.includes('rest day'));
+            });
+        };
+        // Mark rest only picks a day; the Save button sends the picked days,
+        // with the employee shown in the dropdown, in one request.
+        const saveForm = page.querySelector('[data-rest-save-form]');
+        const pendingText = page.querySelector('[data-rest-pending]');
+        const saveButton = page.querySelector('[data-rest-save]');
+        const clearButton = page.querySelector('[data-rest-clear]');
+        const picked = new Set();
+        const refreshPicked = () => {
+            saveForm.querySelectorAll('input[name="rest_dates[]"]').forEach(input => input.remove());
+            picked.forEach(date => {
+                const input = document.createElement('input');
+                input.type = 'hidden'; input.name = 'rest_dates[]'; input.value = date;
+                saveForm.append(input);
+            });
+            page.querySelectorAll('[data-rest-toggle]').forEach(button => {
+                const on = picked.has(button.dataset.restToggle);
+                button.setAttribute('aria-pressed', on ? 'true' : 'false');
+                button.textContent = on ? '✓ Rest (unsaved)' : 'Mark rest';
+                button.classList.toggle('is-picked', on);
+            });
+            const name = restEmployee.selectedOptions[0]?.textContent.trim() || '';
+            pendingText.textContent = picked.size
+                ? `${picked.size} day(s) picked for ${name}: ` + Array.from(picked).sort().map(d => new Date(d + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })).join(', ')
+                : 'No days picked yet.';
+            saveButton.disabled = picked.size === 0;
+            clearButton.hidden = picked.size === 0;
+        };
+        page.querySelectorAll('[data-rest-toggle]').forEach(button => {
+            button.addEventListener('click', () => {
+                const date = button.dataset.restToggle;
+                picked.has(date) ? picked.delete(date) : picked.add(date);
+                refreshPicked();
+            });
+        });
+        clearButton.addEventListener('click', () => { picked.clear(); refreshPicked(); });
+        restEmployee.addEventListener('change', () => {
+            // Picks belong to one person; switching people starts over.
+            picked.clear();
+            updateRestTargets();
+            refreshPicked();
+        });
+        updateRestTargets();
+        refreshPicked();
     }
 })();
 </script>

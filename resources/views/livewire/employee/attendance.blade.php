@@ -5,6 +5,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Support\PayPeriod;
 use Carbon\Carbon;
 
 new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class extends Component
@@ -13,9 +14,11 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
     public $attendanceHistory = [];
     public $monthlySummary = [];
     public $employee;
-    public $currentMonth;
+    public $currentCutoff;
     public $clockStatus = [];
     public $isClockedIn = false;
+    public bool $showAllAttendance = false;
+    public int $cutoffWorkedMinutes = 0;
     
     public function mount()
     {
@@ -36,7 +39,6 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
 
         abort_unless($this->employee, 403, 'An employee record is required.');
 
-        $this->currentMonth = now()->format('F Y');
         $this->loadData();
     }
     
@@ -51,18 +53,24 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             ->whereDate('date', $today)
             ->first();
             
-        // Load attendance history for current month
-        $startOfMonth = now()->startOfMonth()->format('Y-m-d');
-        $endOfMonth = now()->endOfMonth()->format('Y-m-d');
+        // Load attendance history for the current semi-monthly cutoff.
+        $cutoff = PayPeriod::fromStart(now()->day >= 16
+            ? now()->copy()->day(16)->toDateString()
+            : now()->copy()->day(1)->toDateString());
+
+        $this->currentCutoff = $cutoff->label();
         
         $this->attendanceHistory = DB::table('hr_attendance')
             ->where('employee_id', $employeeId)
-            ->whereBetween('date', [$startOfMonth, $endOfMonth])
+            ->whereBetween('date', [$cutoff->start, $cutoff->end])
             ->orderBy('date', 'desc')
             ->get()
             ->toArray();
+
+        $this->cutoffWorkedMinutes = collect($this->attendanceHistory)
+            ->sum(fn ($row) => \App\Support\WorkDay::workedMinutes($row));
             
-        // Load monthly summary
+        // Load cut-off summary
         $this->monthlySummary = DB::table('hr_attendance')
             ->select(
                 DB::raw('COUNT(*) as total_days'),
@@ -73,7 +81,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                 DB::raw('SUM(CASE WHEN status = "on_leave" THEN 1 ELSE 0 END) as leave_days')
             )
             ->where('employee_id', $employeeId)
-            ->whereBetween('date', [$startOfMonth, $endOfMonth])
+            ->whereBetween('date', [$cutoff->start, $cutoff->end])
             ->first();
             
         // Check clock status
@@ -173,6 +181,11 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
     {
         $this->loadData();
     }
+
+    public function toggleAttendanceHistory()
+    {
+        $this->showAllAttendance = ! $this->showAllAttendance;
+    }
 }
 
 ?>
@@ -202,8 +215,8 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             </div>
         </div>
         
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <!-- Time In -->
+        <div class="grid grid-cols-1 lg:grid-cols-[1fr_18rem] gap-6">
+            <!-- Punches -->
             <div class="bg-slate-50 rounded-lg p-5 border border-gray-200">
                 <div class="flex items-center mb-3">
                     <div class="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mr-3">
@@ -211,54 +224,35 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
-                    <h3 class="font-semibold text-gray-900">Time In</h3>
-                </div>
-                @if($attendance && $attendance->time_in)
-                    <p class="text-3xl font-bold text-gray-900 mb-1">
-                        {{ \Carbon\Carbon::parse($attendance->time_in)->format('h:i A') }}
-                    </p>
-                    <p class="text-gray-500 text-sm">
-                        {{ \Carbon\Carbon::parse($attendance->time_in)->format('M j, Y') }}
-                    </p>
-                @else
-                    <p class="text-xl text-gray-400 italic mb-3">Not recorded</p>
-                    <button 
-                        wire:click="manualTimeIn"
-                        class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition flex items-center justify-center space-x-2"
-                    >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>Manual Time In</span>
-                    </button>
-                @endif
-            </div>
-            
-            <!-- Time Out -->
-            <div class="bg-slate-50 rounded-lg p-5 border border-gray-200">
-                <div class="flex items-center mb-3">
-                    <div class="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mr-3">
-                        <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                        </svg>
+                    <div>
+                        <h3 class="font-semibold text-gray-900">Scanner punches</h3>
+                        <p class="text-sm text-gray-500">First in, breaks, and final out from attendance logs.</p>
                     </div>
-                    <h3 class="font-semibold text-gray-900">Time Out</h3>
                 </div>
-                @if($attendance && $attendance->time_out)
-                    <p class="text-3xl font-bold text-gray-900 mb-1">
-                        {{ \Carbon\Carbon::parse($attendance->time_out)->format('h:i A') }}
-                    </p>
-                    <p class="text-gray-500 text-sm">
-                        {{ \Carbon\Carbon::parse($attendance->time_out)->format('M j, Y') }}
-                    </p>
-                @elseif($attendance && $attendance->time_in)
-                    <p class="text-xl text-gray-400 italic mb-3">Not recorded</p>
 
+                @if($attendance)
+                    <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                        @foreach(\App\Support\WorkDay::PUNCHES as $column => $label)
+                            @php $punchValue = $attendance->{$column} ?? null; @endphp
+                            <div class="rounded-xl border border-gray-200 bg-white p-4">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ $label }}</p>
+                                <p class="mt-2 text-2xl font-bold text-gray-900">
+                                    {{ $punchValue ? \Carbon\Carbon::parse($punchValue)->format('h:i A') : '—' }}
+                                </p>
+                                <p class="mt-1 text-xs text-gray-500">
+                                    {{ $punchValue ? \Carbon\Carbon::parse($punchValue)->format('M j, Y') : 'Not recorded' }}
+                                </p>
+                            </div>
+                        @endforeach
+                    </div>
                 @else
-                    <p class="text-xl text-gray-400 italic">Time in required first</p>
+                    <div class="mt-5 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center">
+                        <p class="text-lg font-semibold text-gray-700">No scanner punches today</p>
+                        <p class="mt-1 text-sm text-gray-500">Once the scanner syncs, today’s punch sequence will appear here.</p>
+                    </div>
                 @endif
             </div>
-            
+
             <!-- Status & Hours -->
             <div class="bg-slate-50 rounded-lg p-5 border border-gray-200">
                 <div class="flex items-center mb-3">
@@ -283,10 +277,9 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                     </div>
                     @if($attendance->time_in && $attendance->time_out)
                         @php
-                            $timeIn = \Carbon\Carbon::parse($attendance->time_in);
-                            $timeOut = \Carbon\Carbon::parse($attendance->time_out);
-                            $hours = $timeIn->diffInHours($timeOut);
-                            $minutes = $timeIn->diffInMinutes($timeOut) % 60;
+                            $totalMinutes = \App\Support\WorkDay::workedMinutes($attendance);
+                            $hours = intdiv($totalMinutes, 60);
+                            $minutes = $totalMinutes % 60;
                         @endphp
                         <p class="text-2xl font-bold text-gray-900">{{ $hours }}h {{ $minutes }}m</p>
                         <p class="text-gray-500 text-sm">Total hours worked</p>
@@ -323,11 +316,12 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
     </div>
     
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Left Column - Monthly Summary -->
+        <!-- Left Column - Cut-off Summary -->
         <div class="lg:col-span-2">
-            <!-- Monthly Statistics -->
+            <!-- Cut-off Statistics -->
             <div class="bg-white rounded-xl shadow-sm p-6 border border-green-100 mb-8">
-                <h2 class="text-xl font-bold text-gray-900 mb-6">Monthly Overview - {{ $currentMonth }}</h2>
+                <h2 class="text-xl font-bold text-gray-900 mb-1">Cut-off Overview</h2>
+                <p class="text-sm text-gray-500 mb-6">{{ $currentCutoff }}</p>
                 
                 @if($monthlySummary)
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -352,12 +346,20 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                         </div>
                     </div>
                     
-                    <!-- Monthly Total -->
+                    <!-- Cut-off Total -->
                     <div class="mt-6 p-5 bg-slate-50 border border-slate-200 rounded-lg text-gray-900">
-                        <div class="flex justify-between items-center">
+                        <div class="grid gap-4 md:grid-cols-3 md:items-center">
                             <div>
-                                <p class="text-sm text-gray-600">Total Working Days This Month</p>
+                                <p class="text-sm text-gray-600">Total Working Days This Cut-off</p>
                                 <p class="text-3xl font-bold mt-1">{{ $monthlySummary->total_days ?? 0 }}</p>
+                            </div>
+                            <div class="md:text-center">
+                                @php
+                                    $cutoffHours = intdiv($cutoffWorkedMinutes, 60);
+                                    $cutoffMinutes = $cutoffWorkedMinutes % 60;
+                                @endphp
+                                <p class="text-sm text-gray-600">Total Hours This Cut-off</p>
+                                <p class="text-3xl font-bold mt-1">{{ $cutoffHours }}h {{ $cutoffMinutes }}m</p>
                             </div>
                             <div class="text-right">
                                 @php
@@ -371,18 +373,19 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                     </div>
                 @else
                     <div class="text-center py-8">
-                        <p class="text-gray-500">No attendance data available for this month.</p>
+                        <p class="text-gray-500">No attendance data available for this cut-off.</p>
                     </div>
                 @endif
             </div>
             
             <!-- Recent Attendance -->
             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <h2 class="text-xl font-bold text-gray-900 mb-6">Recent Attendance</h2>
+                <h2 class="text-xl font-bold text-gray-900 mb-1">Recent Attendance</h2>
+                <p class="text-sm text-gray-500 mb-6">{{ $currentCutoff }}</p>
                 
                 @if(count($attendanceHistory) > 0)
                     <div class="space-y-4">
-                        @foreach(array_slice($attendanceHistory, 0, 7) as $record)
+                        @foreach(array_slice($attendanceHistory, 0, $showAllAttendance ? count($attendanceHistory) : 7) as $record)
                             <div class="flex items-center justify-between p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition">
                                 <div class="flex items-center">
                                     <div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center mr-4 border border-gray-200">
@@ -428,8 +431,10 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                     
                     @if(count($attendanceHistory) > 7)
                         <div class="mt-6 text-center">
-                            <button class="px-4 py-2 text-blue-600 hover:text-blue-700 font-medium hover:bg-red-50 rounded-lg transition">
-                                View All Records →
+                            <button type="button"
+                                    wire:click="toggleAttendanceHistory"
+                                    class="px-4 py-2 text-blue-600 hover:text-blue-700 font-medium hover:bg-red-50 rounded-lg transition">
+                                {{ $showAllAttendance ? 'Show Less' : 'View All Records →' }}
                             </button>
                         </div>
                     @endif
@@ -440,7 +445,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                             </svg>
                         </div>
-                        <p class="text-gray-500">No attendance records found for this month.</p>
+                        <p class="text-gray-500">No attendance records found for this cut-off.</p>
                     </div>
                 @endif
             </div>
@@ -465,7 +470,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                     
                     <div>
                         <p class="text-sm text-gray-500 mb-1">Employee ID</p>
-                        <p class="font-medium text-gray-900">{{ str_pad($employee->employee_id, 6, '0', STR_PAD_LEFT) }}</p>
+                        <p class="font-medium text-gray-900">{{ $employee->employee_no ?: 'Not assigned' }}</p>
                     </div>
                     
                     <div>
@@ -511,7 +516,13 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                         </div>
                         <div>
                             <p class="font-medium text-amber-800">Late</p>
-                            <p class="text-sm text-amber-600">Arrived after 9:00 AM</p>
+                            <p class="text-sm text-amber-600">
+                                @if ($employee->shift_start ?? null)
+                                    Arrived more than {{ \App\Support\Tardiness::GRACE_MINUTES }} minutes after {{ \Carbon\Carbon::parse($employee->shift_start)->format('g:i A') }}
+                                @else
+                                    Arrived after the shift start
+                                @endif
+                            </p>
                         </div>
                     </div>
                     

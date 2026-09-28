@@ -9,7 +9,7 @@
             'announcements' => 'Company updates and the information your team needs.',
             'checklists' => 'Track the next steps for a smooth arrival or handover.',
             'reviews' => 'Attendance, feedback, and progress through each review period.',
-            'loans' => $hr ? 'Review requests, confirm disbursements, and track repayments.' : 'Follow your requests, repayment schedule, and remaining balance.',
+            'loans' => $hr ? 'Review government loan requests, confirm disbursements, and track repayments.' : 'Follow your government loan requests, repayment schedule, and remaining balance.',
             'reports' => 'Export the information you need for your next HR report.',
         ];
     @endphp

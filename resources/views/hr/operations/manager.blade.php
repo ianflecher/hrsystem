@@ -112,7 +112,7 @@
                                 <div class="mt-1 text-sm text-slate-500">{{ $r->starts_at }} to {{ $r->ends_at }}</div>
                             </div>
                             <span class="h-fit rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
-                                {{ number_format($r->minutes / 60, 2) }} hour(s)
+                                {{ intdiv((int) $r->minutes, 60) }} hour(s)
                             </span>
                         </div>
                         <p class="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{{ $r->reason }}</p>

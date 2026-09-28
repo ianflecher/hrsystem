@@ -62,8 +62,8 @@ new #[Layout('components.layouts.careers', ['onDarkHero' => true])] class extend
         <div class="careers__wrap">
             <div class="section__head">
                 <span class="careers__eyebrow">Watch</span>
-                <h2>Out at the shows.</h2>
-                <p>Booths, banners, a shirt somebody's turning over in their hands to read the print.</p>
+                <h2>Made here. Worn out there.</h2>
+                <p>Our shirts end up at the country's biggest car shows, in the hands of the people they were made for.</p>
             </div>
 
             @include('partials.careers-clip', ['clipSlot' => 2])

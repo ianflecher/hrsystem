@@ -6,6 +6,7 @@ use App\Services\Attendance\PunchFileReader;
 use App\Services\Attendance\PunchImporter;
 use App\Services\Attendance\ZktecoPuller;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Brings attendance in from the scanner, or from a file exported from it.
@@ -38,6 +39,10 @@ class SyncAttendance extends Command
             }
         } catch (\Throwable $e) {
             $this->error($e->getMessage());
+            if (! $this->option('file')) {
+                // The HR attendance page reads this and warns until a run succeeds.
+                Cache::forever('attendance.sync.last', ['ok' => false, 'at' => now()->toDateTimeString(), 'message' => $e->getMessage()]);
+            }
 
             return self::FAILURE;
         }
@@ -45,6 +50,9 @@ class SyncAttendance extends Command
         $this->info('Found '.count($punches).' punch(es).');
 
         $summary = $importer->import($punches, (bool) $this->option('overwrite'));
+        if (! $this->option('file')) {
+            Cache::forever('attendance.sync.last', ['ok' => true, 'at' => now()->toDateTimeString(), 'message' => null]);
+        }
 
         $this->newLine();
         $this->info("Wrote {$summary['days']} day(s) across {$summary['employees']} employee(s).");
