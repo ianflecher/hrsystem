@@ -135,6 +135,27 @@ class PayrollRunTest extends TestCase
         }
     }
 
+    public function test_plus_and_minus_rows_change_the_payslip(): void
+    {
+        $id = $this->employee(25000);
+        $this->screen()->call('generatePeriod');
+        $before = (float) DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->value('net_pay');
+
+        $screen = $this->screen()->call('viewPayrollDetails', $id)
+            ->set('adjustType', 'addition')->set('adjustReason', 'Incentive')->set('adjustAmount', '500')->call('addAdjustment')
+            ->set('adjustType', 'deduction')->set('adjustReason', 'Cash advance')->set('adjustAmount', '200')->call('addAdjustment')
+            ->assertHasNoErrors();
+
+        $row = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->first();
+        $this->assertEqualsWithDelta($before + 300, (float) $row->net_pay, 0.001, 'a non-taxable plus and a minus land after tax');
+        $this->assertEquals(300, (float) $row->adjustments);
+
+        $adjustment = DB::table('payroll_adjustments')->where('employee_id', $id)->where('type', 'deduction')->value('id');
+        $screen->call('removeAdjustment', $adjustment);
+        $this->assertEqualsWithDelta($before + 500, (float) DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->value('net_pay'), 0.001);
+        DB::table('payroll_adjustments')->where('employee_id', $id)->delete();
+    }
+
     public function test_both_cutoffs_carry_half_the_monthly_contributions(): void
     {
         // 25,000 a month is 12,500 a payslip. Half of each monthly

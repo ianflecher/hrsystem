@@ -1,6 +1,6 @@
 @if($hr)
 <article class="card">
-    <h2>CSV reports</h2>
+    <h2>Excel reports</h2>
     <form method="GET" action="{{ route('people.reports.download') }}" class="grid divider">
         <label class="people-field"><span>Report</span>
             <select name="report" required>
@@ -12,6 +12,13 @@
         </label>
         <x-people.field name="from" label="From" type="date" :required="false" />
         <x-people.field name="to" label="To" type="date" :required="false" />
+        <label class="people-field"><span>Company</span>
+            <select name="company">
+                <option value="">Both companies</option>
+                <option value="GKLASAM OPC">GKLASAM OPC</option>
+                <option value="Imprint Cafe">Imprint Cafe</option>
+            </select>
+        </label>
         <label class="people-field"><span>Department</span>
             <select name="department_id">
                 <option value="">All departments</option>

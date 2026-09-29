@@ -18,6 +18,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     }
     
     public $search = '';
+    /** GKLASAM OPC and the cafe are paid as two separate payrolls. */
+    public string $company = 'GKLASAM OPC';
     public $departmentFilter = '';
     public $payPeriod = '';
     public $statusFilter = 'active';
@@ -46,6 +48,18 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->payPeriod = PayPeriod::recent(1)[0]->start;
     }
     
+    public function getCompaniesProperty(): array
+    {
+        return DB::table('employees')->whereNotNull('company')->where('company', '!=', '')
+            ->distinct()->orderBy('company')->pluck('company')->all();
+    }
+
+    public function updatedCompany(): void
+    {
+        $this->departmentFilter = '';
+        $this->resetPage();
+    }
+
     public function getPayPeriods()
     {
         return array_map(
@@ -122,6 +136,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                       ->orWhere('employees.job_title', 'like', '%' . $this->search . '%');
                 });
             })
+            ->whereRaw("COALESCE(NULLIF(employees.company, ''), 'GKLASAM OPC') = ?", [$this->company])
             ->when($this->departmentFilter, function ($query) {
                 $query->where('departments.department_id', $this->departmentFilter);
             })
@@ -135,6 +150,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public function getDepartmentsProperty()
     {
         return DB::table('departments')
+            ->whereIn('department_id', DB::table('employees')->whereRaw("COALESCE(NULLIF(company, ''), 'GKLASAM OPC') = ?", [$this->company])->whereNotNull('department_id')->select('department_id'))
             ->orderBy('department_name')
             ->get();
     }
@@ -158,6 +174,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 $join->on('employees.employee_id', '=', 'hr_payroll.employee_id')
                     ->where('hr_payroll.period_start', '=', $this->payPeriod);
             })
+            ->whereRaw("COALESCE(NULLIF(employees.company, ''), 'GKLASAM OPC') = ?", [$this->company])
             ->select(
                 DB::raw('COUNT(DISTINCT employees.employee_id) as total_employees'),
                 DB::raw('COUNT(DISTINCT CASE WHEN hr_payroll.status = "paid" THEN employees.employee_id END) as total_paid'),
@@ -234,6 +251,80 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->payrollBreakdown['total_deductions'] = $calc['deductions'];
     }
     
+    /** A plus or minus row HR adds to a payslip. */
+    public string $adjustType = 'addition';
+    public $adjustAmount = '';
+    public string $adjustReason = '';
+    public bool $adjustTaxable = false;
+
+    public function getAdjustmentsProperty()
+    {
+        if (! $this->selectedEmployee) return collect();
+
+        return DB::table('payroll_adjustments')->where('employee_id', $this->selectedEmployee->employee_id)
+            ->whereBetween('effective_date', [$this->period()->start, $this->period()->end])
+            ->where('status', 'approved')->orderBy('id')->get();
+    }
+
+    public function addAdjustment(): void
+    {
+        \App\Support\PeopleAccess::hr();
+        $this->validate([
+            'adjustType' => ['required', 'in:addition,deduction'],
+            'adjustAmount' => ['required', 'numeric', 'min:0.01', 'max:10000000'],
+            'adjustReason' => ['required', 'string', 'max:255'],
+        ], [], ['adjustAmount' => 'amount', 'adjustReason' => 'description']);
+        $employeeId = (int) $this->selectedEmployee->employee_id;
+
+        try {
+            DB::transaction(function () use ($employeeId) {
+                $id = DB::table('payroll_adjustments')->insertGetId([
+                    'employee_id' => $employeeId, 'effective_date' => $this->period()->start,
+                    'type' => $this->adjustType, 'amount' => round((float) $this->adjustAmount, 2),
+                    'taxable' => $this->adjustType === 'addition' && $this->adjustTaxable,
+                    'recurring' => false, 'reason' => trim($this->adjustReason), 'status' => 'approved',
+                    'approved_by' => auth()->id(), 'approved_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+                ]);
+                \App\Services\Auditor::record('create', 'payroll_adjustments', $id, null,
+                    ['type' => $this->adjustType, 'amount' => (float) $this->adjustAmount, 'reason' => $this->adjustReason]);
+                $this->refreshPayslip($employeeId);
+            });
+        } catch (\Throwable $e) {
+            session()->flash('error', $e->getMessage());
+            return;
+        }
+
+        $this->reset(['adjustAmount', 'adjustReason', 'adjustTaxable']);
+        $this->viewPayrollDetails($employeeId);
+    }
+
+    public function removeAdjustment(int $id): void
+    {
+        \App\Support\PeopleAccess::hr();
+        $employeeId = (int) $this->selectedEmployee->employee_id;
+        try {
+            DB::transaction(function () use ($id, $employeeId) {
+                $row = DB::table('payroll_adjustments')->where('id', $id)->where('employee_id', $employeeId)->first();
+                if (! $row) return;
+                DB::table('payroll_adjustments')->where('id', $id)->delete();
+                \App\Services\Auditor::record('delete', 'payroll_adjustments', $id, (array) $row, null);
+                $this->refreshPayslip($employeeId);
+            });
+        } catch (\Throwable $e) {
+            session()->flash('error', $e->getMessage());
+            return;
+        }
+        $this->viewPayrollDetails($employeeId);
+    }
+
+    /** A payslip already generated is worked out again with the rows in it. */
+    private function refreshPayslip(int $employeeId): void
+    {
+        if (DB::table('hr_payroll')->where('employee_id', $employeeId)->where('period_start', $this->period()->start)->exists()) {
+            app(\App\Services\PayrollRun::class)->recalculate($employeeId, $this->period());
+        }
+    }
+
     public function closePayrollDetails()
     {
         $this->showPayrollDetails = false;
@@ -289,13 +380,14 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         $employees = DB::table('employees')
             ->where('status', 'active')
+            ->whereRaw("COALESCE(NULLIF(company, ''), 'GKLASAM OPC') = ?", [$this->company])
             ->where('salary', '>', 0)
             ->whereNotIn('employee_id', $already ?: [0])
             ->select('employee_id', 'salary')
             ->get();
 
         if ($employees->isEmpty()) {
-            session()->flash('info', 'Nothing to generate: everyone active with a salary already has a payslip for '
+            session()->flash('info', 'Nothing to generate: everyone active in '.$this->company.' with a salary already has a payslip for '
                 .$this->period()->label().'.');
 
             return;
@@ -309,9 +401,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             }
             return $count;
         });
-        $skipped = DB::table('employees')->where('status', 'active')->where('salary', '<=', 0)->count();
+        $skipped = DB::table('employees')->where('status', 'active')->whereRaw("COALESCE(NULLIF(company, ''), 'GKLASAM OPC') = ?", [$this->company])->where('salary', '<=', 0)->count();
 
-        $message = 'Generated '.$generated.' payslip'.($generated === 1 ? '' : 's')
+        $message = 'Generated '.$generated.' '.$this->company.' payslip'.($generated === 1 ? '' : 's')
             .' for '.$this->period()->label().'. They are calculated, not yet approved.';
 
         if ($skipped > 0) {
@@ -330,7 +422,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         \App\Support\PeopleAccess::hr();
         try {
-            $n = app(\App\Services\PayrollControlCenter::class)->approve($this->period());
+            $n = app(\App\Services\PayrollControlCenter::class)->approve($this->period(), $this->company);
             session()->flash($n ? 'success' : 'info', $n ? 'Approved '.$n.' payslip'.($n === 1 ? '' : 's').'.' : 'Nothing was waiting for approval in this period.');
         } catch (\Throwable $e) {
             session()->flash('error', $e->getMessage());
@@ -341,7 +433,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         \App\Support\PeopleAccess::hr();
         try {
-            $n = app(\App\Services\PayrollControlCenter::class)->markPaid($this->period());
+            $n = app(\App\Services\PayrollControlCenter::class)->markPaid($this->period(), $this->company);
             session()->flash($n ? 'success' : 'info', $n ? 'Marked '.$n.' payslip'.($n === 1 ? '' : 's').' as paid and locked the period.' : 'Nothing was approved and waiting to be paid in this period.');
         } catch (\Throwable $e) {
             session()->flash('error', $e->getMessage());
@@ -530,6 +622,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         $byStatus = DB::table('hr_payroll')
             ->where('period_start', $periodStart)
+            ->whereIn('employee_id', DB::table('employees')->whereRaw("COALESCE(NULLIF(company, ''), 'GKLASAM OPC') = ?", [$this->company])->select('employee_id'))
             ->selectRaw('status, COUNT(*) as n')
             ->groupBy('status')
             ->pluck('n', 'status')
@@ -537,6 +630,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         $eligible = DB::table('employees')
             ->where('status', 'active')
+            ->whereRaw("COALESCE(NULLIF(company, ''), 'GKLASAM OPC') = ?", [$this->company])
             ->where('salary', '>', 0)
             ->count();
 
@@ -620,8 +714,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         }
 
         return \App\Support\SpreadsheetWriter::download(
-            "payroll-export-{$this->payPeriod}-".date('YmdHis').'.xlsx',
-            'Payroll '.$period,
+            'payroll-'.\Illuminate\Support\Str::slug($this->company)."-{$this->payPeriod}-".date('YmdHis').'.xlsx',
+            $this->company.' payroll '.$period,
             ['Employee Name', 'Department', 'Position', 'Basic Salary', 'Gross Pay', 'Deductions', 'Net Pay', 'Status'],
             $rows
         );
@@ -978,6 +1072,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         </div>
 
         <!-- Filters and Controls -->
+        {{-- Two payrolls: each company is generated, approved, paid and exported on its own. --}}
+        <div class="mb-4 flex flex-wrap gap-2">
+            @foreach($this->companies as $name)
+                <button type="button" wire:click="$set('company', @js($name))"
+                        class="rounded-lg px-4 py-2 text-sm font-semibold border {{ $company === $name ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50' }}">
+                    {{ $name }}
+                </button>
+            @endforeach
+        </div>
+
         <div class="bg-white shadow rounded-lg p-4 mb-6">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <!-- Pay Period Selector -->
@@ -1532,7 +1636,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     @endif
                                     @if($this->payrollBreakdown['other_deductions'] != 0)
                                         <div class="flex justify-between">
-                                            <span class="text-sm">Unaccounted for:</span>
+                                            <span class="text-sm">Adjustments (minus):</span>
                                             <span class="text-sm">-₱{{ number_format($this->payrollBreakdown['other_deductions'], 2) }}</span>
                                         </div>
                                     @endif
@@ -1549,6 +1653,42 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 </div>
                                 @if($selectedEmployee->statutory_rule_version)
                                     <p class="mt-2 text-xs text-gray-500">Rules: {{ $selectedEmployee->statutory_rule_version }}</p>
+                                @endif
+                            </div>
+
+                            <!-- Plus and minus rows -->
+                            <div class="mb-4 border-t border-gray-200 pt-3">
+                                <h5 class="text-xs font-medium text-gray-500 mb-2">ADJUSTMENTS (+ / -)</h5>
+                                @foreach($this->adjustments as $a)
+                                    <div class="flex items-center justify-between gap-2 text-sm py-0.5">
+                                        <span class="min-w-0 truncate">{{ $a->reason }}@if($a->type === 'addition' && $a->taxable) <span class="text-xs text-gray-500">(taxable)</span>@endif</span>
+                                        <span class="flex items-center gap-2 shrink-0">
+                                            <span class="{{ $a->type === 'addition' ? 'text-green-700' : 'text-red-600' }}">{{ $a->type === 'addition' ? '+' : '-' }}₱{{ number_format($a->amount, 2) }}</span>
+                                            @if(($selectedEmployee->status ?? 'calculated') === 'calculated')
+                                                <button type="button" wire:click="removeAdjustment({{ $a->id }})" wire:confirm="Remove this row?" class="text-xs text-gray-400 hover:text-red-600">Remove</button>
+                                            @endif
+                                        </span>
+                                    </div>
+                                @endforeach
+                                @if(($selectedEmployee->status ?? 'calculated') === 'calculated')
+                                    <form wire:submit="addAdjustment" class="mt-2 grid grid-cols-[auto_1fr] gap-2 sm:grid-cols-[auto_1fr_8rem_auto]">
+                                        <select wire:model.live="adjustType" class="rounded-md border-gray-300 text-sm">
+                                            <option value="addition">+ Add</option>
+                                            <option value="deduction">- Deduct</option>
+                                        </select>
+                                        <input type="text" wire:model="adjustReason" maxlength="255" placeholder="Description (e.g. Incentive, Cash advance)" class="rounded-md border-gray-300 text-sm">
+                                        <input type="number" step="0.01" min="0" wire:model="adjustAmount" placeholder="Amount" class="rounded-md border-gray-300 text-sm">
+                                        <button class="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700">Add row</button>
+                                        @if($adjustType === 'addition')
+                                            <label class="col-span-full flex items-center gap-2 text-xs text-gray-600">
+                                                <input type="checkbox" wire:model="adjustTaxable" class="rounded border-gray-300"> Taxable (counts toward withholding tax)
+                                            </label>
+                                        @endif
+                                    </form>
+                                    @error('adjustAmount') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                    @error('adjustReason') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                @else
+                                    <p class="text-xs text-gray-500">This payslip is {{ $selectedEmployee->status }}, so rows can no longer be added.</p>
                                 @endif
                             </div>
 

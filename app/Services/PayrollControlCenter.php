@@ -67,7 +67,7 @@ class PayrollControlCenter
         }
     }
 
-    public function approve(PayPeriod $period): int
+    public function approve(PayPeriod $period, ?string $company = null): int
     {
         $this->assertWritable($period);
         $summary = $this->summary($period);
@@ -80,7 +80,9 @@ class PayrollControlCenter
         // period-level event that replaced it cannot answer "who approved this
         // payslip, and when" - which is the question an audit gets asked.
         $ids = DB::table('hr_payroll')->where('period_start', $period->start)
-            ->where('status', 'calculated')->pluck('payroll_id');
+            ->where('status', 'calculated')
+            ->when($company, fn ($q) => $q->whereIn('employee_id', DB::table('employees')->whereRaw("COALESCE(NULLIF(company, ''), 'GKLASAM OPC') = ?", [$company])->select('employee_id')))
+            ->pluck('payroll_id');
 
         $n = DB::table('hr_payroll')->whereIn('payroll_id', $ids)
             ->update(['status' => 'approved', 'updated_at' => now()]);
@@ -99,14 +101,16 @@ class PayrollControlCenter
         return $n;
     }
 
-    public function markPaid(PayPeriod $period): int
+    public function markPaid(PayPeriod $period, ?string $company = null): int
     {
         $control = $this->control($period);
         if ($control->status !== 'approved') {
             throw new RuntimeException('Payroll must be approved before it can be marked paid.');
         }
-        $n = app(PayrollRun::class)->markPaid($period->start);
-        if ($n) {
+        $n = app(PayrollRun::class)->markPaid($period->start, $company);
+        // Each company is paid on its own; the period locks once nothing is left unpaid.
+        $unpaid = DB::table('hr_payroll')->where('period_start', $period->start)->whereIn('status', ['calculated', 'approved'])->exists();
+        if ($n && ! $unpaid) {
             DB::table('payroll_period_controls')->where('id', $control->id)->update([
                 'status' => 'paid', 'paid_by' => auth()->id(), 'paid_at' => now(),
                 'locked_by' => auth()->id(), 'locked_at' => now(), 'updated_at' => now(),

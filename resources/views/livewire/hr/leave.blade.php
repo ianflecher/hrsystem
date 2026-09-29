@@ -561,6 +561,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         @if($this->entitlements->isNotEmpty())
             <div class="mt-4 flex flex-wrap gap-2">
                 @foreach($this->entitlements as $entitlement)
+                    {{-- Sick, vacation and emergency follow policy; their old figures would mislead. --}}
+                    @continue(in_array($entitlement->leave_type, config('leave.paid_types', []), true))
                     <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-sm text-gray-700">
                         <strong>{{ $leaveTypes[$entitlement->leave_type] ?? $entitlement->leave_type }}</strong>
                         {{ rtrim(rtrim(number_format($entitlement->days_per_year, 1), '0'), '.') }} paid days/year

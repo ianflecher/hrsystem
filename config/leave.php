@@ -23,6 +23,14 @@ return [
     ],
 
     /**
+     * Leave paid in full each time it happens, whatever was taken before:
+     * days per occasion. More days than this in one request are unpaid.
+     */
+    'per_occasion' => [
+        'bereavement' => 3,
+    ],
+
+    /**
      * Who decides supervisors' leave before HR - a user_id. Her own leave
      * goes straight to HR. Set LEAVE_SUPERVISOR_APPROVER to change it.
      */

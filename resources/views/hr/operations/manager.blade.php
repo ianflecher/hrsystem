@@ -5,6 +5,8 @@
     $teamLeaveRoute = $isHr ? 'hr.operations.manager.leave' : 'employee.team.leave';
     $teamOvertimeRoute = $isHr ? 'hr.operations.manager.overtime' : 'employee.team.overtime';
     $teamAttendanceRoute = $isHr ? 'hr.operations.manager.attendance' : 'employee.team.attendance';
+    $teamScheduleRoute = $isHr ? 'hr.operations.manager.schedule' : 'employee.team.schedule';
+    $teamObRoute = $isHr ? 'hr.operations.manager.ob' : 'employee.team.ob';
     $teamTimeLogRoute = $isHr ? 'hr.operations.manager.timelog' : 'employee.team.timelog';
 @endphp
 <x-dynamic-component :component="$layout" title="Team Operations">
@@ -128,10 +130,38 @@
         @endforeach
     </div>
 
+    @if($employees->isNotEmpty())
+    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="border-b border-slate-100 px-5 py-4">
+            <h2 class="font-semibold text-slate-950">Official business</h2>
+            <p class="text-sm text-slate-500">For people working away from the office, like at an event. Those days count as full working days - not absent, late or short - and the scanner sync will not change them.</p>
+        </div>
+        <form method="POST" action="{{ route($teamObRoute) }}" class="grid gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1.5fr_auto] lg:items-end">@csrf
+            <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Employee</span>
+                <select name="ob_employee" class="form-input" required>
+                    <option value="">Choose employee...</option>
+                    @foreach($employees as $person)
+                        <option value="{{ $person->employee_id }}" @selected(old('ob_employee') == $person->employee_id)>{{ $person->full_name }}</option>
+                    @endforeach
+                </select></label>
+            <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">From</span>
+                <input type="date" name="ob_from" value="{{ old('ob_from') }}" class="form-input" required></label>
+            <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">To</span>
+                <input type="date" name="ob_to" value="{{ old('ob_to') }}" class="form-input"></label>
+            <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Where</span>
+                <input type="text" name="ob_note" value="{{ old('ob_note') }}" maxlength="120" placeholder="e.g. MMDA event" class="form-input" required></label>
+            <button class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"><i class="fas fa-briefcase"></i> Mark official business</button>
+        </form>
+        @if($errors->hasAny(['ob_employee', 'ob_from', 'ob_to', 'ob_note']))
+            <p class="px-5 pb-4 text-sm text-red-600">{{ $errors->first('ob_employee') ?: $errors->first('ob_from') ?: $errors->first('ob_to') ?: $errors->first('ob_note') }}</p>
+        @endif
+    </section>
+    @endif
+
     <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div class="border-b border-slate-100 px-5 py-4">
             <h2 class="font-semibold text-slate-950">Team</h2>
-            <p class="text-sm text-slate-500">Open a profile to inspect attendance and leave history.</p>
+            <p class="text-sm text-slate-500">Open a profile to inspect attendance and leave history, or set their shift and rest days.</p>
         </div>
         <div class="divide-y divide-slate-100">
             @forelse($employees as $e)
@@ -145,6 +175,50 @@
                         View
                         <i class="fas fa-arrow-right text-xs"></i>
                     </a>
+                    <details class="sm:col-span-2" @if(old('schedule_for') == $e->employee_id) open @endif>
+                        <summary class="cursor-pointer text-sm font-semibold text-red-600">
+                            Shift &amp; rest days
+                            <span class="font-normal text-slate-500">&middot; {{ $e->shift_start ? \Carbon\Carbon::parse($e->shift_start)->format('g:i A').'-'.($e->shift_end ? \Carbon\Carbon::parse($e->shift_end)->format('g:i A') : '?') : 'no shift set' }}</span>
+                        </summary>
+                        <form method="POST" action="{{ route($teamScheduleRoute, $e->employee_id) }}" class="mt-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">@csrf
+                            <input type="hidden" name="schedule_for" value="{{ $e->employee_id }}">
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Shift starts</span>
+                                    <input type="time" name="shift_start" value="{{ $e->shift_start ? substr($e->shift_start, 0, 5) : '' }}" class="form-input">
+                                    <span class="mt-1 block text-xs text-slate-500">Lateness is measured from this. Blank means never late.</span></label>
+                                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Shift ends</span>
+                                    <input type="time" name="shift_end" value="{{ $e->shift_end ? substr($e->shift_end, 0, 5) : '' }}" class="form-input"></label>
+                            </div>
+                            <div>
+                                <span class="block text-sm font-medium text-slate-700">Rest days (every week)</span>
+                                <div class="mt-1 flex flex-wrap gap-3">
+                                    @foreach(\App\Support\WorkWeek::DAYS as $number => $name)
+                                        <label class="flex items-center gap-2 text-sm text-slate-700">
+                                            <input type="checkbox" name="rest_days[]" value="{{ $number }}" @checked(in_array($number, \App\Support\WorkWeek::days($e->rest_days))) class="rounded border-slate-300">
+                                            {{ substr($name, 0, 3) }}
+                                        </label>
+                                    @endforeach
+                                </div>
+                                <p class="mt-1 text-xs text-slate-500">Their usual rest day, used for every cutoff unless changed below.</p>
+                            </div>
+                            <div>
+                                <span class="block text-sm font-medium text-slate-700">Rest days this cutoff ({{ $cutoff->label() }})</span>
+                                @foreach(collect($e->cutoffRest)->groupBy(fn ($rest, $date) => \Carbon\Carbon::parse($date)->startOfWeek()->toDateString(), true) as $monday => $days)
+                                    <div class="mt-1 flex flex-wrap items-center gap-3">
+                                        <span class="w-24 text-xs font-semibold text-slate-500">{{ \Carbon\Carbon::parse($monday)->format('M j') }}-{{ \Carbon\Carbon::parse($monday)->endOfWeek()->format('M j') }}</span>
+                                        @foreach($days as $date => $rest)
+                                            <label class="flex items-center gap-2 text-sm text-slate-700">
+                                                <input type="checkbox" name="cutoff_rest[]" value="{{ $date }}" @checked($rest) class="rounded border-slate-300">
+                                                {{ \Carbon\Carbon::parse($date)->format('D j') }}
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                @endforeach
+                                <p class="mt-1 text-xs text-slate-500">Change a day here only when this cutoff is different - the weekly default stays as it is.</p>
+                            </div>
+                            <button class="btn-primary">Save</button>
+                        </form>
+                    </details>
                 </div>
             @empty
                 <div class="px-5 py-10 text-center text-sm text-slate-500">No team members found.</div>

@@ -95,18 +95,15 @@ class NavBadges
         return self::remember('staff', function () use ($id) {
             $departmentIds = PeopleAccess::managedDepartmentIds();
 
-            $teamPending = $departmentIds
-                ? (int) DB::table('leaves as l')
-                    ->join('employees as e', 'e.employee_id', '=', 'l.employee_id')
-                    ->where('l.status', 'pending')
-                    ->whereIn('e.department_id', $departmentIds)
-                    ->count()
-                    + (int) DB::table('overtime_requests as o')
-                    ->join('employees as e', 'e.employee_id', '=', 'o.employee_id')
-                    ->where('o.status', 'pending')
-                    ->whereIn('e.department_id', $departmentIds)
-                    ->count()
-                : 0;
+            // Only what this person can actually decide: never their own
+            // request, and a supervisor's leave only for its approver.
+            $leaveIds = DB::table('leaves')->where('status', 'pending')->pluck('employee_id');
+            $otIds = $departmentIds
+                ? DB::table('overtime_requests as o')->join('employees as e', 'e.employee_id', '=', 'o.employee_id')
+                    ->where('o.status', 'pending')->whereIn('e.department_id', $departmentIds)->pluck('o.employee_id')
+                : collect();
+            $teamPending = $leaveIds->filter(fn ($id) => PeopleAccess::decidesLeaveOf((int) $id))->count()
+                + $otIds->filter(fn ($id) => PeopleAccess::managesEmployee((int) $id))->count();
 
             return [
             // Interviews given to them that they have not reported on. Whether

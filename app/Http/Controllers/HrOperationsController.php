@@ -64,9 +64,22 @@ class HrOperationsController extends Controller
             ->when(! \App\Support\PeopleAccess::isHr(), fn($q) => $q->whereIn('e.department_id', $departmentIds)->where('e.user_id', '!=', auth()->id())
                 // Nobody opens their own profile here, and a leader does not open their supervisor's.
                 ->when(auth()->user()->role === 'leader', fn($q) => $q->where('u.role', '!=', 'supervisor')))
-            ->select('e.employee_id','e.job_title','e.department_id','u.full_name','d.department_name')
+            ->select('e.employee_id','e.job_title','e.department_id','u.full_name','d.department_name','e.shift_start','e.shift_end','e.rest_days')
             ->orderBy('u.full_name')
             ->get();
+        // This cutoff's rest days per person: a calendar mark wins over the weekly default.
+        $cutoff = \App\Support\PayPeriod::recent(1)[0];
+        $marks = DB::table('shift_assignments')->whereIn('employee_id', $employees->pluck('employee_id'))
+            ->whereBetween('work_date', [$cutoff->start, $cutoff->end])->get()
+            ->groupBy('employee_id');
+        foreach ($employees as $e) {
+            $own = ($marks[$e->employee_id] ?? collect())->keyBy(fn ($m) => substr((string) $m->work_date, 0, 10));
+            $e->cutoffRest = [];
+            for ($day = \Carbon\Carbon::parse($cutoff->start); $day->lte(\Carbon\Carbon::parse($cutoff->end)); $day->addDay()) {
+                $mark = $own->get($day->toDateString());
+                $e->cutoffRest[$day->toDateString()] = $mark ? (bool) $mark->rest_day : \App\Support\WorkWeek::restsOn($e->rest_days, $day);
+            }
+        }
         $pendingLeave = DB::table('leaves as l')->join('employees as e','l.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')
             ->where('l.status', \App\Support\PeopleAccess::isHr() ? 'pending_hr' : 'pending')
             // Their own team's leave - but a supervisor's leave, from any
@@ -94,7 +107,7 @@ class HrOperationsController extends Controller
             ->when(! \App\Support\PeopleAccess::isHr(), fn ($q) => $q->whereIn('e.department_id', $departmentIds)->where('e.user_id', '!=', auth()->id()))
             ->orderBy('t.date')->get(['t.*', 'u.full_name']);
 
-        return view('hr.operations.manager', compact('employees','pendingLeave','pendingOt','noScanner','recentManual','pendingTimeLogs'));
+        return view('hr.operations.manager', compact('cutoff','employees','pendingLeave','pendingOt','noScanner','recentManual','pendingTimeLogs'));
     }
 
     /**
@@ -186,7 +199,7 @@ class HrOperationsController extends Controller
             }
         });
 
-        \App\Services\Auditor::record('update', 'hr_attendance', null, null,
+        \App\Services\Auditor::record('update', 'hr_attendance', 0, null,
             ['manual_attendance' => $data, 'by' => auth()->id()]);
 
         return back()->with('success', 'Saved for '.\Carbon\Carbon::parse($data['date'])->format('M j').'.');
@@ -337,4 +350,97 @@ class HrOperationsController extends Controller
         return back()->with('success','Lifecycle event recorded.');
     }
 
+    /**
+     * A supervisor sets their team's shift and rest days: the weekly default,
+     * and this cutoff's days off as calendar marks that leave the default alone.
+     */
+    public function teamSchedule(\Illuminate\Http\Request $request, int $id)
+    {
+        \App\Support\PeopleAccess::managerForEmployee($id);
+        $data = $request->validate([
+            'shift_start' => ['nullable', 'date_format:H:i'],
+            'shift_end' => ['nullable', 'date_format:H:i'],
+            'rest_days' => ['array'], 'rest_days.*' => ['integer', 'between:1,7'],
+            'cutoff_rest' => ['array'], 'cutoff_rest.*' => ['date'],
+        ]);
+        $weekly = \App\Support\WorkWeek::store($data['rest_days'] ?? []);
+        $cutoff = \App\Support\PayPeriod::recent(1)[0];
+        $restOn = array_flip($data['cutoff_rest'] ?? []);
+
+        DB::transaction(function () use ($id, $data, $weekly, $cutoff, $restOn) {
+            DB::table('employees')->where('employee_id', $id)->update([
+                'shift_start' => ($data['shift_start'] ?? null) ? $data['shift_start'].':00' : null,
+                'shift_end' => ($data['shift_end'] ?? null) ? $data['shift_end'].':00' : null,
+                'rest_days' => $weekly, 'updated_at' => now(),
+            ]);
+            $marks = DB::table('shift_assignments')->where('employee_id', $id)
+                ->whereBetween('work_date', [$cutoff->start, $cutoff->end])->get()
+                ->keyBy(fn ($m) => substr((string) $m->work_date, 0, 10));
+            for ($day = \Carbon\Carbon::parse($cutoff->start); $day->lte(\Carbon\Carbon::parse($cutoff->end)); $day->addDay()) {
+                $date = $day->toDateString();
+                $rest = isset($restOn[$date]);
+                $mark = $marks->get($date);
+                $default = \App\Support\WorkWeek::restsOn($weekly, $day);
+                if ($mark ? (bool) $mark->rest_day === $rest : $rest === $default) {
+                    continue;
+                }
+                // Back to the default: a plain rest/working mark is no longer needed.
+                if ($rest === $default && $mark && $mark->starts_at === null) {
+                    DB::table('shift_assignments')->where('id', $mark->id)->delete();
+                    continue;
+                }
+                DB::table('shift_assignments')->updateOrInsert(
+                    ['employee_id' => $id, 'work_date' => $date],
+                    ['rest_day' => $rest, 'label' => $rest ? 'Rest day' : 'Working day', 'status' => 'approved',
+                        'created_by' => auth()->id(), 'approved_by' => auth()->id(), 'approved_at' => now(),
+                        'created_at' => $mark->created_at ?? now(), 'updated_at' => now()]
+                );
+            }
+            \App\Services\Auditor::record('update', 'employees', $id, null, ['team_schedule' => $data, 'by' => auth()->id()]);
+        });
+
+        return back()->with('success', 'Shift and rest days saved.');
+    }
+
+    /**
+     * A supervisor marks their own people as out on official business - an
+     * event or errand away from the office. Those days count as full working
+     * days, and the scanner sync leaves them alone.
+     */
+    public function teamOfficialBusiness(\Illuminate\Http\Request $request)
+    {
+        \App\Support\PeopleAccess::manager();
+        $data = $request->validate([
+            'ob_employee' => ['required', 'integer'],
+            'ob_from' => ['required', 'date_format:Y-m-d'],
+            'ob_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:ob_from'],
+            'ob_note' => ['required', 'string', 'max:120'],
+        ], ['ob_employee.required' => 'Choose who was on official business.', 'ob_note.required' => 'Say where - an event name or place.']);
+        \App\Support\PeopleAccess::managerForEmployee((int) $data['ob_employee']);
+
+        $from = \Carbon\Carbon::parse($data['ob_from']);
+        $to = \Carbon\Carbon::parse($data['ob_to'] ?? null ?: $data['ob_from']);
+        if ($from->diffInDays($to) > 31) {
+            return back()->withErrors(['ob_to' => 'At most a month at a time.'])->withInput();
+        }
+
+        $note = 'Official business: '.trim($data['ob_note']);
+        DB::transaction(function () use ($data, $from, $to, $note) {
+            for ($day = $from->copy(); $day->lte($to); $day->addDay()) {
+                $existing = DB::table('hr_attendance')->where('employee_id', $data['ob_employee'])->whereDate('date', $day)->first();
+                if ($existing) {
+                    DB::table('hr_attendance')->where('attendance_id', $existing->attendance_id)
+                        ->update(['status' => 'official_business', 'notes' => $note, 'updated_at' => now()]);
+                } else {
+                    DB::table('hr_attendance')->insert(['employee_id' => $data['ob_employee'], 'date' => $day->toDateString(),
+                        'status' => 'official_business', 'notes' => $note, 'created_at' => now(), 'updated_at' => now()]);
+                }
+                \App\Services\Auditor::record('update', 'hr_attendance', $existing->attendance_id ?? 0,
+                    $existing ? ['status' => $existing->status] : null,
+                    ['status' => 'official_business', 'date' => $day->toDateString(), 'notes' => $note, 'by' => auth()->id()]);
+            }
+        });
+
+        return back()->with('success', 'Marked '.($from->diffInDays($to) + 1).' day(s) as official business.');
+    }
 }

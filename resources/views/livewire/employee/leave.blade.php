@@ -98,25 +98,42 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             (int) substr($this->start_date, 0, 4)
         );
 
-        DB::table('leaves')->insert([
+        // A supervisor's leave is decided by the supervisors' approver
+        // (config/leave.php) before HR, never by their own team. The
+        // approver's own leave goes straight to HR.
+        $status = (int) auth()->id() === (int) config('leave.supervisor_approver_user_id') ? 'pending_hr' : 'pending';
+        $row = fn (string $pay, string $from, string $to, float $days) => [
             'employee_id' => $employeeId,
             'leave_type'  => $this->leave_type,
-            'pay_status'  => $payStatus,
-            'start_date'  => $this->start_date,
-            'end_date'    => $this->end_date,
-            'total_days'  => $this->total_days,
+            'pay_status'  => $pay,
+            'start_date'  => $from,
+            'end_date'    => $to,
+            'total_days'  => $days,
             'reason'      => $this->reason,
-            // A supervisor's leave is decided by the supervisors' approver
-            // (config/leave.php) before HR, never by their own team. The
-            // approver's own leave goes straight to HR.
-            'status'      => (int) auth()->id() === (int) config('leave.supervisor_approver_user_id') ? 'pending_hr' : 'pending',
+            'status'      => $status,
             'created_at'  => now(),
             'updated_at'  => now(),
-        ]);
+        ];
 
-        session()->flash('success', $payStatus === $this->pay_status
+        // Leave paid per occasion (bereavement): the first days are paid and
+        // anything past them is filed alongside as unpaid.
+        $paidDays = config('leave.per_occasion.'.$this->leave_type);
+        if ($paidDays && $this->pay_status === 'paid' && $this->total_days > $paidDays) {
+            $split = Carbon::parse($this->start_date)->addDays($paidDays);
+            DB::table('leaves')->insert([
+                $row('paid', $this->start_date, $split->copy()->subDay()->toDateString(), (float) $paidDays),
+                $row('unpaid', $split->toDateString(), $this->end_date, (float) $this->total_days - $paidDays),
+            ]);
+            $payStatus = 'split';
+        } else {
+            DB::table('leaves')->insert($row($payStatus, $this->start_date, $this->end_date, (float) $this->total_days));
+        }
+
+        session()->flash('success', $payStatus === 'split'
+            ? 'Leave request submitted: the first '.$paidDays.' days are paid and the rest is unpaid.'
+            : ($payStatus === $this->pay_status
             ? 'Leave request submitted successfully.'
-            : 'Leave request submitted as unpaid because no paid balance is available for that leave type.');
+            : 'Leave request submitted as unpaid because no paid balance is available for that leave type.'));
 
         $this->reset(['leave_type', 'pay_status', 'start_date', 'end_date', 'total_days', 'reason']);
         $this->leave_type = 'vacation';

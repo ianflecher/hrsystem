@@ -648,7 +648,19 @@
             @endif
             <span>
                 <span class="hr-sidebar__brand-name">Imprint Customs</span><br>
-                <span class="hr-sidebar__brand-sub">Human Resources</span>
+                {{-- Who is signed in: HR sees "Human Resources"; the admin account
+                     is the owner's, and shows their own title. --}}
+                @php
+                    $sidebarTitle = 'Human Resources';
+                    if (auth()->check() && auth()->user()->role === 'admin') {
+                        $ownTitle = \Illuminate\Support\Facades\DB::table('employees')->where('user_id', auth()->id())->value('job_title');
+                        $sidebarTitle = $ownTitle
+                            ? \Illuminate\Support\Str::title(mb_strtolower(preg_replace('/\s*\/\s*/', ' / ', trim($ownTitle))))
+                            : 'Administrator';
+                        $sidebarTitle = preg_replace(['/\bCeo\b/', '/\bHr\b/'], ['CEO', 'HR'], $sidebarTitle);
+                    }
+                @endphp
+                <span class="hr-sidebar__brand-sub">{{ $sidebarTitle }}</span>
             </span>
         </a>
         <button type="button" class="hr-sidebar__close" data-sidebar-close aria-label="Close navigation"><i class="fas fa-xmark" aria-hidden="true"></i></button>

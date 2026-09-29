@@ -313,7 +313,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
             }
-            \App\Services\Auditor::record('update', 'hr_attendance', $existing->attendance_id ?? null,
+            \App\Services\Auditor::record('update', 'hr_attendance', $existing->attendance_id ?? 0,
                 $existing ? ['status' => $existing->status] : null,
                 ['status' => 'official_business', 'date' => $day->toDateString(), 'notes' => $note]);
         }
@@ -499,41 +499,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             </p>
         </div>
 
-        {{-- Events, client sites: worked, but nowhere near the scanner. --}}
-        <div class="mt-4 pt-4 border-t border-gray-200">
-            <p class="form-label">Official business</p>
-            <p class="text-xs text-gray-500 mb-2">For people working away from the office, like at an event. Those days count as full working days - not absent, late or short - and the scanner sync will not change them.</p>
-            @php
-                $obPeople = \Illuminate\Support\Facades\DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
-                    ->where('e.status', 'active')->orderBy('u.full_name')->get(['e.employee_id', 'u.full_name']);
-            @endphp
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-start">
-                <div class="lg:col-span-2">
-                    <select wire:model="obEmployee" class="form-input" aria-label="Employee">
-                        <option value="">Choose employee…</option>
-                        @foreach($obPeople as $person)
-                            <option value="{{ $person->employee_id }}">{{ $person->full_name }}</option>
-                        @endforeach
-                    </select>
-                    @error('obEmployee') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                </div>
-                <div>
-                    <input type="date" wire:model="obFrom" class="form-input" aria-label="From">
-                    @error('obFrom') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                </div>
-                <div>
-                    <input type="date" wire:model="obTo" class="form-input" aria-label="To (leave blank for one day)" title="To - leave blank for one day">
-                    @error('obTo') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                </div>
-                <div>
-                    <input type="text" wire:model="obNote" class="form-input" maxlength="120" placeholder="Where, e.g. MMDA event" aria-label="Where">
-                    @error('obNote') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                </div>
-            </div>
-            <button wire:click="markOfficialBusiness" wire:loading.attr="disabled" class="btn-secondary mt-3">
-                <i class="fas fa-briefcase"></i> Mark official business
-            </button>
-        </div>
+        {{-- Official business is marked by the team's supervisor on Team Dashboard. --}}
 
         @if ($syncStarted)
             <div class="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800" role="status">

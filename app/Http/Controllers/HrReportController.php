@@ -17,6 +17,7 @@ class HrReportController extends Controller
             'from' => 'nullable|date_format:Y-m-d',
             'to' => 'nullable|date_format:Y-m-d|after_or_equal:from',
             'department_id' => 'nullable|integer|exists:departments,department_id',
+            'company' => 'nullable|in:GKLASAM OPC,Imprint Cafe',
         ]);
 
         $report = $data['report'];
@@ -32,15 +33,21 @@ class HrReportController extends Controller
         // their leading zeros. The header row is always there, so a report
         // with nothing in it still opens as a readable file. Cell text is
         // never read as a formula in .xlsx, so nothing needs escaping for that.
-        return \App\Support\SpreadsheetWriter::download(
-            'hr-'.$report.'-'.$from.'-'.$to.'.xlsx',
-            ucfirst($report),
-            $this->columns($report),
-            (function () use ($report, $from, $to, $data) {
-                foreach ($this->rows($report, $from, $to, $data['department_id'] ?? null) as $row) {
-                    yield (array) $row;
-                }
-            })()
+        // Both companies: one sheet each, in the same workbook.
+        $companies = ($data['company'] ?? null) ? [$data['company']] : ['GKLASAM OPC', 'Imprint Cafe'];
+        $sheets = [];
+        foreach ($companies as $company) {
+            $sheets[] = [$company.' '.ucfirst($report), $this->columns($report),
+                (function () use ($report, $from, $to, $data, $company) {
+                    foreach ($this->rows($report, $from, $to, $data['department_id'] ?? null, $company) as $row) {
+                        yield (array) $row;
+                    }
+                })()];
+        }
+
+        return \App\Support\SpreadsheetWriter::downloadSheets(
+            'hr-'.$report.(($data['company'] ?? '') ? '-'.\Illuminate\Support\Str::slug($data['company']) : '').'-'.$from.'-'.$to.'.xlsx',
+            $sheets
         );
     }
 
@@ -69,29 +76,34 @@ class HrReportController extends Controller
         };
     }
 
-    private function rows(string $report, string $from, string $to, ?int $departmentId)
+    private function rows(string $report, string $from, string $to, ?int $departmentId, ?string $company = null)
     {
         return match ($report) {
             'attendance' => DB::table('hr_attendance as a')->join('employees as e', 'e.employee_id', '=', 'a.employee_id')->join('users as u', 'u.user_id', '=', 'e.user_id')
                 ->leftJoin('departments as d', 'd.department_id', '=', 'e.department_id')
                 ->when($departmentId, fn ($q) => $q->where('e.department_id', $departmentId))
+                ->when($company, fn ($q) => $q->whereRaw("COALESCE(NULLIF(e.company, ''), 'GKLASAM OPC') = ?", [$company]))
                 ->whereBetween('a.date', [$from, $to])->orderBy('a.date')->select('a.date', 'u.full_name', 'd.department_name', 'a.time_in', 'a.time_out', 'a.status')->cursor(),
             'leave' => DB::table('leaves as l')->join('employees as e', 'e.employee_id', '=', 'l.employee_id')->join('users as u', 'u.user_id', '=', 'e.user_id')
                 ->leftJoin('departments as d', 'd.department_id', '=', 'e.department_id')
                 ->when($departmentId, fn ($q) => $q->where('e.department_id', $departmentId))
+                ->when($company, fn ($q) => $q->whereRaw("COALESCE(NULLIF(e.company, ''), 'GKLASAM OPC') = ?", [$company]))
                 ->where('l.start_date', '<=', $to)->where('l.end_date', '>=', $from)->orderBy('l.start_date')->select('l.start_date', 'l.end_date', 'u.full_name', 'd.department_name', 'l.leave_type', 'l.status')->cursor(),
             'payroll' => DB::table('hr_payroll as p')->join('employees as e', 'e.employee_id', '=', 'p.employee_id')->join('users as u', 'u.user_id', '=', 'e.user_id')
                 ->leftJoin('departments as d', 'd.department_id', '=', 'e.department_id')
                 ->when($departmentId, fn ($q) => $q->where('e.department_id', $departmentId))
+                ->when($company, fn ($q) => $q->whereRaw("COALESCE(NULLIF(e.company, ''), 'GKLASAM OPC') = ?", [$company]))
                 ->whereBetween('p.period_start', [$from, $to])->orderBy('p.period_start')->select('p.period_start', 'p.period_end', 'u.full_name', 'd.department_name', 'p.gross_pay', 'p.overtime_pay', 'p.loan_deduction', 'p.sss', 'p.philhealth', 'p.pagibig', 'p.tax', 'p.deductions', 'p.net_pay', 'p.status')->cursor(),
             'sss', 'philhealth', 'pagibig', 'bir' => DB::table('hr_payroll as p')->join('employees as e', 'e.employee_id', '=', 'p.employee_id')->join('users as u', 'u.user_id', '=', 'e.user_id')
                 ->leftJoin('departments as d', 'd.department_id', '=', 'e.department_id')
                 ->when($departmentId, fn ($q) => $q->where('e.department_id', $departmentId))
+                ->when($company, fn ($q) => $q->whereRaw("COALESCE(NULLIF(e.company, ''), 'GKLASAM OPC') = ?", [$company]))
                 ->whereBetween('p.period_start', [$from, $to])->orderBy('p.period_start')
                 ->select('p.period_start', 'p.period_end', 'u.full_name', 'd.department_name', 'p.gross_pay', 'p.sss', 'p.employer_sss', 'p.employer_ec', 'p.philhealth', 'p.employer_philhealth', 'p.pagibig', 'p.employer_pagibig', 'p.tax', 'p.net_pay')->cursor(),
             default => DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
                 ->leftJoin('departments as d', 'd.department_id', '=', 'e.department_id')
                 ->when($departmentId, fn ($q) => $q->where('e.department_id', $departmentId))
+                ->when($company, fn ($q) => $q->whereRaw("COALESCE(NULLIF(e.company, ''), 'GKLASAM OPC') = ?", [$company]))
                 ->where('e.hire_date', '<=', $to)->orderBy('u.full_name')->select('u.full_name', 'd.department_name', 'e.job_title', 'e.status', 'e.hire_date', 'e.salary')->cursor(),
         };
     }

@@ -47,6 +47,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public string $biometric_id = '';
     public $department_id = '';
     public string $hire_date = '';
+    /** Paid days in a month, for turning a day rate into the monthly figure contributions read. */
+    public const DAYS_A_MONTH = 26;
+
+    /** Per day. */
     public $salary = '';
     public $allowance = '';
     /** Why the pay changed. Only asked for when it actually has. */
@@ -205,7 +209,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->leftJoin('departments as d', 'e.department_id', '=', 'd.department_id')
             ->whereNull('u.deleted_at')
             ->select(
-                'e.employee_id', 'e.job_title', 'e.status', 'e.hire_date', 'e.salary', 'e.allowance',
+                'e.employee_id', 'e.job_title', 'e.status', 'e.hire_date', 'e.salary', 'e.allowance', 'e.daily_rate', 'e.pay_basis',
                 'e.employment_type', 'e.company',
                 'u.user_id', 'u.full_name', 'u.username', 'u.email', 'u.role',
                 'u.must_change_password',
@@ -312,11 +316,14 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->biometric_id  = (string) ($row->biometric_id ?? '');
         $this->department_id = $row->department_id ?? '';
         $this->hire_date     = $row->hire_date;
-        $this->salary        = $row->salary;
+        // Pay is entered by the day; an older monthly figure is shown as its day rate.
+        $this->salary        = ($row->pay_basis ?? 'monthly') === 'monthly'
+            ? round((float) $row->salary / self::DAYS_A_MONTH, 2) : (float) ($row->daily_rate ?? 0);
         $this->employment_type = $this->knownEmploymentType($row->employment_type);
         $this->company       = array_key_exists((string) $row->company, $this->companies) ? (string) $row->company : 'GKLASAM OPC';
-        $this->payWas        = ['salary' => (float) $row->salary, 'allowance' => (float) ($row->allowance ?? 0)];
-        $this->allowance     = $row->allowance;
+        $this->allowance     = ($row->pay_basis ?? 'monthly') === 'monthly'
+            ? round((float) ($row->allowance ?? 0) / self::DAYS_A_MONTH, 2) : (float) ($row->allowance ?? 0);
+        $this->payWas        = ['salary' => (float) $this->salary, 'allowance' => (float) $this->allowance];
         $this->status        = $row->status;
         $this->role          = $row->role;
         $this->showModal     = true;
@@ -570,8 +577,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     'biometric_id'  => $biometricId,
                     'department_id' => $departmentId,
                     'hire_date'     => $data['hire_date'],
-                    'salary'        => $salary,
+                    'salary'        => round((float) $salary * self::DAYS_A_MONTH, 2),
                     'allowance'     => $allowance,
+                    'pay_basis'     => 'daily',
+                    'daily_rate'    => $salary,
                     'status'        => $data['status'],
                     'employment_type' => $data['employment_type'],
                     'company'       => $data['company'],
@@ -590,8 +599,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 if ($payMoved) {
                     SalaryHistory::record(
                         employeeId: $this->editingId,
-                        salary: (float) $salary,
+                        salary: round((float) $salary * self::DAYS_A_MONTH, 2),
                         allowance: (float) $allowance,
+                        payBasis: 'daily',
+                        dailyRate: (float) $salary,
                         reason: $this->payChangeReason !== '' ? $this->payChangeReason : null,
                     );
                 }
@@ -635,8 +646,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'biometric_id'  => $biometricId,
                 'department_id' => $departmentId,
                 'hire_date'     => $data['hire_date'],
-                'salary'        => $salary,
+                'salary'        => round((float) $salary * self::DAYS_A_MONTH, 2),
                 'allowance'     => $allowance,
+                'pay_basis'     => 'daily',
+                'daily_rate'    => $salary,
                 'status'        => $data['status'],
                 'employment_type' => $data['employment_type'],
                 'company'       => $data['company'],
@@ -647,8 +660,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             // The pay they start on is the first entry in the log.
             SalaryHistory::record(
                 employeeId: $employeeId,
-                salary: (float) $salary,
+                salary: round((float) $salary * self::DAYS_A_MONTH, 2),
                 allowance: (float) $allowance,
+                payBasis: 'daily',
+                dailyRate: (float) $salary,
                 effectiveFrom: $data['hire_date'],
                 reason: 'Starting pay',
             );
@@ -1237,54 +1252,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                           placeholder="House/lot, street, barangay, city"></textarea>
                                 @error('address') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
-                            <div>
-                                <label class="form-label" for="shift_start">Shift starts</label>
-                                <input id="shift_start" type="time" wire:model="shift_start" class="form-input">
-                                <p class="mt-1 text-xs text-gray-500">
-                                    Lateness is measured from this. Blank means never late.
-                                </p>
-                                @error('shift_start') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                            </div>
-                            <div>
-                                <label class="form-label" for="shift_end">Shift ends</label>
-                                <input id="shift_end" type="time" wire:model="shift_end" class="form-input">
-                                @error('shift_end') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                            </div>
-                            <div class="sm:col-span-2 lg:col-span-3">
-                                <span class="form-label">Rest days (every week)</span>
-                                <div class="flex flex-wrap gap-3 mt-1">
-                                    @foreach (WorkWeek::DAYS as $number => $name)
-                                        <label class="flex items-center gap-2 text-sm text-gray-700">
-                                            <input type="checkbox" value="{{ $number }}" wire:model="rest_days" class="rounded border-gray-300">
-                                            {{ substr($name, 0, 3) }}
-                                        </label>
-                                    @endforeach
-                                </div>
-                                <p class="mt-1 text-xs text-gray-500">
-                                    Their usual rest day, used for every cutoff unless changed below.
-                                </p>
-
-                                @if ($editingId && $cutoff_rest)
-                                    <span class="form-label mt-4 block">Rest days this cutoff ({{ $this->cutoffPeriod()->label() }})</span>
-                                    @foreach (collect(array_keys($cutoff_rest))->groupBy(fn ($key) => \Carbon\Carbon::createFromFormat('Ymd', (string) $key)->startOfWeek()->format('Y-m-d')) as $monday => $keys)
-                                        <div class="flex flex-wrap items-center gap-3 mt-1" wire:key="cutoff-week-{{ $monday }}">
-                                            <span class="w-24 text-xs font-semibold text-gray-500">
-                                                {{ \Carbon\Carbon::parse($monday)->format('M j') }}–{{ \Carbon\Carbon::parse($monday)->endOfWeek()->format('M j') }}
-                                            </span>
-                                            @foreach ($keys as $key)
-                                                <label class="flex items-center gap-2 text-sm text-gray-700">
-                                                    <input type="checkbox" wire:model="cutoff_rest.{{ $key }}" class="rounded border-gray-300">
-                                                    {{ \Carbon\Carbon::createFromFormat('Ymd', (string) $key)->format('D j') }}
-                                                </label>
-                                            @endforeach
-                                        </div>
-                                    @endforeach
-                                    <p class="mt-1 text-xs text-gray-500">
-                                        Starts as the weekly default. Change a day here only when this cutoff is different - the weekly default above stays as it is.
-                                    </p>
-                                @endif
-                                @error('rest_days') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                            </div>
+                            {{-- Shift and rest days are set by the team's supervisor on My team. --}}
                             <div class="sm:col-span-2">
                                 <label class="form-label" for="immersion_until">Work immersion until</label>
                                 <input id="immersion_until" type="date" wire:model="immersion_until" class="form-input">
@@ -1336,19 +1304,19 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                  basic carries the tax and the contributions, an
                                  allowance is paid whole. --}}
                             <div>
-                                <label class="form-label" for="salary">Basic salary (monthly)</label>
+                                <label class="form-label" for="salary">Basic salary (per day)</label>
                                 <input id="salary" type="number" step="0.01" min="0" wire:model.live="salary"
                                        class="form-input" placeholder="0.00">
                                 @error('salary') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
                             <div>
-                                <label class="form-label" for="allowance">Allowance</label>
+                                <label class="form-label" for="allowance">Allowance (per day)</label>
                                 <input id="allowance" type="number" step="0.01" min="0" wire:model.live="allowance"
                                        class="form-input" placeholder="0.00">
                                 @error('allowance') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                                 @if ((float) $salary > 0 || (float) $allowance > 0)
                                     <p class="mt-1 text-xs text-gray-600">
-                                        Total &#8369;{{ number_format((float) $salary + (float) $allowance, 2) }} a month
+                                        Total &#8369;{{ number_format((float) $salary + (float) $allowance, 2) }} a day
                                     </p>
                                 @endif
                             </div>
@@ -1370,7 +1338,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         <strong>&#8369;{{ number_format((float) $payWas['salary'] + (float) $payWas['allowance'], 2) }}</strong>
                                         to
                                         <strong>&#8369;{{ number_format((float) $salary + (float) $allowance, 2) }}</strong>
-                                        a month. This is recorded against their record.
+                                        a day. This is recorded against their record.
                                     </p>
                                     <label class="form-label mt-2" for="payChangeReason">Reason</label>
                                     <input id="payChangeReason" type="text" wire:model.live="payChangeReason"

@@ -46,6 +46,14 @@ class PayrollRun
             $onImmersion = $employee->immersion_until
                 && $period->start <= substr((string) $employee->immersion_until, 0, 10);
 
+            // HR's plus and minus rows for this cutoff. A taxable plus is pay
+            // like any other; a non-taxable plus and every minus land after tax.
+            $adjustments = DB::table('payroll_adjustments')->where('employee_id', $employeeId)->where('status', 'approved')
+                ->whereBetween('effective_date', [$period->start, $period->end])->get();
+            $plusTaxable = (float) $adjustments->where('type', 'addition')->where('taxable', true)->sum('amount');
+            $plusExempt = (float) $adjustments->where('type', 'addition')->where('taxable', false)->sum('amount');
+            $minus = (float) $adjustments->where('type', 'deduction')->sum('amount');
+
             $compliance = app(PhilippinePayrollCompliance::class)->assertReady($period->start);
             $ruleSnapshot = Statutory::snapshot($period->start);
             $overtimeAmount=(float) $overtime->sum('approved_amount');
@@ -54,8 +62,15 @@ class PayrollRun
             // Split across the two cutoffs like basic pay, so a monthly
             // allowance arrives as the month goes rather than all at once.
             // Nobody on immersion is paid one: they are paid in full anyway.
-            $monthlyAllowance = $onImmersion ? 0.0 : (float) ($employee->allowance ?? 0);
-            $allowance = round($monthlyAllowance / 2, 2);
+            // Day-rated staff get theirs for each day paid, like their basic.
+            if ($payBasis === 'monthly') {
+                $monthlyAllowance = $onImmersion ? 0.0 : (float) ($employee->allowance ?? 0);
+                $allowance = round($monthlyAllowance / 2, 2);
+            } else {
+                $perDay = $onImmersion ? 0.0 : (float) ($employee->allowance ?? 0);
+                $allowance = round($perDay * (($time['work_days'] ?? 0) + ($time['paid_leave_days'] ?? 0)), 2);
+                $monthlyAllowance = round($perDay * 26, 2);
+            }
 
             // Total monthly compensation, which only Pag-IBIG reads - and it
             // caps the base at 10,000, so in practice the allowance changes
@@ -63,8 +78,13 @@ class PayrollRun
             // and tax picks the allowance up through gross.
             $monthlyCompensation = round($statutoryBase + $monthlyAllowance, 2);
             $c = $payBasis === 'monthly'
-                ? PayrollCalculator::forCutoff($statutoryBase, $time['total'], $period->isSecondCutoff, $overtimeAmount, $holiday['amount'], ! $onImmersion, $nsd['amount'], $period->start, (bool) ($employee->minimum_wage_earner ?? false), 0.0, $allowance, $monthlyCompensation)
-                : PayrollCalculator::forNonMonthlyCutoff((float) ($time['basic_override'] ?? 0), $statutoryBase, 0, $period->isSecondCutoff, $overtimeAmount, $holiday['amount'], ! $onImmersion, $nsd['amount'], $period->start, (bool) ($employee->minimum_wage_earner ?? false), 0.0, $allowance, $monthlyCompensation);
+                ? PayrollCalculator::forCutoff($statutoryBase, $time['total'], $period->isSecondCutoff, $overtimeAmount, $holiday['amount'], ! $onImmersion, $nsd['amount'], $period->start, (bool) ($employee->minimum_wage_earner ?? false), $plusTaxable, $allowance, $monthlyCompensation)
+                : PayrollCalculator::forNonMonthlyCutoff((float) ($time['basic_override'] ?? 0), $statutoryBase, 0, $period->isSecondCutoff, $overtimeAmount, $holiday['amount'], ! $onImmersion, $nsd['amount'], $period->start, (bool) ($employee->minimum_wage_earner ?? false), $plusTaxable, $allowance, $monthlyCompensation);
+            if ($plusExempt > 0 || $minus > 0) {
+                $c['gross'] = round($c['gross'] + $plusExempt, 2);
+                $c['deductions'] = round($c['deductions'] + $minus, 2);
+                $c['net'] = round($c['net'] + $plusExempt - $minus, 2);
+            }
             $remainingCents = max(0, (int) round($c['net'] * 100));
             $loans = DB::table('employee_loans')->where('employee_id', $employeeId)->where('status', 'active')->where('starts_on', '<=', $period->start)->orderBy('id')->lockForUpdate()->get();
             $installments = [];
@@ -103,12 +123,15 @@ class PayrollRun
             if ($c['overtime'] > 0) $notes .= ' | Overtime: PHP '.number_format($c['overtime'], 2);
             if ($c['nsd'] > 0) $notes .= ' | NSD: '.number_format($c['nsd'], 2). ' ('.number_format($nsd['hours'], 2).' hours)';
             if ($deduction > 0) $notes .= ' | Loan repayment: PHP '.number_format($deduction, 2);
+            foreach ($adjustments as $a) {
+                $notes .= ' | '.($a->type === 'addition' ? '+' : '-').' PHP '.number_format((float) $a->amount, 2).' '.$a->reason;
+            }
             $id = DB::table('hr_payroll')->insertGetId([
                 'employee_id' => $employeeId, 'period_start' => $period->start, 'period_end' => $period->end,
                 'gross_pay' => $c['gross'], 'basic_pay' => $c['basic'], 'allowance' => $c['allowance'] ?? 0, 'deductions' => round($c['deductions'] + $deduction, 2), 'net_pay' => round($c['net'] - $deduction, 2),
                 'overtime_pay' => $c['overtime'], 'holiday_pay' => $c['holiday'], 'nsd_pay' => $c['nsd'], 'time_deduction' => $time['total'],
                 'sss' => $c['sss'], 'employer_sss' => $c['employer_sss'], 'employer_ec' => $c['employer_ec'], 'philhealth' => $c['philhealth'], 'employer_philhealth' => $c['employer_philhealth'], 'pagibig' => $c['pagibig'], 'employer_pagibig' => $c['employer_pagibig'], 'tax' => $c['tax'], 'taxable_compensation' => $c['taxable'], 'other_taxable_compensation' => $c['other_taxable'], 'mwe_exempt_compensation' => $c['mwe_exempt_compensation'], 'statutory_rule_version' => $ruleSnapshot['version'], 'statutory_snapshot' => json_encode($ruleSnapshot, JSON_THROW_ON_ERROR), 'rules_verified_at' => $compliance['verified_at'], 'employer_total_cost' => round($c['gross'] + $c['employer_sss'] + $c['employer_ec'] + $c['employer_philhealth'] + $c['employer_pagibig'], 2),
-                'loan_deduction' => $deduction, 'status' => 'calculated', 'notes' => $notes,
+                'loan_deduction' => $deduction, 'adjustments' => round($plusTaxable + $plusExempt - $minus, 2), 'status' => 'calculated', 'notes' => $notes,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
             DB::table('overtime_requests')->whereIn('id', $overtime->pluck('id'))->update(['payroll_id' => $id, 'updated_at' => now()]);
@@ -119,10 +142,12 @@ class PayrollRun
         });
     }
 
-    public function markPaid(string $periodStart): int
+    public function markPaid(string $periodStart, ?string $company = null): int
     {
-        return DB::transaction(function () use ($periodStart) {
-            $payrolls = DB::table('hr_payroll')->where('period_start', $periodStart)->where('status', 'approved')->lockForUpdate()->pluck('payroll_id');
+        return DB::transaction(function () use ($periodStart, $company) {
+            $payrolls = DB::table('hr_payroll')->where('period_start', $periodStart)->where('status', 'approved')
+                ->when($company, fn ($q) => $q->whereIn('employee_id', DB::table('employees')->whereRaw("COALESCE(NULLIF(company, ''), 'GKLASAM OPC') = ?", [$company])->select('employee_id')))
+                ->lockForUpdate()->pluck('payroll_id');
             $installments = DB::table('loan_installments')->whereIn('payroll_id', $payrolls)->get();
             DB::table('loan_installments')->whereIn('payroll_id', $payrolls)->whereNull('paid_at')->update(['paid_at' => now(), 'updated_at' => now()]);
             foreach ($installments->pluck('loan_id')->unique()->sort() as $loanId) {
@@ -132,6 +157,28 @@ class PayrollRun
                 if ($loan && (float) $loan->amount > 0 && (int) round($paid * 100) >= (int) round($loan->amount * 100)) DB::table('employee_loans')->where('id', $loanId)->update(['status' => 'repaid', 'updated_at' => now()]);
             }
             return DB::table('hr_payroll')->whereIn('payroll_id', $payrolls)->update(['status' => 'paid', 'updated_at' => now()]);
+        });
+    }
+
+    /**
+     * Throws away a payslip that is only calculated and works it out again,
+     * so a change made after generating (a plus or minus row) is included.
+     */
+    public function recalculate(int $employeeId, PayPeriod $period): ?int
+    {
+        return DB::transaction(function () use ($employeeId, $period) {
+            $payslip = DB::table('hr_payroll')->where('employee_id', $employeeId)->where('kind', 'regular')
+                ->where('period_start', $period->start)->lockForUpdate()->first();
+            if ($payslip && $payslip->status !== 'calculated') {
+                throw new \RuntimeException('This payslip is already '.$payslip->status.' - it can no longer change.');
+            }
+            if ($payslip) {
+                DB::table('loan_installments')->where('payroll_id', $payslip->payroll_id)->delete();
+                DB::table('overtime_requests')->where('payroll_id', $payslip->payroll_id)->update(['payroll_id' => null, 'updated_at' => now()]);
+                DB::table('hr_payroll')->where('payroll_id', $payslip->payroll_id)->delete();
+            }
+
+            return $this->generate($employeeId, $period);
         });
     }
 }

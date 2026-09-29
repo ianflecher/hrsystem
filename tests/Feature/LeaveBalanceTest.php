@@ -59,9 +59,9 @@ class LeaveBalanceTest extends TestCase
     {
         // Explicit rather than assumed: the table may already hold a policy,
         // and this test is about what happens when it does not.
-        DB::table('leave_entitlements')->where('leave_type', 'bereavement')->delete();
+        DB::table('leave_entitlements')->where('leave_type', 'paternity')->delete();
 
-        $id = $this->leave('bereavement', 30, 'pending');
+        $id = $this->leave('paternity', 30, 'pending');
         $leave = DB::table('leaves')->where('leave_id', $id)->first();
 
         $verdict = (new LeaveBalances)->canApprove($leave);
@@ -71,11 +71,11 @@ class LeaveBalanceTest extends TestCase
 
     public function test_taken_and_pending_days_both_come_off_the_balance(): void
     {
-        $this->entitle('bereavement', 15);
-        $this->leave('bereavement', 3, 'approved');
-        $this->leave('bereavement', 2, 'pending');
+        $this->entitle('paternity', 15);
+        $this->leave('paternity', 3, 'approved');
+        $this->leave('paternity', 2, 'pending');
 
-        $balance = (new LeaveBalances)->forEmployee($this->employeeId)['bereavement'];
+        $balance = (new LeaveBalances)->forEmployee($this->employeeId)['paternity'];
 
         $this->assertEquals(15.0, $balance['entitled']);
         $this->assertEquals(3.0, $balance['used']);
@@ -86,26 +86,26 @@ class LeaveBalanceTest extends TestCase
 
     public function test_a_rejected_request_gives_the_days_back(): void
     {
-        $this->entitle('bereavement', 10);
-        $this->leave('bereavement', 4, 'rejected');
-        $this->leave('bereavement', 1, 'cancelled');
+        $this->entitle('paternity', 10);
+        $this->leave('paternity', 4, 'rejected');
+        $this->leave('paternity', 1, 'cancelled');
 
-        $this->assertEquals(10.0, (new LeaveBalances)->forEmployee($this->employeeId)['bereavement']['remaining']);
+        $this->assertEquals(10.0, (new LeaveBalances)->forEmployee($this->employeeId)['paternity']['remaining']);
     }
 
     public function test_last_years_leave_does_not_count_against_this_year(): void
     {
-        $this->entitle('bereavement', 10);
-        $this->leave('bereavement', 8, 'approved', ($this->year - 1).'-06-01');
+        $this->entitle('paternity', 10);
+        $this->leave('paternity', 8, 'approved', ($this->year - 1).'-06-01');
 
-        $this->assertEquals(10.0, (new LeaveBalances)->forEmployee($this->employeeId)['bereavement']['remaining']);
+        $this->assertEquals(10.0, (new LeaveBalances)->forEmployee($this->employeeId)['paternity']['remaining']);
     }
 
     public function test_approving_past_the_balance_is_refused(): void
     {
-        $this->entitle('bereavement', 5);
-        $this->leave('bereavement', 4, 'approved');
-        $id = $this->leave('bereavement', 3, 'pending');
+        $this->entitle('paternity', 5);
+        $this->leave('paternity', 4, 'approved');
+        $id = $this->leave('paternity', 3, 'pending');
 
         Volt::actingAs($this->hr)->test('hr.leave')->call('approveLeave', $id);
 
@@ -115,8 +115,8 @@ class LeaveBalanceTest extends TestCase
 
     public function test_a_request_is_not_counted_against_itself(): void
     {
-        $this->entitle('bereavement', 5);
-        $id = $this->leave('bereavement', 5, 'pending');
+        $this->entitle('paternity', 5);
+        $id = $this->leave('paternity', 5, 'pending');
 
         Volt::actingAs($this->hr)->test('hr.leave')->call('approveLeave', $id);
 
@@ -127,11 +127,11 @@ class LeaveBalanceTest extends TestCase
     public function test_service_time_gates_the_leave_that_is_earned(): void
     {
         // Five days, but only after a year - and they started last month.
-        $this->entitle('bereavement', 5, 12);
+        $this->entitle('paternity', 5, 12);
         DB::table('employees')->where('employee_id', $this->employeeId)
             ->update(['hire_date' => now()->subMonth()->toDateString()]);
 
-        $id = $this->leave('bereavement', 1, 'pending');
+        $id = $this->leave('paternity', 1, 'pending');
         Volt::actingAs($this->hr)->test('hr.leave')->call('approveLeave', $id);
 
         $this->assertSame('pending', DB::table('leaves')->where('leave_id', $id)->value('status'));
@@ -179,25 +179,38 @@ class LeaveBalanceTest extends TestCase
         $this->assertSame('unpaid', (new LeaveBalances)->payStatusForRequest($this->employeeId, 'emergency', 2, 'paid'));
     }
 
+    public function test_a_long_bereavement_pays_three_days_and_files_the_rest_unpaid(): void
+    {
+        Volt::actingAs($this->staff)->test('employee.leave')
+            ->set('leave_type', 'bereavement')->set('pay_status', 'paid')
+            ->set('start_date', $this->year.'-08-03')->set('end_date', $this->year.'-08-07')
+            ->set('reason', 'Funeral')->call('submit')->assertHasNoErrors();
+
+        $rows = DB::table('leaves')->where('employee_id', $this->employeeId)->orderBy('start_date')->get();
+        $this->assertCount(2, $rows);
+        $this->assertSame(['paid', $this->year.'-08-05', 3.0], [$rows[0]->pay_status, (string) $rows[0]->end_date, (float) $rows[0]->total_days]);
+        $this->assertSame(['unpaid', $this->year.'-08-06', 2.0], [$rows[1]->pay_status, (string) $rows[1]->start_date, (float) $rows[1]->total_days]);
+    }
+
     public function test_hr_sets_and_removes_an_entitlement(): void
     {
         Volt::actingAs($this->hr)->test('hr.leave')
-            ->set('entitlementType', 'bereavement')
+            ->set('entitlementType', 'paternity')
             ->set('entitlementDays', 12)
             ->set('entitlementAfterMonths', 6)
             ->call('saveEntitlement')
             ->assertHasNoErrors();
 
-        $this->assertDatabaseHas('leave_entitlements', ['leave_type' => 'bereavement', 'days_per_year' => 12, 'after_months' => 6]);
+        $this->assertDatabaseHas('leave_entitlements', ['leave_type' => 'paternity', 'days_per_year' => 12, 'after_months' => 6]);
 
-        Volt::actingAs($this->hr)->test('hr.leave')->call('removeEntitlement', 'bereavement');
-        $this->assertDatabaseMissing('leave_entitlements', ['leave_type' => 'bereavement']);
+        Volt::actingAs($this->hr)->test('hr.leave')->call('removeEntitlement', 'paternity');
+        $this->assertDatabaseMissing('leave_entitlements', ['leave_type' => 'paternity']);
     }
 
     public function test_the_employee_sees_their_own_balance(): void
     {
-        $this->entitle('bereavement', 15);
-        $this->leave('bereavement', 5, 'approved');
+        $this->entitle('paternity', 15);
+        $this->leave('paternity', 5, 'approved');
 
         Volt::actingAs($this->staff)->test('employee.leave')
             ->assertSee('Your leave this year')

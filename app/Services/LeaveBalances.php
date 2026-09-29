@@ -105,6 +105,15 @@ class LeaveBalances
         $used = fn (string $type) => (float) $taken->where('leave_type', $type)->where('status', 'approved')->sum('days');
         $pending = fn (string $type) => (float) $taken->where('leave_type', $type)->whereIn('status', ['pending', 'pending_hr'])->sum('days');
 
+        // Paid every time, so nothing is used up across the year.
+        foreach (config('leave.per_occasion', []) as $type => $days) {
+            $balances[$type] = [
+                'entitled' => (float) $days, 'used' => $used($type), 'pending' => $pending($type),
+                'remaining' => (float) $days, 'usedAgainst' => 0.0, 'eligible' => true,
+                'afterMonths' => 0, 'shared' => false, 'perOccasion' => true,
+            ];
+        }
+
         if ($role === 'supervisor') {
             foreach ($types as $type) {
                 $entitled = (float) (config('leave.supervisor_days_per_year')[$type] ?? 0);

@@ -251,7 +251,7 @@ class ScheduleUpload
             }
         });
 
-        Auditor::record('create', 'shift_assignments', null, null,
+        Auditor::record('create', 'shift_assignments', 0, null,
             ['schedule_upload' => $plan['period']['label'], 'people' => count($plan['people'])] + $done);
 
         return $done;

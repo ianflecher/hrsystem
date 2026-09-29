@@ -137,17 +137,20 @@ class SalaryHistoryTest extends TestCase
 
         Volt::actingAs($hr)->test('hr.employees')
             ->call('edit', $this->employeeId)
-            ->set('salary', '18000')
+            ->set('salary', '700')
             ->set('payChangeReason', 'Annual increase')
             ->call('save')
             ->assertHasNoErrors();
 
-        $this->assertEquals(18000,
+        // Entered by the day; the monthly figure is 26 days of it.
+        $this->assertEquals(18200,
             DB::table('employees')->where('employee_id', $this->employeeId)->value('salary'));
+        $this->assertEquals(700,
+            DB::table('employees')->where('employee_id', $this->employeeId)->value('daily_rate'));
 
         $rows = $this->rows();
         $this->assertCount(1, $rows, 'the raise was not logged');
-        $this->assertEquals(18000, $rows[0]->salary);
+        $this->assertEquals(18200, $rows[0]->salary);
         $this->assertSame('Annual increase', $rows[0]->reason);
 
         // And it says who did it.
