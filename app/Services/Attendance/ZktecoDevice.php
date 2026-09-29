@@ -214,7 +214,10 @@ class ZktecoDevice extends ZKTeco
     {
         $this->_command(Util::CMD_ATT_LOG_RRQ, '', Util::COMMAND_TYPE_DATA);
 
-        return self::decodeLog((string) Util::recData($this));
+        // Three silent waits, not the library's ten: at sixty seconds each a
+        // stalled download used to hold the sync - and the keypad - for ten
+        // minutes or more before giving up.
+        return self::decodeLog((string) Util::recData($this, 3));
     }
 
     /**

@@ -49,11 +49,11 @@ class ReportDownloadTest extends TestCase
     #[DataProvider('reports')]
     public function test_a_report_with_nothing_in_it_still_has_headers(string $report): void
     {
-        $csv = $this->download($report);
+        $rows = $this->download($report);
 
-        $this->assertNotSame('', trim($csv), "the {$report} report downloaded as an empty file");
+        $this->assertNotEmpty($rows, "the {$report} report downloaded as an empty file");
 
-        $header = str_getcsv(strtok($csv, "\n"));
+        $header = $rows[0];
         $this->assertNotEmpty($header);
         $this->assertSame(
             $this->columns($report), $header,
@@ -99,18 +99,21 @@ class ReportDownloadTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
-        $this->assertStringContainsString(
-            $starts, $this->download('leave'),
+        $cells = array_merge(...$this->download('leave'));
+        $this->assertTrue(
+            (bool) array_filter($cells, fn ($c) => str_contains((string) $c, $starts)),
             'leave twenty days out is missing from the leave report'
         );
     }
 
-    private function download(string $report): string
+    /** The downloaded workbook, read back as rows - which also proves it opens. */
+    private function download(string $report): array
     {
         $response = $this->actingAs($this->hr())->get('/hr/reports/download?report='.$report);
         $response->assertOk();
+        $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
-        return $response->streamedContent();
+        return \App\Support\SpreadsheetReader::rows($response->baseResponse->getFile()->getPathname(), 'report.xlsx');
     }
 
     private function columns(string $report): array

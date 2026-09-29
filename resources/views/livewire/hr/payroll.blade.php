@@ -607,34 +607,24 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $employees = $this->employees->items();
         $period = $this->period()->label();
         
-        // No thousands separator: a comma inside an unquoted CSV field splits
-        // it into two columns, so every amount landed one cell to the right.
-        $money = fn ($amount) => number_format((float) $amount, 2, '.', '');
-
-        $csvData = "Employee Name,Department,Position,Basic Salary,Gross Pay,Deductions,Net Pay,Status
-";
-
+        // An Excel workbook: the amounts are numbers, formatted with two
+        // decimals, that can be summed straight away.
+        $money = fn ($amount) => round((float) $amount, 2);
+        $rows = [];
         foreach ($employees as $emp) {
-            $csvData .= '"'.str_replace('"', '""', (string) $emp->full_name).'",';
-            $csvData .= '"'.str_replace('"', '""', (string) $emp->department_name).'",';
-            $csvData .= '"'.str_replace('"', '""', (string) $emp->job_title).'",';
-            $csvData .= $money($emp->salary).",";
-            $csvData .= $money($emp->gross_pay ?? 0).",";
-            $csvData .= $money($emp->deductions ?? 0).",";
-            $csvData .= $money($emp->net_pay ?? 0).",";
-            $csvData .= $emp->payroll_status;
-            $csvData .= "
-";
+            $rows[] = [
+                (string) $emp->full_name, (string) $emp->department_name, (string) $emp->job_title,
+                $money($emp->salary), $money($emp->gross_pay ?? 0), $money($emp->deductions ?? 0), $money($emp->net_pay ?? 0),
+                (string) $emp->payroll_status,
+            ];
         }
 
-        $filename = "payroll-export-{$this->payPeriod}-" . date('YmdHis') . ".csv";
-        
-        return response()->streamDownload(function () use ($csvData) {
-            echo $csvData;
-        }, $filename, [
-            'Content-Type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-        ]);
+        return \App\Support\SpreadsheetWriter::download(
+            "payroll-export-{$this->payPeriod}-".date('YmdHis').'.xlsx',
+            'Payroll '.$period,
+            ['Employee Name', 'Department', 'Position', 'Basic Salary', 'Gross Pay', 'Deductions', 'Net Pay', 'Status'],
+            $rows
+        );
     }
 }
 ?>
@@ -657,7 +647,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     <svg class="mr-2 h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
-                    Export CSV
+                    Export Excel
                 </button>
             </div>
         </div>

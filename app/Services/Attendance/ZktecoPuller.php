@@ -55,8 +55,10 @@ class ZktecoPuller
         try {
             return $this->pullOnce();
         } catch (RuntimeException $e) {
-            // A wrong or missing COM key will not fix itself.
-            if (str_contains($e->getMessage(), 'COM key')) {
+            // Only a quick refusal is worth a second try. A wrong COM key
+            // will not fix itself, and a download that has already stalled
+            // for minutes only stalls again - retrying it doubled the wait.
+            if (! str_contains($e->getMessage(), 'did not answer')) {
                 throw $e;
             }
             sleep(5);
@@ -85,9 +87,10 @@ class ZktecoPuller
         }
 
         try {
-            // Reading is quicker with the keypad disabled, and it stops a scan
-            // landing halfway through the transfer.
-            $device->disableDevice();
+            // The keypad stays usable while the log is read. Locking it made a
+            // stalled download stop people clocking in for as long as the
+            // stall lasted; a punch made mid-read is kept by the device and
+            // arrives with the next sync.
 
             // Sixty seconds of silence per packet. This device pauses mid-way
             // through a large log - ten and then thirty both cut the download

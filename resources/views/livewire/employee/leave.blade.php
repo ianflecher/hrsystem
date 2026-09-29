@@ -9,6 +9,7 @@ use Carbon\Carbon;
 new #[Layout('components.layouts.employeeland')] class extends Component
 {
     public string $leave_type = 'vacation';
+    public string $pay_status = 'paid';
     public string $start_date = '';
     public string $end_date = '';
     public int $total_days = 0;
@@ -51,6 +52,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
     {
         return [
             'leave_type' => 'required',
+            'pay_status' => 'required|in:paid,unpaid',
             'start_date' => 'required|date',
             'end_date'   => 'required|date|after_or_equal:start_date',
             'reason'     => 'required|min:5',
@@ -88,21 +90,37 @@ new #[Layout('components.layouts.employeeland')] class extends Component
             abort(403, 'Employee record not found.');
         }
 
+        $payStatus = (new \App\Services\LeaveBalances)->payStatusForRequest(
+            $employeeId,
+            $this->leave_type,
+            (float) $this->total_days,
+            $this->pay_status,
+            (int) substr($this->start_date, 0, 4)
+        );
+
         DB::table('leaves')->insert([
             'employee_id' => $employeeId,
             'leave_type'  => $this->leave_type,
+            'pay_status'  => $payStatus,
             'start_date'  => $this->start_date,
             'end_date'    => $this->end_date,
             'total_days'  => $this->total_days,
             'reason'      => $this->reason,
-            'status'      => 'pending',
+            // A supervisor's leave is decided by the supervisors' approver
+            // (config/leave.php) before HR, never by their own team. The
+            // approver's own leave goes straight to HR.
+            'status'      => (int) auth()->id() === (int) config('leave.supervisor_approver_user_id') ? 'pending_hr' : 'pending',
             'created_at'  => now(),
             'updated_at'  => now(),
         ]);
 
-        session()->flash('success', 'Leave request submitted successfully.');
+        session()->flash('success', $payStatus === $this->pay_status
+            ? 'Leave request submitted successfully.'
+            : 'Leave request submitted as unpaid because no paid balance is available for that leave type.');
 
-        $this->reset(['leave_type', 'start_date', 'end_date', 'total_days', 'reason']);
+        $this->reset(['leave_type', 'pay_status', 'start_date', 'end_date', 'total_days', 'reason']);
+        $this->leave_type = 'vacation';
+        $this->pay_status = 'paid';
     }
 };
 ?>
@@ -151,7 +169,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                     @endforeach
                 </div>
                 <p class="mt-3 text-xs text-gray-500">
-                    Days awaiting a decision are already held against the balance. Unpaid leave is not limited.
+                    Days awaiting a decision are already held against the paid balance. Ordinary paid leave with no remaining balance is submitted as unpaid.
                 </p>
             </div>
         @endif
@@ -181,7 +199,8 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                     <form wire:submit.prevent="submit" class="p-8 space-y-8">
                         <!-- Leave Type -->
                         <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                            <label class="block mb-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <label class="block">
                                 <div class="flex items-center mb-2">
                                     <div class="w-1.5 h-5 bg-red-600 rounded-full mr-3"></div>
                                     <span class="text-lg font-bold text-gray-800">Leave Type</span>
@@ -200,6 +219,20 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                     <option value="others">Others</option>
                                 </select>
                             </label>
+                            <label class="block">
+                                <div class="flex items-center mb-2">
+                                    <div class="w-1.5 h-5 bg-slate-500 rounded-full mr-3"></div>
+                                    <span class="text-lg font-bold text-gray-800">Pay</span>
+                                </div>
+                                <select wire:model="pay_status"
+                                    class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white
+                                           focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition duration-200 cursor-pointer">
+                                    <option value="paid">Paid</option>
+                                    <option value="unpaid">Unpaid</option>
+                                </select>
+                                <p class="mt-2 text-xs text-gray-500">If paid leave balance is used up, this becomes unpaid automatically.</p>
+                            </label>
+                            </div>
                         </div>
 
                         <!-- Dates -->

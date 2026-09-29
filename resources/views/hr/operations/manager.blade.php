@@ -4,6 +4,8 @@
     $teamEmployeeRoute = $isHr ? 'hr.operations.employee' : 'employee.team.employee';
     $teamLeaveRoute = $isHr ? 'hr.operations.manager.leave' : 'employee.team.leave';
     $teamOvertimeRoute = $isHr ? 'hr.operations.manager.overtime' : 'employee.team.overtime';
+    $teamAttendanceRoute = $isHr ? 'hr.operations.manager.attendance' : 'employee.team.attendance';
+    $teamTimeLogRoute = $isHr ? 'hr.operations.manager.timelog' : 'employee.team.timelog';
 @endphp
 <x-dynamic-component :component="$layout" title="Team Operations">
 
@@ -19,6 +21,92 @@
             </div>
         </div>
     </section>
+
+    @if(session('success'))
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
+    @endif
+    @if($errors->any())
+        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ $errors->first() }}</div>
+    @endif
+
+    {{-- People the scanner cannot record yet: their days are entered here, or
+         sent in by them and approved here. --}}
+    @if($noScanner->isNotEmpty() || $pendingTimeLogs->isNotEmpty())
+    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="border-b border-slate-100 px-5 py-4">
+            <h2 class="font-semibold text-slate-950">No scanner yet</h2>
+            <p class="text-sm text-slate-500">For team members without a scanner ID. Enter their shift and times for a day, or approve the times they sent in. They drop off this list once they have a scanner ID.</p>
+        </div>
+
+        @if($pendingTimeLogs->isNotEmpty())
+            <div class="border-b border-slate-100 px-5 py-4">
+                <h3 class="text-sm font-semibold text-slate-900">Sent in by them - waiting for you</h3>
+                <div class="mt-3 space-y-3">
+                    @foreach($pendingTimeLogs as $log)
+                        <form method="POST" action="{{ route($teamTimeLogRoute, $log->id) }}" class="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">@csrf
+                            <div class="min-w-[12rem] flex-1 text-sm">
+                                <div class="font-semibold text-slate-950">{{ $log->full_name }} · {{ \Carbon\Carbon::parse($log->date)->format('D, M j') }}</div>
+                                <div class="text-slate-700">In {{ \Carbon\Carbon::parse($log->time_in)->format('g:i A') }} · Out {{ $log->time_out ? \Carbon\Carbon::parse($log->time_out)->format('g:i A') : '—' }}@if($log->note) · "{{ $log->note }}"@endif</div>
+                            </div>
+                            <input type="text" name="review_note" maxlength="255" placeholder="Note (optional)" class="form-input w-44 text-sm">
+                            <button name="action" value="approve" class="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Approve</button>
+                            <button name="action" value="reject" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Reject</button>
+                        </form>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
+        @if($noScanner->isNotEmpty())
+            <form method="POST" action="{{ route($teamAttendanceRoute) }}" class="grid gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-7 lg:items-end">@csrf
+                <label class="lg:col-span-2 text-sm"><span class="mb-1 block font-medium text-slate-700">Employee</span>
+                    <select name="employee_id" class="form-input" required>
+                        <option value="">Choose…</option>
+                        @foreach($noScanner as $person)
+                            <option value="{{ $person->employee_id }}" @selected(old('employee_id') == $person->employee_id)>{{ $person->full_name }}{{ $person->employee_no ? ' ('.$person->employee_no.')' : '' }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Date</span>
+                    <input type="date" name="date" value="{{ old('date', now()->toDateString()) }}" max="{{ now()->toDateString() }}" class="form-input" required></label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Shift start</span>
+                    <input type="time" name="shift_start" value="{{ old('shift_start', '08:00') }}" class="form-input" required></label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Shift end</span>
+                    <input type="time" name="shift_end" value="{{ old('shift_end', '17:00') }}" class="form-input" required></label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Time in</span>
+                    <input type="time" name="time_in" value="{{ old('time_in') }}" class="form-input"></label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Time out</span>
+                    <input type="time" name="time_out" value="{{ old('time_out') }}" class="form-input"></label>
+                <div class="sm:col-span-2 lg:col-span-7 flex items-center gap-3">
+                    <button class="btn-primary">Save day</button>
+                    <span class="text-xs text-slate-500">Leave the times blank to set only the shift. Marked as entered by you.</span>
+                </div>
+            </form>
+        @endif
+
+        @if($recentManual->isNotEmpty())
+            <div class="border-t border-slate-100 px-5 py-4">
+                <h3 class="text-sm font-semibold text-slate-900">Recent days</h3>
+                <div class="mt-2 overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead><tr class="text-left text-xs uppercase text-slate-500"><th class="py-1 pr-4">Date</th><th class="pr-4">Employee</th><th class="pr-4">In</th><th class="pr-4">Out</th><th>Entered</th></tr></thead>
+                        <tbody>
+                            @foreach($recentManual as $day)
+                                <tr class="border-t border-slate-100">
+                                    <td class="py-1.5 pr-4">{{ \Carbon\Carbon::parse($day->date)->format('D, M j') }}</td>
+                                    <td class="pr-4">{{ $day->full_name }}</td>
+                                    <td class="pr-4">{{ $day->time_in ? \Carbon\Carbon::parse($day->time_in)->format('g:i A') : '—' }}</td>
+                                    <td class="pr-4">{{ $day->time_out ? \Carbon\Carbon::parse($day->time_out)->format('g:i A') : '—' }}</td>
+                                    <td class="text-slate-500">{{ $day->notes }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endif
+    </section>
+    @endif
 
     <div class="grid gap-4 md:grid-cols-3">
         @foreach([

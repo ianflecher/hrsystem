@@ -18,13 +18,13 @@
     $tone = fn ($status) => $statusTone[$status] ?? 'bg-slate-100 text-slate-700 ring-slate-200';
     $attendanceCounts = collect($attendance)->countBy('status');
     $attendanceByDate = collect($attendance)->keyBy('date');
-    $calendarAnchor = $attendanceByDate->keys()->first()
-        ? \Carbon\Carbon::parse($attendanceByDate->keys()->first())->startOfMonth()
-        : now()->startOfMonth();
-    $calendarStart = $calendarAnchor->copy()->startOfWeek(\Carbon\Carbon::SUNDAY);
-    $calendarEnd = $calendarAnchor->copy()->endOfMonth()->endOfWeek(\Carbon\Carbon::SATURDAY);
+    // The cutoff being worked now, not the whole month: the days payroll is
+    // about to be run on.
+    $cutoff = \App\Support\PayPeriod::fromStart(now()->toDateString());
+    $cutoffStart = \Carbon\Carbon::parse($cutoff->start);
+    $cutoffEnd = \Carbon\Carbon::parse($cutoff->end);
     $calendarDays = [];
-    for ($day = $calendarStart->copy(); $day->lte($calendarEnd); $day->addDay()) {
+    for ($day = $cutoffStart->copy()->startOfWeek(\Carbon\Carbon::SUNDAY); $day->lte($cutoffEnd->copy()->endOfWeek(\Carbon\Carbon::SATURDAY)); $day->addDay()) {
         $calendarDays[] = $day->copy();
     }
     $dayTone = [
@@ -33,6 +33,7 @@
         'absent' => 'border-red-200 bg-red-50 text-red-900',
         'on_leave' => 'border-blue-200 bg-blue-50 text-blue-900',
         'half_day' => 'border-yellow-200 bg-yellow-50 text-yellow-900',
+        'official_business' => 'border-cyan-200 bg-cyan-50 text-cyan-900',
     ];
 @endphp
 <x-dynamic-component :component="$layout" title="Employee 360">
@@ -90,17 +91,19 @@
         </div>
     @endif
 
-    <div class="grid gap-6 lg:grid-cols-2">
+    <div class="grid gap-6">
         <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
                 <div>
                     <h2 class="font-semibold text-slate-950">Attendance Calendar</h2>
-                    <p class="text-sm text-slate-500">{{ $calendarAnchor->format('F Y') }}</p>
+                    <p class="text-sm text-slate-500">Cutoff {{ $cutoff->label() }}</p>
                 </div>
                 <div class="flex flex-wrap justify-end gap-2 text-xs">
                     <span class="inline-flex items-center gap-1 text-slate-500"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Present</span>
                     <span class="inline-flex items-center gap-1 text-slate-500"><span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>Late</span>
                     <span class="inline-flex items-center gap-1 text-slate-500"><span class="h-2.5 w-2.5 rounded-full bg-red-500"></span>Absent</span>
+                    <span class="inline-flex items-center gap-1 text-slate-500"><span class="h-2.5 w-2.5 rounded-full bg-blue-500"></span>Leave</span>
+                    <span class="inline-flex items-center gap-1 text-slate-500"><span class="h-2.5 w-2.5 rounded-full bg-cyan-500"></span>Official business</span>
                 </div>
             </div>
             <div class="p-5">
@@ -113,7 +116,7 @@
                     @foreach($calendarDays as $day)
                         @php
                             $record = $attendanceByDate->get($day->toDateString());
-                            $inMonth = $day->month === $calendarAnchor->month;
+                            $inMonth = $day->betweenIncluded($cutoffStart, $cutoffEnd);
                             $classes = $record
                                 ? ($dayTone[$record->status] ?? 'border-slate-200 bg-slate-50 text-slate-700')
                                 : 'border-slate-200 bg-white text-slate-500';
@@ -127,18 +130,42 @@
                                         @elseif($record->status === 'late') bg-amber-500
                                         @elseif($record->status === 'absent') bg-red-500
                                         @elseif($record->status === 'on_leave') bg-blue-500
+                                        @elseif($record->status === 'official_business') bg-cyan-500
                                         @else bg-slate-400 @endif"></span>
                                 @endif
                             </div>
                             @if($record)
-                                <div class="mt-3 text-xs font-semibold">{{ ucfirst(str_replace('_', ' ', $record->status)) }}</div>
-                                <div class="mt-1 text-[11px] leading-4 opacity-80">
-                                    {{ $record->time_in ? \Carbon\Carbon::parse($record->time_in)->format('g:i A') : 'No in' }}
-                                    @foreach(['lunch_in' => 'Lunch in', 'lunch_out' => 'Lunch out', 'cb_in' => 'CB in', 'cb_out' => 'CB out'] as $punch => $punchLabel)
-                                        @if($record->{$punch} ?? null)<br>{{ $punchLabel }} {{ \Carbon\Carbon::parse($record->{$punch})->format('g:i A') }}@endif
-                                    @endforeach
-                                    <br>
-                                    {{ $record->time_out ? \Carbon\Carbon::parse($record->time_out)->format('g:i A') : 'No out' }}
+                                @php
+                                    // One glance per day: the hours large, each break on a
+                                    // single short line, and the word only when it is not
+                                    // an ordinary present day - the colour already says so.
+                                    $t = fn ($v) => $v ? \Carbon\Carbon::parse($v)->format('g:i') : null;
+                                    $span = fn ($a, $b) => ($t($a) || $t($b)) ? ($t($a) ?? '?').'–'.($t($b) ?? '?') : null;
+                                    $lunch = $span($record->lunch_in ?? null, $record->lunch_out ?? null);
+                                    $cb = $span($record->cb_in ?? null, $record->cb_out ?? null);
+                                    $statusWord = ucfirst(str_replace('_', ' ', $record->status));
+                                    $full = collect(['First in' => $record->time_in, 'Lunch out' => $record->lunch_in ?? null, 'Lunch in' => $record->lunch_out ?? null,
+                                        'CB out' => $record->cb_in ?? null, 'CB in' => $record->cb_out ?? null, 'Final out' => $record->time_out])
+                                        ->filter()->map(fn ($v, $k) => $k.' '.\Carbon\Carbon::parse($v)->format('g:i A'))->implode(' · ');
+                                @endphp
+                                <div title="{{ $statusWord }}{{ $full ? ' · '.$full : '' }}">
+                                    @if($record->status !== 'present')
+                                        <div class="mt-2 text-[11px] font-bold uppercase tracking-wide">{{ $statusWord }}</div>
+                                    @endif
+                                    @if($record->time_in || $record->time_out)
+                                        {{-- Labelled, with AM/PM: "7:57–8:01" read as two morning
+                                             times, and the final out looked missing. --}}
+                                        <div class="mt-2 text-xs font-bold leading-snug">
+                                            <div><span class="font-normal opacity-60">In</span> {{ $record->time_in ? \Carbon\Carbon::parse($record->time_in)->format('g:i A') : '—' }}</div>
+                                            <div><span class="font-normal opacity-60">Out</span> {{ $record->time_out ? \Carbon\Carbon::parse($record->time_out)->format('g:i A') : ($day->isToday() ? 'at work' : '—') }}</div>
+                                        </div>
+                                    @endif
+                                    <div class="mt-1 hidden space-y-0.5 text-[11px] leading-4 opacity-75 sm:block">
+                                        @if($lunch)<div>Lunch {{ $lunch }}</div>@endif
+                                        @if($cb)<div>CB {{ $cb }}</div>@endif
+                                        {{-- Today's day is not over: no check-out yet is expected. --}}
+                                        @if($record->time_in && ! $record->time_out)<div class="font-semibold">{{ $day->isToday() ? 'At work' : 'No final out' }}</div>@endif
+                                    </div>
                                 </div>
                             @else
                                 <div class="mt-3 text-xs text-slate-400">No record</div>

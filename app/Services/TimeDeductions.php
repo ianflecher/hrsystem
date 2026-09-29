@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\DB;
  * charge anybody for days that have not happened yet.
  *
  * On a day they were due but did not clock in:
- *   - approved leave that is not the unpaid kind costs nothing;
+ *   - approved paid leave costs nothing;
  *   - approved unpaid leave costs the day;
  *   - nothing at all - no record, or a record marked absent - also costs the
  *     day, because from payroll's point of view it is the same day missed.
@@ -33,9 +33,8 @@ class TimeDeductions
      * Regular holidays are already covered by the monthly salary; special
      * non-working days follow the configured no-work/no-pay policy.
      *
-     * Leave types that are not paid. Everything else in the leaves table -
-     * vacation, sick, maternity and the rest - is paid leave, so it is a day
-     * off rather than a day missing.
+     * Older rows used leave_type = unpaid. Newer rows keep the leave reason in
+     * leave_type and store whether the day is paid in pay_status.
      */
     public const UNPAID_LEAVE_TYPES = ['unpaid'];
 
@@ -172,7 +171,10 @@ class TimeDeductions
     private function unpaidLeaveOn(iterable $leaves, string $date): bool
     {
         foreach ($leaves as $leave) {
-            if ($this->covers($leave, $date) && in_array($leave->leave_type, self::UNPAID_LEAVE_TYPES, true)) {
+            $unpaid = in_array($leave->leave_type, self::UNPAID_LEAVE_TYPES, true)
+                || (property_exists($leave, 'pay_status') && $leave->pay_status === 'unpaid');
+
+            if ($this->covers($leave, $date) && $unpaid) {
                 return true;
             }
         }

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * What somebody has left to take.
@@ -40,10 +41,18 @@ class LeaveBalances
         $year = $year ?: (int) now()->year;
         $entitlements = $this->entitlements();
 
-        $taken = DB::table('leaves')
+        $takenQuery = DB::table('leaves')
             ->where('employee_id', $employeeId)
             ->whereIn('status', ['approved', 'pending', 'pending_hr'])
-            ->whereBetween('start_date', [$year.'-01-01', $year.'-12-31'])
+            ->whereBetween('start_date', [$year.'-01-01', $year.'-12-31']);
+
+        if (Schema::hasColumn('leaves', 'pay_status')) {
+            $takenQuery->where('pay_status', 'paid')->whereNotIn('leave_type', self::UNLIMITED_TYPES);
+        } else {
+            $takenQuery->whereNotIn('leave_type', self::UNLIMITED_TYPES);
+        }
+
+        $taken = $takenQuery
             ->selectRaw('leave_type, status, COALESCE(SUM(total_days), 0) as days')
             ->groupBy('leave_type', 'status')
             ->get();
@@ -76,7 +85,50 @@ class LeaveBalances
             ];
         }
 
+        $balances = $this->applyPolicy($employeeId, $balances, $taken);
         ksort($balances);
+
+        return $balances;
+    }
+
+    /**
+     * The company's paid allowance for sick, vacation and emergency leave
+     * (config/leave.php): supervisors a number of days per type, everybody
+     * else one allowance shared by the three. Other types keep what their
+     * entitlement row says.
+     */
+    private function applyPolicy(int $employeeId, array $balances, $taken): array
+    {
+        $types = config('leave.paid_types', ['sick', 'vacation', 'emergency']);
+        $role = DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
+            ->where('e.employee_id', $employeeId)->value('u.role');
+        $used = fn (string $type) => (float) $taken->where('leave_type', $type)->where('status', 'approved')->sum('days');
+        $pending = fn (string $type) => (float) $taken->where('leave_type', $type)->whereIn('status', ['pending', 'pending_hr'])->sum('days');
+
+        if ($role === 'supervisor') {
+            foreach ($types as $type) {
+                $entitled = (float) (config('leave.supervisor_days_per_year')[$type] ?? 0);
+                $balances[$type] = [
+                    'entitled' => $entitled, 'used' => $used($type), 'pending' => $pending($type),
+                    'remaining' => round($entitled - $used($type) - $pending($type), 1),
+                    'usedAgainst' => $used($type), 'eligible' => true, 'afterMonths' => 0, 'shared' => false,
+                ];
+            }
+
+            return $balances;
+        }
+
+        $entitled = (float) config('leave.employee_days_per_year', 7);
+        $poolUsed = array_sum(array_map($used, $types));
+        $poolPending = array_sum(array_map($pending, $types));
+        foreach ($types as $type) {
+            $balances[$type] = [
+                'entitled' => $entitled, 'used' => $used($type), 'pending' => $pending($type),
+                'remaining' => round($entitled - $poolUsed - $poolPending, 1),
+                // What a request is weighed against: all three types together.
+                'usedAgainst' => $poolUsed, 'eligible' => true, 'afterMonths' => 0, 'shared' => true,
+            ];
+        }
 
         return $balances;
     }
@@ -92,6 +144,10 @@ class LeaveBalances
      */
     public function canApprove(object $leave): array
     {
+        if (! $this->isPaid($leave)) {
+            return ['ok' => true, 'reason' => null];
+        }
+
         $year = (int) substr((string) $leave->start_date, 0, 4);
         $balance = $this->forEmployee((int) $leave->employee_id, $year)[$leave->leave_type] ?? null;
 
@@ -104,7 +160,8 @@ class LeaveBalances
                 .$balance['afterMonths'].' months of service, which they have not reached yet.'];
         }
 
-        $available = $balance['entitled'] - $balance['used'];
+        // Shared allowances are weighed against everything taken from them.
+        $available = $balance['entitled'] - ($balance['usedAgainst'] ?? $balance['used']);
         $asking = (float) $leave->total_days;
 
         if ($asking > $available) {
@@ -114,6 +171,34 @@ class LeaveBalances
         }
 
         return ['ok' => true, 'reason' => null];
+    }
+
+    public function payStatusForRequest(int $employeeId, string $type, float $days, string $requested, ?int $year = null): string
+    {
+        if ($requested === 'unpaid' || $type === 'unpaid') {
+            return 'unpaid';
+        }
+
+        $balance = $this->forEmployee($employeeId, $year)[$type] ?? null;
+
+        if (! $balance || $balance['entitled'] === null || ! $balance['eligible']) {
+            return 'unpaid';
+        }
+
+        return $days <= max(0, (float) $balance['remaining']) ? 'paid' : 'unpaid';
+    }
+
+    public function isPaid(object $leave): bool
+    {
+        if (in_array((string) $leave->leave_type, self::UNLIMITED_TYPES, true)) {
+            return false;
+        }
+
+        if (property_exists($leave, 'pay_status') && $leave->pay_status !== null) {
+            return $leave->pay_status === 'paid';
+        }
+
+        return ! in_array((string) $leave->leave_type, self::UNLIMITED_TYPES, true);
     }
 
     /** Whole months of service as of today, or null when the hire date is unknown. */

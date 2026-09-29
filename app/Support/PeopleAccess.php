@@ -83,7 +83,37 @@ class PeopleAccess
             return false;
         }
 
+        // A leader answers to the supervisor, not the other way round: a
+        // supervisor's own requests go to HR, never to a leader beneath them.
+        if (! self::isHr() && auth()->user()->role === 'leader'
+            && DB::table('users')->where('user_id', $employee->user_id)->value('role') === 'supervisor') {
+            return false;
+        }
+
         return in_array((int) $employee->department_id, self::managedDepartmentIds(), true);
+    }
+
+    /** The one person who decides supervisors' leave before HR (config/leave.php). */
+    public static function isSupervisorLeaveApprover(): bool
+    {
+        return auth()->check() && (int) auth()->id() === (int) config('leave.supervisor_approver_user_id');
+    }
+
+    /**
+     * Whose leave this person decides: their own team's - except a
+     * supervisor's, which is only ever the supervisors' approver's.
+     */
+    public static function decidesLeaveOf(int $employeeId): bool
+    {
+        $userId = DB::table('employees')->where('employee_id', $employeeId)->value('user_id');
+        if (! $userId || (int) $userId === (int) auth()->id()) {
+            return false;
+        }
+        if (DB::table('users')->where('user_id', $userId)->value('role') === 'supervisor') {
+            return self::isSupervisorLeaveApprover();
+        }
+
+        return self::managesEmployee($employeeId);
     }
 
     public static function managerForEmployee(int $employeeId): void

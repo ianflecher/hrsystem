@@ -605,10 +605,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             return;
         }
 
-        // A new account needs a first password, and somebody has to hand it
-        // over. It is generated rather than chosen so it is not a guessable
-        // house default, and the account must replace it at first sign-in.
-        $password = Str::password(12, symbols: false);
+        // Every new account starts on the company's first password, the same
+        // one the masterlist import gives, and must replace it at first sign-in.
+        $password = \App\Console\Commands\ImportMasterlist::PASSWORD;
 
         DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $password) {
             $newUserId = DB::table('users')->insertGetId([
@@ -690,7 +689,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             return;
         }
 
-        $password = Str::password(12, symbols: false);
+        // Back to the first password; replaced again at the next sign-in.
+        $password = \App\Console\Commands\ImportMasterlist::PASSWORD;
 
         DB::table('users')->where('user_id', $row->user_id)->update([
             'password'             => Hash::make($password),

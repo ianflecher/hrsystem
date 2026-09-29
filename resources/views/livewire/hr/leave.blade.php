@@ -108,6 +108,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'l.leave_id',
                 'l.employee_id',
                 'l.leave_type',
+                'l.pay_status',
                 'l.start_date',
                 'l.end_date',
                 'l.total_days',
@@ -168,7 +169,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         return $query->paginate(10);
     }
 
-    public string $entitlementType = 'vacation';
+    public string $entitlementType = 'bereavement';
     public $entitlementDays = '';
     public $entitlementAfterMonths = 0;
 
@@ -193,14 +194,14 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public function saveEntitlement(): void
     {
         $data = $this->validate([
-            'entitlementType'        => ['required', \Illuminate\Validation\Rule::in(array_keys($this->leaveTypes))],
+            // Sick, vacation and emergency are set by policy (config/leave.php).
+            'entitlementType'        => ['required', \Illuminate\Validation\Rule::in(array_diff(array_keys($this->leaveTypes), config('leave.paid_types', [])))],
             'entitlementDays'        => ['required', 'numeric', 'min:0', 'max:365'],
-            'entitlementAfterMonths' => ['required', 'integer', 'min:0', 'max:120'],
         ]);
 
         DB::table('leave_entitlements')->updateOrInsert(
             ['leave_type' => $data['entitlementType']],
-            ['days_per_year' => $data['entitlementDays'], 'after_months' => $data['entitlementAfterMonths'],
+            ['days_per_year' => $data['entitlementDays'], 'after_months' => 0,
              'created_at' => now(), 'updated_at' => now()]);
 
         $this->entitlementDays = '';
@@ -526,15 +527,14 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         </div>
     </div>
 
-    {{-- What a year is worth, per kind of leave. Empty until HR fills it in:
-         the law sets a floor but the rest is company policy, and a number
-         invented here would be the number people planned their year around. --}}
+    {{-- Paid leave limits by type. This controls how many days can be paid
+         before ordinary leave requests are submitted as unpaid. --}}
     <div class="bg-white rounded-xl p-5 mb-6 shadow-sm border border-gray-100">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
-                <h2 class="text-lg font-semibold text-gray-900">Leave entitlements</h2>
+                <h2 class="text-lg font-semibold text-gray-900">Leave per year</h2>
                 <p class="text-sm text-gray-600 mt-1">
-                    Days a year, per type. A type with nothing set here is not limited.
+                    Set how many paid days each leave type has per year. Sick, vacation and emergency leave follow company policy instead: employees share 7 paid days a year across the three, supervisors have 4 sick, 4 vacation and 1 emergency. Anything beyond is unpaid.
                 </p>
             </div>
         </div>
@@ -544,19 +544,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 <label class="form-label" for="entitlementType">Leave type</label>
                 <select id="entitlementType" wire:model="entitlementType" class="form-input">
                     @foreach($leaveTypes as $key => $label)
+                        @continue(in_array($key, config('leave.paid_types', []), true))
                         <option value="{{ $key }}">{{ $label }}</option>
                     @endforeach
                 </select>
             </div>
             <div>
-                <label class="form-label" for="entitlementDays">Days a year</label>
+                <label class="form-label" for="entitlementDays">Days per year</label>
                 <input id="entitlementDays" type="number" step="0.5" min="0" max="365"
                        wire:model="entitlementDays" class="form-input w-32">
-            </div>
-            <div>
-                <label class="form-label" for="entitlementAfterMonths">Earned after (months)</label>
-                <input id="entitlementAfterMonths" type="number" min="0" max="120"
-                       wire:model="entitlementAfterMonths" class="form-input w-32">
             </div>
             <button wire:click="saveEntitlement" class="btn-primary">Save</button>
         </div>
@@ -567,12 +563,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 @foreach($this->entitlements as $entitlement)
                     <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-sm text-gray-700">
                         <strong>{{ $leaveTypes[$entitlement->leave_type] ?? $entitlement->leave_type }}</strong>
-                        {{ rtrim(rtrim(number_format($entitlement->days_per_year, 1), '0'), '.') }} days
-                        @if($entitlement->after_months > 0)
-                            <span class="text-gray-500">after {{ $entitlement->after_months }} months</span>
-                        @endif
+                        {{ rtrim(rtrim(number_format($entitlement->days_per_year, 1), '0'), '.') }} paid days/year
                         <button wire:click="removeEntitlement('{{ $entitlement->leave_type }}')"
-                                wire:confirm="Remove the entitlement for {{ $leaveTypes[$entitlement->leave_type] ?? $entitlement->leave_type }}? That leave type stops being limited."
+                                wire:confirm="Remove the paid leave limit for {{ $leaveTypes[$entitlement->leave_type] ?? $entitlement->leave_type }}?"
                                 class="text-gray-400 hover:text-red-600" title="Remove">
                             <i class="fas fa-times"></i>
                         </button>
@@ -581,7 +574,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             </div>
         @else
             <p class="mt-4 text-sm text-gray-500">
-                Nothing set yet, so no leave type is limited and every request can be approved.
+                No paid leave limits set yet.
             </p>
         @endif
     </div>
@@ -942,6 +935,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     <label class="text-xs text-gray-500">Leave Type</label>
                                     <span class="px-3 py-1 rounded-full text-sm font-medium {{ $typeColors[$selectedLeave->leave_type] ?? 'bg-gray-100 text-gray-800' }}">
                                         {{ $leaveTypes[$selectedLeave->leave_type] ?? ucfirst($selectedLeave->leave_type) }}
+                                    </span>
+                                    <span class="ml-2 px-3 py-1 rounded-full text-sm font-medium {{ ($selectedLeave->pay_status ?? ($selectedLeave->leave_type === 'unpaid' ? 'unpaid' : 'paid')) === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-orange-100 text-orange-800' }}">
+                                        {{ ucfirst($selectedLeave->pay_status ?? ($selectedLeave->leave_type === 'unpaid' ? 'unpaid' : 'paid')) }}
                                     </span>
                                 </div>
                                 <div>

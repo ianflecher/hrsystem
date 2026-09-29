@@ -315,7 +315,9 @@ class ScheduleUpload
     private function asDate(string $cell, Carbon $start, Carbon $end): ?string
     {
         $cell = trim($cell);
-        if ($cell === '') {
+        // A shift is not a date: "10-7" in an October sheet would otherwise
+        // read as October 7th and pass itself off as the row of dates.
+        if ($cell === '' || self::times(strtoupper($cell)) !== null) {
             return null;
         }
         $date = null;
@@ -373,7 +375,7 @@ class ScheduleUpload
         $before = array_slice($row, 0, $firstDateColumn);
 
         foreach ($before as $cell) {
-            if (preg_match('/\b(IC|CAFE)\s*-\s*(\d+)\b/i', (string) $cell, $m)) {
+            if (preg_match('/\b(IC|CAFE|SL)\s*-\s*(\d+)\b/i', (string) $cell, $m)) {
                 $number = strtoupper($m[1]).'-'.str_pad($m[2], 5, '0', STR_PAD_LEFT);
                 if ($found = $staff->firstWhere('employee_no', $number)) {
                     return $found;
@@ -384,7 +386,7 @@ class ScheduleUpload
         $words = fn (string $s) => array_values(array_filter(preg_split('/[^a-z0-9ñ]+/u', mb_strtolower($s)), fn ($w) => $w !== ''));
         $written = [];
         foreach ($before as $cell) {
-            if (preg_match('/^\s*(IC|CAFE)\s*-/i', (string) $cell) || preg_match('/^\d+$/', trim((string) $cell))) {
+            if (preg_match('/^\s*(IC|CAFE|SL)\s*-/i', (string) $cell) || preg_match('/^\d+$/', trim((string) $cell))) {
                 continue;
             }
             $written = array_merge($written, $words((string) $cell));

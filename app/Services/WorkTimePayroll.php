@@ -43,7 +43,9 @@ class WorkTimePayroll
                 continue;
             }
             foreach($leaves as $leave){
-                if($leave->leave_type!=='unpaid' && substr((string)$leave->start_date,0,10)<=$date && substr((string)$leave->end_date,0,10)>=$date){$paidLeaveDays++;break;}
+                $paidLeave = $leave->leave_type !== 'unpaid'
+                    && (! property_exists($leave, 'pay_status') || $leave->pay_status === null || $leave->pay_status === 'paid');
+                if($paidLeave && substr((string)$leave->start_date,0,10)<=$date && substr((string)$leave->end_date,0,10)>=$date){$paidLeaveDays++;break;}
             }
         }
         return ['worked_days'=>$workedDays,'paid_leave_days'=>$paidLeaveDays,'hours'=>round($hours,2)];

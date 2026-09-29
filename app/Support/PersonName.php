@@ -23,8 +23,17 @@ class PersonName
     /** "Juan", "Dela Cruz", "Santos" -> "Juan Santos Dela Cruz". */
     public static function full(?string $first, ?string $middle, ?string $last): string
     {
+        // A second given name typed into the middle name as well - "Roi
+        // Vincent" / "Vincent" - would read "Roi Vincent Vincent". The middle
+        // name starts after whatever the first name already ends with.
+        $firstWords = preg_split('/\s+/', trim((string) $first), -1, PREG_SPLIT_NO_EMPTY);
+        $middleWords = preg_split('/\s+/', trim((string) $middle), -1, PREG_SPLIT_NO_EMPTY);
+        while ($middleWords && $firstWords && strcasecmp($middleWords[0], end($firstWords)) === 0) {
+            array_shift($middleWords);
+        }
+
         return trim(preg_replace('/\s+/', ' ',
-            implode(' ', array_filter([trim((string) $first), trim((string) $middle), trim((string) $last)]))));
+            implode(' ', array_filter([trim((string) $first), implode(' ', $middleWords), trim((string) $last)]))));
     }
 
     /**

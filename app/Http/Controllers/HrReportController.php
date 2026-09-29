@@ -9,7 +9,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class HrReportController extends Controller
 {
-    public function __invoke(Request $request): StreamedResponse
+    public function __invoke(Request $request)
     {
         PeopleAccess::hr();
         $data = $request->validate([
@@ -28,20 +28,20 @@ class HrReportController extends Controller
             ? now()->addYear()->toDateString()
             : now()->toDateString());
 
-        return response()->streamDownload(function () use ($report, $from, $to, $data) {
-            $out = fopen('php://output', 'w');
-            $write = fn (array $row) => fputcsv($out, array_map(fn ($v) => is_string($v) && preg_match('/^[=+\-@]/', $v) ? "'".$v : $v, $row));
-
-            // Written before the query runs, so a report with nothing in it
-            // still downloads as a readable file. It used to come out zero
-            // bytes, which is indistinguishable from a failed download.
-            $write($this->columns($report));
-
-            foreach ($this->rows($report, $from, $to, $data['department_id'] ?? null) as $row) {
-                $write((array) $row);
-            }
-            fclose($out);
-        }, 'hr-'.$report.'-'.$from.'-'.$to.'.csv', ['Content-Type' => 'text/csv']);
+        // An Excel workbook: amounts stay numbers that add up, and IDs keep
+        // their leading zeros. The header row is always there, so a report
+        // with nothing in it still opens as a readable file. Cell text is
+        // never read as a formula in .xlsx, so nothing needs escaping for that.
+        return \App\Support\SpreadsheetWriter::download(
+            'hr-'.$report.'-'.$from.'-'.$to.'.xlsx',
+            ucfirst($report),
+            $this->columns($report),
+            (function () use ($report, $from, $to, $data) {
+                foreach ($this->rows($report, $from, $to, $data['department_id'] ?? null) as $row) {
+                    yield (array) $row;
+                }
+            })()
+        );
     }
 
     /**

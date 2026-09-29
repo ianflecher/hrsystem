@@ -128,7 +128,7 @@ class PeopleController extends Controller
         }
         $requestStatuses = match ($module) {
             'overtime' => ['pending', 'approved', 'rejected', 'cancelled'],
-            'loans' => ['pending', 'approved', 'active', 'repaid', 'rejected', 'cancelled'],
+            'loans' => ['pending', 'approved', 'active', 'repaid', 'stopped', 'rejected', 'cancelled'],
             default => [],
         };
         $request->validate([
@@ -210,6 +210,14 @@ class PeopleController extends Controller
             // The calendar shows who is away: every leave touching the
             // cutoff, spread onto each of its days.
             $staffIds = $extra['staff']->pluck('employee_id');
+            // Days the schedule grid marks from attendance: suspensions and
+            // official business, keyed employee|date.
+            $extra['dayMarks'] = DB::table('hr_attendance')
+                ->whereIn('employee_id', $extra['staff']->pluck('employee_id'))
+                ->whereBetween('date', [$period->start, $period->end])
+                ->where(fn ($q) => $q->where('status', 'official_business')->orWhere('notes', 'Suspension'))
+                ->get(['employee_id', 'date', 'status', 'notes'])
+                ->keyBy(fn ($r) => $r->employee_id.'|'.substr((string) $r->date, 0, 10));
             $extra['leaves'] = collect();
             foreach (DB::table('leaves as l')->join('employees as e', 'e.employee_id', '=', 'l.employee_id')
                 ->join('users as u', 'u.user_id', '=', 'e.user_id')
@@ -375,7 +383,8 @@ class PeopleController extends Controller
                 // A cutoff's schedule from HR's spreadsheet: read and shown
                 // first, written only once confirmed.
                 if (in_array($request->input('kind'), ['schedule-upload', 'schedule-confirm', 'schedule-cancel'], true)) {
-                    PeopleAccess::hr();
+                    // The team's supervisor or leader uploads it, for their own team only.
+                    abort_unless($teamPortal, 403);
                     if ($request->input('kind') === 'schedule-cancel') {
                         session()->forget('schedule_upload');
 
@@ -400,6 +409,29 @@ class PeopleController extends Controller
                         $plan = (new \App\Services\ScheduleUpload)->read($rows, PayPeriod::fromStart($request->input('cutoff')));
                     } catch (\RuntimeException $e) {
                         throw ValidationException::withMessages(['schedule_file' => $e->getMessage()]);
+                    }
+
+                    // A supervisor schedules their own team: hours and rest days.
+                    // Leave, suspensions and official business change pay, and
+                    // stay HR's to record.
+                    if (! $hr) {
+                        $plan['hr_only'] = [];
+                        $team = [];
+                        foreach ($plan['people'] as $person) {
+                            if (! PeopleAccess::managesEmployee((int) $person['employee_id'])) {
+                                $plan['unmatched'][] = $person['name'].' (not on your team)';
+                                continue;
+                            }
+                            foreach ($person['days'] as $date => $day) {
+                                if (! in_array($day['type'], ['shift', 'rest', 'school'], true)) {
+                                    $plan['hr_only'][] = $person['name'].', '.Carbon::parse($date)->format('M j').': '
+                                        .['leave_paid' => 'leave with pay', 'leave_unpaid' => 'leave', 'suspension' => 'suspension', 'ob' => 'official business'][$day['type']];
+                                    unset($person['days'][$date]);
+                                }
+                            }
+                            $team[] = $person;
+                        }
+                        $plan['people'] = $team;
                     }
                     session(['schedule_upload' => $plan]);
 
@@ -497,13 +529,18 @@ class PeopleController extends Controller
                 break;
             case 'loans':
                 PeopleAccess::hr();
+                // One figure, as the SSS / Pag-IBIG notice gives it: the monthly
+                // amortization. No balance - it is deducted every cutoff, half
+                // each, until HR stops it. A stored amount of 0 marks that.
                 $data = $request->validate([
                     'type' => ['required', Rule::in(['sss', 'pagibig', 'government'])],
-                    'amount' => 'required|numeric|min:1|max:1000000',
-                    'installment' => 'required|numeric|min:1|lte:amount',
+                    'monthly' => 'required|numeric|min:1|max:1000000',
                     'starts_on' => 'required|date_format:Y-m-d',
                     'reason' => 'required|string|min:5|max:3000',
-                ]);
+                ], [], ['monthly' => 'monthly amortization']);
+                $data['installment'] = round((float) $data['monthly'], 2);
+                $data['amount'] = 0;
+                unset($data['monthly']);
                 DB::table('employee_loans')->insert($base + $data + [
                     'status' => 'active',
                     'reviewed_by' => auth()->id(),
@@ -607,6 +644,13 @@ class PeopleController extends Controller
                 else {
                     PeopleAccess::hr();
                     abort_if(DB::table('employees')->where('employee_id', $row->employee_id)->value('user_id') == auth()->id(), 403, 'You cannot approve your own loan.');
+                }
+                // A monthly amortization runs until HR ends it - when the agency
+                // says the loan is paid, or the employee leaves.
+                if ($module === 'loans' && $action === 'stop') {
+                    abort_unless($row->status === 'active', 422);
+                    DB::table('employee_loans')->where('id', $id)->update(['status' => 'stopped', 'decision_note' => 'Deductions stopped by '.auth()->user()->full_name.' on '.now()->format('M j, Y'), 'updated_at' => now()]);
+                    return;
                 }
                 if ($module === 'loans' && $action === 'disburse') {
                     abort_unless($row->status === 'approved', 422);

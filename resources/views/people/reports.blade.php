@@ -19,7 +19,7 @@
             </select>
         </label>
         <p class="muted wide">Headcount uses hire date. Attendance uses work date. Leave includes requests that overlap the range. Payroll uses cutoff start.</p>
-        <div><button>Download CSV</button></div>
+        <div><button>Download Excel</button></div>
     </form>
 </article>
 @else

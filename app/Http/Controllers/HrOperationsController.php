@@ -61,19 +61,135 @@ class HrOperationsController extends Controller
             ->join('users as u', 'e.user_id', '=', 'u.user_id')
             ->leftJoin('departments as d', 'e.department_id', '=', 'd.department_id')
             ->where('e.status', 'active')
-            ->when(! \App\Support\PeopleAccess::isHr(), fn($q) => $q->whereIn('e.department_id', $departmentIds))
+            ->when(! \App\Support\PeopleAccess::isHr(), fn($q) => $q->whereIn('e.department_id', $departmentIds)->where('e.user_id', '!=', auth()->id())
+                // Nobody opens their own profile here, and a leader does not open their supervisor's.
+                ->when(auth()->user()->role === 'leader', fn($q) => $q->where('u.role', '!=', 'supervisor')))
             ->select('e.employee_id','e.job_title','e.department_id','u.full_name','d.department_name')
             ->orderBy('u.full_name')
             ->get();
         $pendingLeave = DB::table('leaves as l')->join('employees as e','l.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')
             ->where('l.status', \App\Support\PeopleAccess::isHr() ? 'pending_hr' : 'pending')
-            ->when(! \App\Support\PeopleAccess::isHr(), fn($q)=>$q->whereIn('e.department_id',$departmentIds))
+            // Their own team's leave - but a supervisor's leave, from any
+            // department, is only ever the supervisors' approver's to decide.
+            ->when(! \App\Support\PeopleAccess::isHr(), fn($q)=>$q->where('e.user_id','!=',auth()->id())
+                ->where(fn($q) => $q->where(fn($q) => $q->whereIn('e.department_id',$departmentIds)->where('u.role', '!=', 'supervisor'))
+                    ->when(\App\Support\PeopleAccess::isSupervisorLeaveApprover(), fn($q) => $q->orWhere('u.role', 'supervisor'))))
             ->select('l.*','u.full_name')->orderBy('l.start_date')->get();
         $pendingOt = DB::table('overtime_requests as o')->join('employees as e','o.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')
             ->where('o.status', \App\Support\PeopleAccess::isHr() ? 'pending_hr' : 'pending')
-            ->when(! \App\Support\PeopleAccess::isHr(), fn($q)=>$q->whereIn('e.department_id',$departmentIds))
+            ->when(! \App\Support\PeopleAccess::isHr(), fn($q)=>$q->whereIn('e.department_id',$departmentIds)->where('e.user_id','!=',auth()->id())
+                ->when(auth()->user()->role === 'leader', fn($q) => $q->where('u.role', '!=', 'supervisor')))
             ->select('o.*','u.full_name')->orderBy('o.starts_at')->get();
-        return view('hr.operations.manager', compact('employees','pendingLeave','pendingOt'));
+        // Team members the scanner cannot see yet: their days are entered here.
+        $noScanner = DB::table('employees as e')->join('users as u', 'e.user_id', '=', 'u.user_id')
+            ->where('e.status', 'active')->where(fn ($q) => $q->whereNull('e.biometric_id')->orWhere('e.biometric_id', ''))
+            ->when(! \App\Support\PeopleAccess::isHr(), fn ($q) => $q->whereIn('e.department_id', $departmentIds)->where('e.user_id', '!=', auth()->id()))
+            ->orderBy('u.full_name')->get(['e.employee_id', 'e.employee_no', 'u.full_name']);
+        $recentManual = DB::table('hr_attendance as a')->join('employees as e', 'e.employee_id', '=', 'a.employee_id')->join('users as u', 'u.user_id', '=', 'e.user_id')
+            ->whereIn('a.employee_id', $noScanner->pluck('employee_id'))->where('a.date', '>=', now()->subDays(20)->toDateString())
+            ->orderByDesc('a.date')->orderBy('u.full_name')->limit(40)->get(['a.*', 'u.full_name']);
+
+        $pendingTimeLogs = DB::table('time_log_requests as t')->join('employees as e', 'e.employee_id', '=', 't.employee_id')->join('users as u', 'u.user_id', '=', 'e.user_id')
+            ->where('t.status', 'pending')
+            ->when(! \App\Support\PeopleAccess::isHr(), fn ($q) => $q->whereIn('e.department_id', $departmentIds)->where('e.user_id', '!=', auth()->id()))
+            ->orderBy('t.date')->get(['t.*', 'u.full_name']);
+
+        return view('hr.operations.manager', compact('employees','pendingLeave','pendingOt','noScanner','recentManual','pendingTimeLogs'));
+    }
+
+    /**
+     * An employee's own time log, approved or rejected. Approved, it becomes
+     * the day's attendance - the same as if the supervisor had entered it.
+     */
+    public function timeLogDecision(Request $request, int $id)
+    {
+        \App\Support\PeopleAccess::manager();
+        $log = DB::table('time_log_requests')->where('id', $id)->first();
+        abort_unless($log, 404);
+        abort_unless($log->status === 'pending', 422, 'This time log has already been decided.');
+        \App\Support\PeopleAccess::managerForEmployee((int) $log->employee_id);
+        $data = $request->validate(['action' => 'required|in:approve,reject', 'review_note' => 'nullable|string|max:255']);
+
+        DB::transaction(function () use ($log, $data) {
+            DB::table('time_log_requests')->where('id', $log->id)->update([
+                'status' => $data['action'] === 'approve' ? 'approved' : 'rejected',
+                'reviewed_by' => auth()->id(), 'reviewed_at' => now(),
+                'review_note' => $data['review_note'] ?? null, 'updated_at' => now(),
+            ]);
+
+            if ($data['action'] === 'approve') {
+                $employee = DB::table('employees')->where('employee_id', $log->employee_id)->first();
+                $shift = \App\Support\ShiftSchedule::forEmployeeDate($employee, (string) $log->date);
+                $in = \Carbon\Carbon::parse($log->time_in);
+                $late = $shift['start'] && \App\Support\Tardiness::isLate($in, $shift['start']);
+                DB::table('hr_attendance')->updateOrInsert(
+                    ['employee_id' => $log->employee_id, 'date' => substr((string) $log->date, 0, 10)],
+                    ['time_in' => $log->time_in, 'time_out' => $log->time_out, 'status' => $late ? 'late' : 'present',
+                        'notes' => 'Time log approved by '.auth()->user()->full_name.' (no scanner ID)',
+                        'created_at' => now(), 'updated_at' => now()]
+                );
+            }
+        });
+
+        \App\Services\Auditor::record('update', 'time_log_requests', $log->id, ['status' => 'pending'], ['status' => $data['action']]);
+
+        return back()->with('success', 'Time log '.($data['action'] === 'approve' ? 'approved.' : 'rejected.'));
+    }
+
+    /**
+     * A day for somebody the scanner cannot record - seasonal staff not yet
+     * enrolled. The supervisor enters the shift and the times worked; a person
+     * who has a scanner ID is not offered here, so nothing the device recorded
+     * can be written over. The note says who entered it.
+     */
+    public function manualAttendance(Request $request)
+    {
+        \App\Support\PeopleAccess::manager();
+        $data = $request->validate([
+            'employee_id' => 'required|integer|exists:employees,employee_id',
+            'date' => 'required|date_format:Y-m-d|before_or_equal:today',
+            'shift_start' => 'required|date_format:H:i',
+            'shift_end' => 'required|date_format:H:i',
+            'time_in' => 'nullable|date_format:H:i',
+            'time_out' => 'nullable|date_format:H:i',
+        ], ['date.before_or_equal' => 'Times can only be entered for today or earlier.']);
+
+        \App\Support\PeopleAccess::managerForEmployee((int) $data['employee_id']);
+        $employee = DB::table('employees')->where('employee_id', $data['employee_id'])->first();
+        abort_if(trim((string) $employee->biometric_id) !== '', 422, 'This person has a scanner ID - their times come from the scanner.');
+
+        // Times on the clock; a time-out earlier than the time-in is the next morning.
+        $at = fn ($time) => $time ? \Carbon\Carbon::parse($data['date'].' '.$time) : null;
+        $in = $at($data['time_in'] ?? null);
+        $out = $at($data['time_out'] ?? null);
+        if ($in && $out && $out->lte($in)) {
+            $out->addDay();
+        }
+
+        DB::transaction(function () use ($data, $in, $out) {
+            DB::table('shift_assignments')->updateOrInsert(
+                ['employee_id' => $data['employee_id'], 'work_date' => $data['date']],
+                ['starts_at' => $data['shift_start'], 'ends_at' => $data['shift_end'], 'rest_day' => false,
+                    'label' => 'Assigned shift', 'status' => 'approved', 'created_by' => auth()->id(),
+                    'approved_by' => auth()->id(), 'approved_at' => now(), 'created_at' => now(), 'updated_at' => now()]
+            );
+
+            if ($in || $out) {
+                $late = $in && \App\Support\Tardiness::isLate($in, $data['shift_start']);
+                DB::table('hr_attendance')->updateOrInsert(
+                    ['employee_id' => $data['employee_id'], 'date' => $data['date']],
+                    ['time_in' => $in?->toDateTimeString(), 'time_out' => $out?->toDateTimeString(),
+                        'status' => $late ? 'late' : 'present',
+                        'notes' => 'Entered by '.auth()->user()->full_name.' (no scanner ID)',
+                        'created_at' => now(), 'updated_at' => now()]
+                );
+            }
+        });
+
+        \App\Services\Auditor::record('update', 'hr_attendance', null, null,
+            ['manual_attendance' => $data, 'by' => auth()->id()]);
+
+        return back()->with('success', 'Saved for '.\Carbon\Carbon::parse($data['date'])->format('M j').'.');
     }
 
     public function managerLeaveDecision(Request $request, int $id)
@@ -81,7 +197,7 @@ class HrOperationsController extends Controller
         \App\Support\PeopleAccess::manager();
         $leave = DB::table('leaves')->where('leave_id', $id)->first();
         abort_unless($leave, 404);
-        \App\Support\PeopleAccess::managerForEmployee((int) $leave->employee_id);
+        abort_unless(\App\Support\PeopleAccess::isHr() || \App\Support\PeopleAccess::decidesLeaveOf((int) $leave->employee_id), 403);
 
         $action = $request->input('action');
         abort_unless(in_array($action, ['approve', 'reject'], true) && $leave->status === 'pending', 422);

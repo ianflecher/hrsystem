@@ -2,7 +2,8 @@
 @php($teamShiftManager = !$hr && in_array(auth()->user()->role, ['supervisor', 'leader'], true))
 @if($hr || $teamShiftManager)
 
-    @if($hr)
+    {{-- The team's supervisor or leader uploads the schedule; HR does not. --}}
+    @if($teamShiftManager)
     @php($thisCutoff = \App\Support\PayPeriod::fromStart(now()->toDateString()))
     @php($nextCutoff = \App\Support\PayPeriod::fromStart(\Carbon\Carbon::parse($thisCutoff->end)->addDay()->toDateString()))
     @php($plan = session('schedule_upload'))
@@ -23,7 +24,6 @@
             </label>
             <div class="schedule-upload-actions">
                 <button><i class="fas fa-upload"></i> Read schedule</button>
-                <a class="secondary-link" href="{{ request()->url() }}?download=schedule-template&cutoff={{ $nextCutoff->start }}">Download a blank template for {{ $nextCutoff->label() }}</a>
             </div>
         </form>
 
@@ -52,6 +52,10 @@
                     <div class="alert error"><strong>Not matched to anybody - these rows will be skipped:</strong> {{ implode(', ', $plan['unmatched']) }}.
                         Put their employee number (like IC-00235 or CAFE-00016) in a column before the dates, or write the name as it is in Employees.</div>
                 @endif
+                @if(! empty($plan['hr_only']))
+                    <div class="alert"><strong>For HR to record - leave, suspensions and official business are not saved from here:</strong>
+                        <ul>@foreach($plan['hr_only'] as $cell)<li>{{ $cell }}</li>@endforeach</ul></div>
+                @endif
                 @if($plan['unknown'])
                     <div class="alert error"><strong>Cells that were not understood - left unchanged:</strong>
                         <ul>@foreach($plan['unknown'] as $cell)<li>{{ $cell }}</li>@endforeach</ul></div>
@@ -63,7 +67,9 @@
             </div>
         @endif
     </div>
+    @endif
 
+    @if($hr)
     <details class="card"><summary>Add a holiday</summary>
         <form method="POST" action="{{ $base }}" class="grid divider">@csrf
             <input type="hidden" name="kind" value="holiday">
@@ -86,7 +92,7 @@
 @php($periodStart = \Carbon\Carbon::parse($extra['period']->start))
 @php($periodEnd = \Carbon\Carbon::parse($extra['period']->end))
 <div class="card scroll">
-    <h2>{{ $extra['period']->label() }}</h2>
+    <h2>Leave calendar · {{ $extra['period']->label() }}</h2>
     <p class="muted">Current payroll cutoff: who is on leave, and the holidays. Shifts and rest days are set on each person under Employees.</p>
 {{-- Phones: only the days something happens, as a list. A seven-column
      grid of mostly empty boxes does not fit a phone. --}}
@@ -213,7 +219,12 @@
                         @php($mark = $extra['assignments']->get($date, collect())->firstWhere('employee_id', $person->employee_id))
                         @php($mark = ($mark && ($mark->status ?? 'approved') === 'approved') ? $mark : null)
                         @php($leave = $extra['leaves']->get($date, collect())->first(fn ($l) => $l->employee_id == $person->employee_id && $l->status === 'approved'))
-                        @if($leave)
+                        @php($dayMark = ($extra['dayMarks'] ?? collect())->get($person->employee_id.'|'.$date))
+                        @if($dayMark && $dayMark->status === 'official_business')
+                            <td class="sg-ob" title="{{ $dayMark->notes }}">OB</td>
+                        @elseif($dayMark)
+                            <td class="sg-susp" title="Suspension">S</td>
+                        @elseif($leave)
                             <td class="sg-leave" title="{{ ucwords(str_replace('_', ' ', (string) $leave->leave_type)) }}">LEAVE</td>
                         @elseif($mark ? $mark->rest_day : WorkWeek::restsOn($person->rest_days, $day))
                             <td class="sg-rest">RD</td>
@@ -231,5 +242,5 @@
     </tbody>
 </table>
 </div>
-<p class="muted sg-legend"><span class="sg-rest">RD</span> rest day <span class="sg-leave">LEAVE</span> approved leave <span class="sg-none">—</span> no shift set yet</p>
+<p class="muted sg-legend"><span class="sg-rest">RD</span> rest day <span class="sg-leave">LEAVE</span> approved leave <span class="sg-susp">S</span> suspension <span class="sg-ob">OB</span> official business <span class="sg-none">—</span> no shift set yet</p>
 </div>

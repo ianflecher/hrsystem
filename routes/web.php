@@ -111,6 +111,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/hr/operations/manager', [\App\Http\Controllers\HrOperationsController::class, 'manager'])->name('hr.operations.manager');
     Route::post('/hr/operations/manager/leave/{id}', [\App\Http\Controllers\HrOperationsController::class, 'managerLeaveDecision'])->whereNumber('id')->name('hr.operations.manager.leave');
     Route::post('/hr/operations/manager/overtime/{id}', [\App\Http\Controllers\HrOperationsController::class, 'managerOvertimeDecision'])->whereNumber('id')->name('hr.operations.manager.overtime');
+    Route::post('/hr/operations/manager/manual-attendance', [\App\Http\Controllers\HrOperationsController::class, 'manualAttendance'])->name('hr.operations.manager.attendance');
+    Route::post('/hr/operations/manager/time-log/{id}', [\App\Http\Controllers\HrOperationsController::class, 'timeLogDecision'])->whereNumber('id')->name('hr.operations.manager.timelog');
     Route::post('/hr/operations/exceptions/{id}/resolve', [\App\Http\Controllers\HrOperationsController::class, 'resolveException'])->whereNumber('id')->name('hr.operations.exception.resolve');
     Route::get('/hr/operations/employee/{id}', [\App\Http\Controllers\HrOperationsController::class, 'employee'])->whereNumber('id')->name('hr.operations.employee');
     Route::get('/hr/operations/inbox', [\App\Http\Controllers\HrOperationsController::class, 'inbox'])->name('hr.operations.inbox');
@@ -136,6 +138,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/employee/team/{id}', [\App\Http\Controllers\HrOperationsController::class, 'employee'])->whereNumber('id')->name('employee.team.employee');
     Route::post('/employee/team/leave/{id}', [\App\Http\Controllers\HrOperationsController::class, 'managerLeaveDecision'])->whereNumber('id')->name('employee.team.leave');
     Route::post('/employee/team/overtime/{id}', [\App\Http\Controllers\HrOperationsController::class, 'managerOvertimeDecision'])->whereNumber('id')->name('employee.team.overtime');
+    Route::post('/employee/team/manual-attendance', [\App\Http\Controllers\HrOperationsController::class, 'manualAttendance'])->name('employee.team.attendance');
+    Route::post('/employee/team/time-log/{id}', [\App\Http\Controllers\HrOperationsController::class, 'timeLogDecision'])->whereNumber('id')->name('employee.team.timelog');
 
     // Interviews this person has been given. The component scopes every read
     // and write to the signed-in interviewer, so the gate here is only that

@@ -28,7 +28,8 @@ class ImportMasterlist extends Command
 
     protected $description = 'Create or update employee accounts from the masterlist';
 
-    private const PASSWORD = 'imprint123';
+    /** Every new account's first password; it must be replaced at first sign-in. */
+    public const PASSWORD = 'imprint123';
 
     public function handle(): int
     {

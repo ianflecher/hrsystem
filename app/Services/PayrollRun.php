@@ -69,6 +69,18 @@ class PayrollRun
             $loans = DB::table('employee_loans')->where('employee_id', $employeeId)->where('status', 'active')->where('starts_on', '<=', $period->start)->orderBy('id')->lockForUpdate()->get();
             $installments = [];
             foreach ($loans as $loan) {
+                // A monthly amortization (recorded without a balance) comes off
+                // the 1-15 cutoff in full, and nothing on the second; it runs
+                // until HR stops it. A loan with a balance is paid down per
+                // cutoff as before, and ends when the balance is reached.
+                if ((float) $loan->amount <= 0) {
+                    if ($period->isSecondCutoff) continue;
+                    $cents = min((int) round($loan->installment * 100), $remainingCents);
+                    if ($cents <= 0) continue;
+                    $installments[$loan->id] = $cents / 100;
+                    $remainingCents -= $cents;
+                    continue;
+                }
                 $reserved = DB::table('loan_installments')->where('loan_id', $loan->id)->sum('amount');
                 $balance = max(0, (int) round(((float) $loan->amount - (float) $reserved) * 100));
                 $cents = min($balance, (int) round($loan->installment * 100), $remainingCents);
@@ -116,7 +128,8 @@ class PayrollRun
             foreach ($installments->pluck('loan_id')->unique()->sort() as $loanId) {
                 $loan = DB::table('employee_loans')->where('id', $loanId)->lockForUpdate()->first();
                 $paid = DB::table('loan_installments')->where('loan_id', $loanId)->whereNotNull('paid_at')->sum('amount');
-                if ($loan && (int) round($paid * 100) >= (int) round($loan->amount * 100)) DB::table('employee_loans')->where('id', $loanId)->update(['status' => 'repaid', 'updated_at' => now()]);
+                // Only a loan with a balance can be finished by payments.
+                if ($loan && (float) $loan->amount > 0 && (int) round($paid * 100) >= (int) round($loan->amount * 100)) DB::table('employee_loans')->where('id', $loanId)->update(['status' => 'repaid', 'updated_at' => now()]);
             }
             return DB::table('hr_payroll')->whereIn('payroll_id', $payrolls)->update(['status' => 'paid', 'updated_at' => now()]);
         });

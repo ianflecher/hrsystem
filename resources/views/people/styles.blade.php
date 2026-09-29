@@ -214,3 +214,10 @@
 .people .schedule-preview .alert { margin-top: 12px; }
 .people .schedule-preview .alert ul { margin: 6px 0 0 18px; }
 </style>
+<style>
+.people .sg-susp { background: #475569 !important; color: #fff; font-weight: 700; }
+.people .sg-ob { background: #cffafe !important; color: #155e75; font-weight: 700; font-size: 11px; }
+</style>
+<style>
+.people .leave-tag { display: inline-block; margin-right: 4px; padding: 0 6px; border-radius: 4px; background: #fde047; color: #713f12; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+</style>

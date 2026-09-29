@@ -19,7 +19,59 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
     public $isClockedIn = false;
     public bool $showAllAttendance = false;
     public int $cutoffWorkedMinutes = 0;
-    
+
+    /** A day's times from somebody the scanner cannot record yet. */
+    public string $logDate = '';
+    public string $logIn = '';
+    public string $logOut = '';
+    public string $logNote = '';
+
+    /** No scanner ID: their days come from a time log their supervisor approves. */
+    public function getNeedsTimeLogProperty(): bool
+    {
+        return $this->employee && trim((string) ($this->employee->biometric_id ?? '')) === '';
+    }
+
+    public function getMyTimeLogsProperty()
+    {
+        return DB::table('time_log_requests')->where('employee_id', $this->employee->employee_id)
+            ->orderByDesc('date')->limit(10)->get();
+    }
+
+    public function submitTimeLog(): void
+    {
+        abort_unless($this->needsTimeLog, 403);
+        $this->validate([
+            'logDate' => 'required|date_format:Y-m-d|before_or_equal:today',
+            'logIn' => 'required|date_format:H:i',
+            'logOut' => 'nullable|date_format:H:i',
+            'logNote' => 'nullable|string|max:255',
+        ], ['logDate.before_or_equal' => 'You can only log today or an earlier day.'], ['logDate' => 'date', 'logIn' => 'time in', 'logOut' => 'time out']);
+
+        $already = DB::table('time_log_requests')->where('employee_id', $this->employee->employee_id)
+            ->whereDate('date', $this->logDate)->whereIn('status', ['pending', 'approved'])->exists();
+        if ($already) {
+            $this->addError('logDate', 'You already sent in this day.');
+            return;
+        }
+
+        $in = \Carbon\Carbon::parse($this->logDate.' '.$this->logIn);
+        $out = $this->logOut !== '' ? \Carbon\Carbon::parse($this->logDate.' '.$this->logOut) : null;
+        if ($out && $out->lte($in)) {
+            $out->addDay(); // a time-out before the time-in is the next morning
+        }
+
+        DB::table('time_log_requests')->insert([
+            'employee_id' => $this->employee->employee_id, 'date' => $this->logDate,
+            'time_in' => $in->toDateTimeString(), 'time_out' => $out?->toDateTimeString(),
+            'note' => $this->logNote !== '' ? $this->logNote : null, 'status' => 'pending',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->reset('logIn', 'logOut', 'logNote');
+        session()->flash('timelog', 'Sent to your supervisor. It counts once approved.');
+    }
+
     public function mount()
     {
         // Get current employee based on logged-in user
@@ -196,7 +248,52 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
         <h1 class="text-2xl font-bold text-gray-900 mb-2">My Attendance Overview</h1>
         <p class="text-gray-600">Track your daily attendance and work hours</p>
     </div>
-    
+
+    @if ($this->needsTimeLog)
+        {{-- No scanner ID yet: the day is sent in here and counts once approved. --}}
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-8 border border-amber-200">
+            <h2 class="text-xl font-bold text-gray-900">Log my time</h2>
+            <p class="text-sm text-gray-600 mt-1">You are not on the scanner yet. Send in your time in and time out for a day; it counts once your supervisor approves it.</p>
+            @if (session('timelog'))
+                <div class="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">{{ session('timelog') }}</div>
+            @endif
+            <form wire:submit="submitTimeLog" class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
+                <label class="text-sm"><span class="mb-1 block font-medium text-gray-700">Date</span>
+                    <input type="date" wire:model="logDate" max="{{ now()->toDateString() }}" class="form-input" required>
+                    @error('logDate') <span class="text-xs text-red-600">{{ $message }}</span> @enderror</label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-gray-700">Time in</span>
+                    <input type="time" wire:model="logIn" class="form-input" required>
+                    @error('logIn') <span class="text-xs text-red-600">{{ $message }}</span> @enderror</label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-gray-700">Time out</span>
+                    <input type="time" wire:model="logOut" class="form-input">
+                    @error('logOut') <span class="text-xs text-red-600">{{ $message }}</span> @enderror</label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-gray-700">Note (optional)</span>
+                    <input type="text" wire:model="logNote" maxlength="255" class="form-input" placeholder="e.g. overtime, left early"></label>
+                <button type="submit" class="btn-primary">Send to supervisor</button>
+            </form>
+            @if ($this->myTimeLogs->isNotEmpty())
+                <div class="mt-4 overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead><tr class="text-left text-xs uppercase text-gray-500"><th class="py-1 pr-4">Date</th><th class="pr-4">In</th><th class="pr-4">Out</th><th>Status</th></tr></thead>
+                        <tbody>
+                            @foreach ($this->myTimeLogs as $log)
+                                <tr class="border-t border-gray-100">
+                                    <td class="py-1.5 pr-4">{{ \Carbon\Carbon::parse($log->date)->format('D, M j') }}</td>
+                                    <td class="pr-4">{{ \Carbon\Carbon::parse($log->time_in)->format('g:i A') }}</td>
+                                    <td class="pr-4">{{ $log->time_out ? \Carbon\Carbon::parse($log->time_out)->format('g:i A') : '—' }}</td>
+                                    <td>
+                                        <span class="rounded-full px-2 py-0.5 text-xs font-semibold {{ ['pending' => 'bg-amber-100 text-amber-800', 'approved' => 'bg-emerald-100 text-emerald-800', 'rejected' => 'bg-red-100 text-red-800'][$log->status] ?? '' }}">{{ ucfirst($log->status) }}</span>
+                                        @if ($log->review_note) <span class="text-xs text-gray-500">· {{ $log->review_note }}</span>@endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </div>
+    @endif
+
     <!-- Today's Status Card -->
     <div class="bg-white rounded-xl shadow-sm p-6 mb-8 border border-gray-200">
         <div class="flex items-center justify-between mb-4">
