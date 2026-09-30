@@ -27,6 +27,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         'status' => null,
         'department' => null,
         'company' => null,
+        // Security guards work 12-hour duties, often overnight: 'guards' or 'others'.
+        'staff' => null,
         'search' => null,
     ];
 
@@ -73,6 +75,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->leftJoin('departments as d', 'd.department_id', '=', 'e.department_id')
             ->where('e.status', 'active')
             ->when($this->filters['company'] ?? null, fn ($q, $c) => $q->where('e.company', $c))
+            ->when($this->filters['staff'] ?? null, fn ($q, $k) => $q->{$k === 'guards' ? 'where' : 'whereNot'}(fn ($g) => $g->where('e.job_title', 'like', '%security guard%')))
             ->when($this->filters['department'] ?? null, fn ($q, $d) => $q->where('e.department_id', $d))
             ->when($this->filters['search'] ?? null, fn ($q, $term) => $q->where('u.full_name', 'like', '%'.$term.'%'))
             ->when(trim($this->summarySearch) !== '', function ($q) {
@@ -132,6 +135,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             $query->where('e.company', $this->filters['company']);
         }
 
+        if ($this->filters['staff'] ?? null) {
+            $query->{$this->filters['staff'] === 'guards' ? 'where' : 'whereNot'}(fn ($g) => $g->where('e.job_title', 'like', '%security guard%'));
+        }
+
         if ($this->filters['search']) {
             $query->where(function($q) {
                 $q->where('u.full_name', 'like', '%' . $this->filters['search'] . '%')
@@ -170,6 +177,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
         if ($this->filters['company']) {
             $query->where('e.company', $this->filters['company']);
+        }
+
+        if ($this->filters['staff'] ?? null) {
+            $query->{$this->filters['staff'] === 'guards' ? 'where' : 'whereNot'}(fn ($g) => $g->where('e.job_title', 'like', '%security guard%'));
         }
 
         if ($this->filters['search']) {
@@ -246,6 +257,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->filters = [
             'status' => null,
             'department' => null,
+            'company' => null,
+            'staff' => null,
             'search' => null,
         ];
         $this->loadData();
@@ -590,7 +603,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
     <!-- Filters -->
     <div class="bg-white rounded-xl p-4 mb-6 shadow-sm border border-gray-100">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <!-- Status Filter -->
             <div>
                 <label class="form-label">Status</label>
@@ -613,6 +626,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     @foreach($companies as $c)
                         <option value="{{ $c }}">{{ $c }}</option>
                     @endforeach
+                </select>
+            </div>
+
+            <!-- Guards apart: their duties run 12 hours and cross midnight -->
+            <div>
+                <label class="form-label">Staff</label>
+                <select wire:model.live="filters.staff" class="form-input">
+                    <option value="">All staff</option>
+                    <option value="guards">Security guards (12-hour)</option>
+                    <option value="others">Everyone else</option>
                 </select>
             </div>
 

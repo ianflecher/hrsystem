@@ -37,30 +37,55 @@ class ThirteenthMonth
     public const KIND = '13th_month';
 
     /**
-     * What one employee earned as basic salary during the year, and the
-     * resulting 13th month.
+     * What one employee earned as basic salary during the year, month by
+     * month (both cutoffs of a month together), and the resulting 13th month:
+     * the twelve months added up, divided by twelve.
      *
-     * @return array{basic: float, amount: float, payslips: int, taxableExcess: float}
+     * @return array{basic: float, amount: float, payslips: int, taxableExcess: float, months: array<int, float>}
      */
     public function forEmployee(int $employeeId, int $year): array
     {
-        $row = DB::table('hr_payroll')
+        $byMonth = DB::table('hr_payroll')
             ->where('employee_id', $employeeId)
             ->where('kind', 'regular')
             ->where('status', '!=', 'cancelled')
             ->whereBetween('period_start', [$year.'-01-01', $year.'-12-31'])
-            ->selectRaw('COUNT(*) as payslips, COALESCE(SUM(gross_pay - overtime_pay - holiday_pay - nsd_pay'
+            ->selectRaw('MONTH(period_start) as m, COUNT(*) as payslips, COALESCE(SUM(gross_pay - overtime_pay - holiday_pay - nsd_pay'
                 .' - time_deduction - COALESCE(allowance, 0) - COALESCE(other_taxable_compensation, 0)), 0) as basic')
-            ->first();
+            ->groupByRaw('MONTH(period_start)')
+            ->get()->keyBy('m');
 
-        $basic = round(max(0, (float) ($row->basic ?? 0)), 2);
+        // HR's non-taxable plus rows (an incentive, a reimbursement) are paid
+        // inside gross but are not basic salary. Taxable ones are already out,
+        // with other_taxable_compensation.
+        $extras = DB::table('payroll_adjustments')->where('employee_id', $employeeId)
+            ->where('status', 'approved')->where('type', 'addition')->where('taxable', false)
+            ->whereBetween('effective_date', [$year.'-01-01', $year.'-12-31'])
+            ->selectRaw('MONTH(effective_date) as m, SUM(amount) as total')->groupByRaw('MONTH(effective_date)')
+            ->pluck('total', 'm');
+
+        // A month counts for no more than a full month's basic - the day rate
+        // times 26 - so the 13th month tops out at one month's pay (PHP 15,600
+        // at PHP 600 a day), however the days of a month fell.
+        $employee = DB::table('employees')->where('employee_id', $employeeId)->first(['salary', 'daily_rate', 'pay_basis']);
+        $monthCap = ($employee->pay_basis ?? 'monthly') === 'monthly'
+            ? (float) ($employee->salary ?? 0)
+            : round((float) ($employee->daily_rate ?? 0) * 26, 2);
+
+        $months = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $earned = max(0, (float) ($byMonth[$m]->basic ?? 0) - (float) ($extras[$m] ?? 0));
+            $months[$m] = round($monthCap > 0 ? min($earned, $monthCap) : $earned, 2);
+        }
+        $basic = round(array_sum($months), 2);
         $amount = round($basic / 12, 2);
 
         return [
             'basic'         => $basic,
             'amount'        => $amount,
-            'payslips'      => (int) ($row->payslips ?? 0),
+            'payslips'      => (int) $byMonth->sum('payslips'),
             'taxableExcess' => round(max(0, $amount - self::TAX_EXEMPT_CEILING), 2),
+            'months'        => $months,
         ];
     }
 

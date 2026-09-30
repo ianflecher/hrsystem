@@ -176,6 +176,45 @@ new #[Layout('components.layouts.employeeland')] class extends Component
         </div>
     </div>
 
+    {{-- While on probation: when they become regular. Gone once HR marks them Regular. --}}
+    @if(strcasecmp((string) ($employee->employment_type ?? ''), 'Probation') === 0 && $employee->regular_date)
+        @php
+            $regularOn = \Carbon\Carbon::parse($employee->regular_date);
+            $daysToGo = (int) now()->startOfDay()->diffInDays($regularOn, false);
+            $probationFrom = $employee->probation_date ? \Carbon\Carbon::parse($employee->probation_date) : null;
+            $progress = $probationFrom && $probationFrom->lt($regularOn)
+                ? max(0, min(100, (int) round($probationFrom->diffInDays(now()) / max(1, $probationFrom->diffInDays($regularOn)) * 100)))
+                : null;
+        @endphp
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm md:p-6">
+            <div class="flex items-start gap-4">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                    <i class="fas fa-user-clock"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-semibold text-amber-800">You're on probation</p>
+                    <p class="mt-1 text-lg font-bold text-slate-950">
+                        Regular date: {{ $regularOn->format('F j, Y') }}
+                    </p>
+                    <p class="mt-1 text-sm text-slate-600">
+                        @if($daysToGo > 0)
+                            {{ $daysToGo }} day{{ $daysToGo === 1 ? '' : 's' }} to go{{ $probationFrom ? ' · probation started '.$probationFrom->format('F j, Y') : '' }}
+                        @elseif($daysToGo === 0)
+                            Today is your regular date - HR will confirm your regularization.
+                        @else
+                            Your regular date has passed - HR will confirm your regularization.
+                        @endif
+                    </p>
+                    @if($progress !== null)
+                        <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-amber-100">
+                            <div class="h-2 rounded-full bg-amber-500" style="width: {{ $progress }}%"></div>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </div>
+    @endif
+
     <!-- Quick Stats -->
     <div class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
         <!-- Attendance Card -->

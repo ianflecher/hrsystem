@@ -910,7 +910,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     <td class="py-2">{{ $row['name'] }}</td>
                                     <td class="py-2 text-gray-600">
                                         PHP {{ number_format($row['basic'], 2) }}
-                                        <span class="block text-xs text-gray-500">{{ $row['payslips'] }} payslip(s)</span>
+                                        <details class="text-xs text-gray-500">
+                                            <summary class="cursor-pointer">By month</summary>
+                                            <div class="mt-1 grid grid-cols-3 gap-x-4 gap-y-0.5 sm:grid-cols-4">
+                                                @foreach ($row['months'] as $m => $basicInMonth)
+                                                    <span>{{ \Carbon\Carbon::create(null, $m, 1)->format('M') }}: {{ number_format($basicInMonth, 2) }}</span>
+                                                @endforeach
+                                            </div>
+                                            <span class="mt-1 block">Total ÷ 12 = PHP {{ number_format($row['amount'], 2) }}</span>
+                                        </details>
                                     </td>
                                     <td class="py-2 font-semibold">PHP {{ number_format($row['amount'], 2) }}</td>
                                     <td class="py-2">

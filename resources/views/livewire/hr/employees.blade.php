@@ -47,6 +47,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public string $biometric_id = '';
     public $department_id = '';
     public string $hire_date = '';
+    /** When probation started, and the day they become regular. */
+    public string $probation_date = '';
+    public string $regular_date = '';
+
+    /** A week ahead of the regular date, the person is pinned to the top as a reminder. */
+    public const REGULAR_SOON_DAYS = 7;
     /** Paid days in a month, for turning a day rate into the monthly figure contributions read. */
     public const DAYS_A_MONTH = 26;
 
@@ -75,11 +81,20 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
     public array $statuses = [
         'active'     => 'Active',
-        'inactive'   => 'Inactive',
         'on_leave'   => 'On leave',
+        'resigned'   => 'Resigned',
         'terminated' => 'Terminated',
         'awol'       => 'AWOL',
     ];
+
+    /** People who have left. Off the list unless HR asks to see them. */
+    public const SEPARATED = ['resigned', 'terminated', 'awol', 'inactive'];
+    public bool $showSeparated = false;
+
+    /** Why and when somebody left, asked for when they are marked as leaving. */
+    public string $separationDate = '';
+    public string $separationReason = '';
+    public string $leaveAs = 'resigned';
 
     /**
      * What somebody is engaged as, which is not the same question as whether
@@ -209,14 +224,24 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->leftJoin('departments as d', 'e.department_id', '=', 'd.department_id')
             ->whereNull('u.deleted_at')
             ->select(
-                'e.employee_id', 'e.job_title', 'e.status', 'e.hire_date', 'e.salary', 'e.allowance', 'e.daily_rate', 'e.pay_basis',
+                'e.employee_id', 'e.job_title', 'e.status', 'e.hire_date', 'e.probation_date', 'e.regular_date', 'e.salary', 'e.allowance', 'e.daily_rate', 'e.pay_basis',
                 'e.employment_type', 'e.company',
                 'u.user_id', 'u.full_name', 'u.username', 'u.email', 'u.role',
                 'u.must_change_password',
-                'd.department_name'
-            );
+                'd.department_name',
+                's.separation_date', 's.reason as separation_reason',
+                // Somebody never scanned has no last day of their own to show.
+                DB::raw('exists(select 1 from hr_attendance ha where ha.employee_id = e.employee_id and (ha.time_in is not null or ha.time_out is not null)) as has_attendance')
+            )
+            // Their latest separation record: when they left, and why.
+            ->leftJoin('employee_separations as s', 's.id', '=', DB::raw('(select max(s2.id) from employee_separations s2 where s2.employee_id = e.employee_id)'));
 
-        if ($this->statusFilter !== 'all') {
+        if ($this->statusFilter === 'due_regular') {
+            $query->whereNotIn('e.status', self::SEPARATED)->where('e.employment_type', '!=', 'Regular')
+                ->whereNotNull('e.regular_date')->where('e.regular_date', '<=', now()->addDays(self::REGULAR_SOON_DAYS)->toDateString());
+        } elseif ($this->statusFilter === 'all') {
+            $query->whereNotIn('e.status', self::SEPARATED);
+        } else {
             $query->where('e.status', $this->statusFilter);
         }
 
@@ -237,6 +262,14 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         // By surname, the way a staff list is read. Anyone without their name
         // in parts - the two admin accounts - falls back to the whole thing
         // rather than sorting to the top under an empty string.
+        // Anybody due for regularization stays at the top of the list - a
+        // reminder every time HR opens it - until they are made regular or
+        // leave. Soonest (or most overdue) first.
+        $due = "e.employment_type <> 'Regular' and e.regular_date is not null and e.regular_date <= '"
+            .now()->addDays(self::REGULAR_SOON_DAYS)->toDateString()."' and e.status not in ('resigned','terminated','awol','inactive')";
+        $query->orderByRaw("case when {$due} then 0 else 1 end")
+            ->orderByRaw("case when {$due} then e.regular_date end");
+
         return $query
             ->orderByRaw("COALESCE(NULLIF(u.last_name, ''), u.full_name)")
             ->orderByRaw("COALESCE(NULLIF(u.first_name, ''), u.full_name)");
@@ -264,6 +297,34 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         $this->companyFilter = $company;
         $this->resetPage();
+    }
+
+    public function toggleSeparated(): void
+    {
+        $this->showSeparated = ! $this->showSeparated;
+        $this->statusFilter = 'all';
+        $this->resetPage();
+        $this->loadEmployees();
+    }
+
+    /** Headcount by status, for the boxes at the top. */
+    public function getStatusCountsProperty(): array
+    {
+        $counts = DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')->whereNull('u.deleted_at')
+            ->when($this->companyFilter !== 'all', fn ($q) => $q->where('e.company', $this->companyFilter))
+            ->selectRaw('e.status, count(*) n')->groupBy('e.status')->pluck('n', 'status')->all();
+        $counts['resigned'] = ($counts['resigned'] ?? 0) + ($counts['inactive'] ?? 0);
+        $counts['due_regular'] = DB::table('employees as e')->whereNotIn('e.status', self::SEPARATED)
+            ->where('e.employment_type', '!=', 'Regular')->whereNotNull('e.regular_date')
+            ->where('e.regular_date', '<=', now()->addDays(self::REGULAR_SOON_DAYS)->toDateString())
+            ->when($this->companyFilter !== 'all', fn ($q) => $q->where('e.company', $this->companyFilter))->count();
+
+        return $counts;
+    }
+
+    public function getSeparatedCountProperty(): int
+    {
+        return DB::table('employees')->whereIn('status', self::SEPARATED)->count();
     }
 
     public function setStatusFilter(string $status): void
@@ -316,6 +377,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->biometric_id  = (string) ($row->biometric_id ?? '');
         $this->department_id = $row->department_id ?? '';
         $this->hire_date     = $row->hire_date;
+        $this->probation_date = $row->probation_date ? substr((string) $row->probation_date, 0, 10) : '';
+        $this->regular_date  = $row->regular_date ? substr((string) $row->regular_date, 0, 10) : '';
         // Pay is entered by the day; an older monthly figure is shown as its day rate.
         $this->salary        = ($row->pay_basis ?? 'monthly') === 'monthly'
             ? round((float) $row->salary / self::DAYS_A_MONTH, 2) : (float) ($row->daily_rate ?? 0);
@@ -324,7 +387,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->allowance     = ($row->pay_basis ?? 'monthly') === 'monthly'
             ? round((float) ($row->allowance ?? 0) / self::DAYS_A_MONTH, 2) : (float) ($row->allowance ?? 0);
         $this->payWas        = ['salary' => (float) $this->salary, 'allowance' => (float) $this->allowance];
-        $this->status        = $row->status;
+        $this->status        = $row->status === 'inactive' ? 'resigned' : $row->status;
+        $left = DB::table('employee_separations')->where('employee_id', $row->employee_id)->orderByDesc('id')->first();
+        $this->separationDate = $left ? substr((string) $left->separation_date, 0, 10) : '';
+        $this->separationReason = $left->reason ?? '';
         $this->role          = $row->role;
         $this->showModal     = true;
     }
@@ -521,16 +587,22 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'biometric_id'  => ['nullable', 'string', 'max:50',
                                 Rule::unique('employees', 'biometric_id')->ignore($this->editingId, 'employee_id')],
             'department_id' => ['nullable'],
-            'hire_date'     => ['required', 'date'],
+            'probation_date' => ['nullable', 'date_format:Y-m-d'],
+            'regular_date'  => ['nullable', 'date_format:Y-m-d', 'after_or_equal:probation_date'],
             'salary'        => ['nullable', 'numeric', 'min:0'],
             'allowance'     => ['nullable', 'numeric', 'min:0'],
             'status'        => ['required', Rule::in(array_keys($this->statuses))],
+            'separationDate' => [Rule::requiredIf(in_array($this->status, self::SEPARATED, true)), 'nullable', 'date_format:Y-m-d'],
+            'separationReason' => [Rule::requiredIf(in_array($this->status, self::SEPARATED, true)), 'nullable', 'string', 'max:120'],
             'employment_type' => ['required', Rule::in(array_keys($this->employmentTypes))],
             'company'       => ['required', Rule::in(array_keys($this->companies))],
             'role'          => ['required', Rule::in(array_keys($this->roles))],
         ]);
 
         $departmentId = $data['department_id'] !== '' ? (int) $data['department_id'] : null;
+        // Service is counted from the start of probation; without one, the
+        // date already on record (or today, for somebody new) stands.
+        $hireDate = ($data['probation_date'] ?? '') ?: ($this->hire_date ?: now()->toDateString());
         // Left null when blank: somebody with no shift set cannot be judged
         // late, which is the right answer until their hours are known.
         $shiftStart = ($data['shift_start'] ?? '') !== '' ? $data['shift_start'].':00' : null;
@@ -552,7 +624,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $allowance = $data['allowance'] === '' || $data['allowance'] === null ? 0 : $data['allowance'];
 
         if ($this->editingId) {
-            DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $userId) {
+            DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $userId, $hireDate) {
                 DB::table('users')->where('user_id', $userId)->update([
                     'full_name'  => PersonName::full($data['first_name'], $data['middle_name'] ?? '', $data['last_name']),
                     'first_name' => PersonName::tidy($data['first_name']),
@@ -565,6 +637,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 ]);
 
                 $this->saveCutoffRest((int) $this->editingId, $restDays);
+                if (in_array($data['status'], self::SEPARATED, true)) {
+                    $this->recordSeparation((int) $this->editingId, (int) $userId, $data['status'], $data['separationDate'], $data['separationReason']);
+                }
 
                 DB::table('employees')->where('employee_id', $this->editingId)->update([
                     'job_title'     => $data['job_title'],
@@ -576,7 +651,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     'immersion_until' => $immersionUntil,
                     'biometric_id'  => $biometricId,
                     'department_id' => $departmentId,
-                    'hire_date'     => $data['hire_date'],
+                    'hire_date'     => $hireDate,
+                    'probation_date' => $data['probation_date'] ?: null,
+                    'regular_date'  => $data['regular_date'] ?: null,
                     'salary'        => round((float) $salary * self::DAYS_A_MONTH, 2),
                     'allowance'     => $allowance,
                     'pay_basis'     => 'daily',
@@ -620,7 +697,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         // one the masterlist import gives, and must replace it at first sign-in.
         $password = \App\Console\Commands\ImportMasterlist::PASSWORD;
 
-        DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $password) {
+        DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $password, $hireDate) {
             $newUserId = DB::table('users')->insertGetId([
                 'full_name'            => PersonName::full($data['first_name'], $data['middle_name'] ?? '', $data['last_name']),
                 'first_name'           => PersonName::tidy($data['first_name']),
@@ -645,7 +722,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'rest_days'     => $restDays,
                 'biometric_id'  => $biometricId,
                 'department_id' => $departmentId,
-                'hire_date'     => $data['hire_date'],
+                'hire_date'     => $hireDate,
+                'probation_date' => $data['probation_date'] ?: null,
+                'regular_date'  => $data['regular_date'] ?: null,
                 'salary'        => round((float) $salary * self::DAYS_A_MONTH, 2),
                 'allowance'     => $allowance,
                 'pay_basis'     => 'daily',
@@ -664,7 +743,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 allowance: (float) $allowance,
                 payBasis: 'daily',
                 dailyRate: (float) $salary,
-                effectiveFrom: $data['hire_date'],
+                effectiveFrom: $hireDate,
                 reason: 'Starting pay',
             );
 
@@ -756,6 +835,58 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'documents'   => DB::table('employee_documents')->where('employee_id', $employeeId)->count(),
             'deletes'     => $payslips === 0,
         ];
+        $this->separationDate = $this->lastWorkedDay($employeeId) ?? now()->toDateString();
+        $this->separationReason = '';
+    }
+
+    /**
+     * Somebody leaving: the kind (resigned, terminated, AWOL) on the employee,
+     * the day and the reason in employee_separations, and no more sign-in.
+     */
+    private function recordSeparation(int $employeeId, int $userId, string $status, string $date, string $reason): void
+    {
+        $was = DB::table('employees')->where('employee_id', $employeeId)->value('status');
+        DB::table('employees')->where('employee_id', $employeeId)->update(['status' => $status, 'updated_at' => now()]);
+        $latest = DB::table('employee_separations')->where('employee_id', $employeeId)->orderByDesc('id')->first();
+        $values = ['separation_date' => $date, 'reason' => trim($reason), 'status' => $status,
+            'processed_by' => auth()->id(), 'updated_at' => now()];
+        if ($latest) {
+            DB::table('employee_separations')->where('id', $latest->id)->update($values);
+        } else {
+            DB::table('employee_separations')->insert(['employee_id' => $employeeId, 'created_at' => now()] + $values);
+        }
+        if (! in_array($was, self::SEPARATED, true)) {
+            // Cannot sign in again: the password is replaced by one nobody holds.
+            DB::table('users')->where('user_id', $userId)
+                ->update(['password' => Hash::make(Str::password(32)), 'must_change_password' => true, 'updated_at' => now()]);
+        }
+        \App\Services\Auditor::record('update', 'employees', $employeeId, ['status' => $was],
+            ['status' => $status, 'separation_date' => $date, 'reason' => $reason]);
+    }
+
+    /** Probation runs six months: the regular date follows the probation date. */
+    public function updatedProbationDate(string $value): void
+    {
+        if ($value !== '') {
+            $this->regular_date = \Carbon\Carbon::parse($value)->addMonthsNoOverflow(6)->toDateString();
+        }
+    }
+
+    /** The last day they actually worked: their last scan or entered time. */
+    private function lastWorkedDay(int $employeeId): ?string
+    {
+        $day = DB::table('hr_attendance')->where('employee_id', $employeeId)
+            ->where(fn ($q) => $q->whereNotNull('time_in')->orWhereNotNull('time_out'))->max('date');
+
+        return $day ? substr((string) $day, 0, 10) : null;
+    }
+
+    /** Marking somebody as leaving in Edit starts the last day at their last worked day. */
+    public function updatedStatus(string $value): void
+    {
+        if (in_array($value, self::SEPARATED, true) && $this->separationDate === '' && $this->editingId) {
+            $this->separationDate = $this->lastWorkedDay((int) $this->editingId) ?? '';
+        }
     }
 
     public function cancelRemove(): void
@@ -794,16 +925,16 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
             session()->flash('success', $removing['name'].' was removed, along with their account and files.');
         } else {
-            DB::transaction(function () use ($removing) {
-                DB::table('employees')->where('employee_id', $removing['employee_id'])
-                    ->update(['status' => 'inactive', 'updated_at' => now()]);
-                // Cannot sign in again: the password is replaced by one nobody
-                // holds, and the account is held at the change-password screen.
-                DB::table('users')->where('user_id', $removing['user_id'])
-                    ->update(['password' => Hash::make(Str::password(32)), 'must_change_password' => true, 'updated_at' => now()]);
-            });
+            $this->validate([
+                'leaveAs' => ['required', Rule::in(['resigned', 'terminated', 'awol'])],
+                'separationDate' => ['required', 'date_format:Y-m-d'],
+                'separationReason' => ['required', 'string', 'max:120'],
+            ], [], ['separationDate' => 'last day', 'separationReason' => 'reason']);
+            DB::transaction(fn () => $this->recordSeparation((int) $removing['employee_id'], (int) $removing['user_id'],
+                $this->leaveAs, $this->separationDate, $this->separationReason));
 
-            session()->flash('success', $removing['name'].' was deactivated and can no longer sign in. Their payslips are kept.');
+            session()->flash('success', $removing['name'].' is now '.$this->statuses[$this->leaveAs].' and can no longer sign in. Their payslips are kept.');
+            $this->reset(['separationDate', 'separationReason', 'leaveAs']);
         }
 
         $this->removing = null;
@@ -833,6 +964,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->biometric_id  = '';
         $this->department_id = '';
         $this->hire_date     = now()->toDateString();
+        $this->probation_date = '';
+        $this->regular_date  = '';
         $this->first_name    = '';
         $this->middle_name   = '';
         $this->last_name     = '';
@@ -866,6 +999,29 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 <i class="fas fa-user-plus"></i> Add employee
             </button>
         </div>
+    </div>
+
+    {{-- Click a box to list those people. --}}
+    @php
+        $counts = $this->statusCounts;
+        $boxes = [
+            'all' => ['Current employees', ($counts['active'] ?? 0) + ($counts['on_leave'] ?? 0), 'text-gray-900'],
+            'active' => ['Active', $counts['active'] ?? 0, 'text-emerald-700'],
+            'on_leave' => ['On leave', $counts['on_leave'] ?? 0, 'text-sky-700'],
+            'resigned' => ['Resigned', $counts['resigned'] ?? 0, 'text-gray-600'],
+            'terminated' => ['Terminated', $counts['terminated'] ?? 0, 'text-red-700'],
+            'awol' => ['AWOL', $counts['awol'] ?? 0, 'text-amber-700'],
+            'due_regular' => ['Due for regular', $counts['due_regular'] ?? 0, 'text-amber-600'],
+        ];
+    @endphp
+    <div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        @foreach ($boxes as $key => [$label, $n, $tone])
+            <button type="button" wire:click="setStatusFilter('{{ $key }}')"
+                    class="rounded-xl border bg-white p-4 text-left shadow-sm transition-colors {{ $statusFilter === $key ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200 hover:border-gray-300' }}">
+                <div class="text-xs font-medium uppercase tracking-wide text-gray-500">{{ $label }}</div>
+                <div class="mt-1 text-2xl font-bold {{ $tone }}">{{ $n }}</div>
+            </button>
+        @endforeach
     </div>
 
     @if ($showDepartments)
@@ -1026,10 +1182,20 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             {{-- Phones get one card per person: eight columns do not fit. --}}
             <ul class="md:hidden divide-y divide-gray-200">
                 @foreach ($employees as $employee)
-                    <li wire:key="emp-card-{{ $employee->employee_id }}" class="p-4">
+                    @php
+                        $regIn = $employee->regular_date && strcasecmp((string) $employee->employment_type, 'Regular') !== 0 && ! in_array($employee->status, self::SEPARATED, true)
+                            ? (int) now()->startOfDay()->diffInDays(\Carbon\Carbon::parse($employee->regular_date), false) : null;
+                        $regTone = $regIn === null ? '' : ($regIn < 0 ? 'bg-red-100 border-l-4 border-red-500' : ($regIn <= self::REGULAR_SOON_DAYS ? 'bg-amber-100 border-l-4 border-amber-500' : ''));
+                    @endphp
+                    <li wire:key="emp-card-{{ $employee->employee_id }}" class="p-4 {{ $regTone }}">
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
                                 <div class="font-semibold text-gray-900">{{ $employee->full_name }}</div>
+                                @if ($regTone !== '')
+                                    <span class="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold {{ $regIn < 0 ? 'bg-red-600 text-white' : 'bg-amber-500 text-white' }}">
+                                        <i class="fas fa-bell"></i> Regularization {{ $regIn < 0 ? 'overdue since' : 'due' }} {{ \Carbon\Carbon::parse($employee->regular_date)->format('M j') }}
+                                    </span>
+                                @endif
                                 <div class="text-sm text-gray-700 truncate">{{ $employee->job_title ?: '—' }}</div>
                                 <div class="text-xs text-gray-500 truncate">{{ $employee->email }}</div>
                             </div>
@@ -1038,7 +1204,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 @elseif ($employee->status === 'on_leave') status-onleave
                                 @elseif ($employee->status === 'terminated') status-terminated
                                 @else status-inactive @endif">
-                                {{ $statuses[$employee->status] ?? $employee->status }}
+                                {{ $statuses[$employee->status] ?? $employee->status }}{{ $employee->separation_date && $employee->has_attendance && in_array($employee->status, self::SEPARATED, true) ? ' · Last day '.\Carbon\Carbon::parse($employee->separation_date)->format('M j, Y') : '' }}
                             </span>
                         </div>
                         <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
@@ -1046,6 +1212,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             <span>· {{ $roles[$employee->role] ?? $employee->role }}</span>
                             @if ($employee->company)<span>· {{ $employee->company }}</span>@endif
                             @if ($employee->employment_type)<span>· {{ $employee->employment_type }}</span>@endif
+                            @if ($regTone !== '')<span class="{{ $regIn < 0 ? 'text-red-700' : 'text-amber-700' }} font-semibold">· Regular {{ \Carbon\Carbon::parse($employee->regular_date)->format('M j') }}</span>@endif
                         </div>
                         @if ($employee->must_change_password)
                             <div class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-700">
@@ -1080,9 +1247,19 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     </thead>
                     <tbody>
                         @foreach ($employees as $employee)
-                            <tr wire:key="emp-{{ $employee->employee_id }}">
+                            @php
+                                $regIn = $employee->regular_date && strcasecmp((string) $employee->employment_type, 'Regular') !== 0 && ! in_array($employee->status, self::SEPARATED, true)
+                                    ? (int) now()->startOfDay()->diffInDays(\Carbon\Carbon::parse($employee->regular_date), false) : null;
+                                $regTone = $regIn === null ? '' : ($regIn < 0 ? 'bg-red-100 border-l-4 border-red-500' : ($regIn <= self::REGULAR_SOON_DAYS ? 'bg-amber-100 border-l-4 border-amber-500' : ''));
+                            @endphp
+                            <tr wire:key="emp-{{ $employee->employee_id }}" class="{{ $regTone }}">
                                 <td>
                                     <div class="font-medium text-gray-900">{{ $employee->full_name }}</div>
+                                    @if ($regTone !== '')
+                                        <span class="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold {{ $regIn < 0 ? 'bg-red-600 text-white' : 'bg-amber-500 text-white' }}">
+                                            <i class="fas fa-bell"></i> Regularization {{ $regIn < 0 ? 'overdue since' : 'due' }} {{ \Carbon\Carbon::parse($employee->regular_date)->format('M j') }}
+                                        </span>
+                                    @endif
                                     <div class="text-sm text-gray-600">{{ $employee->email }}</div>
                                     @if ($employee->must_change_password)
                                         <div class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-amber-700">
@@ -1098,6 +1275,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 </td>
                                 <td>
                                     <span class="text-sm text-gray-700">{{ $employee->employment_type ?: '-' }}</span>
+                                    @if ($employee->regular_date)
+                                        <div class="text-xs {{ $regIn !== null && $regIn < 0 ? 'text-red-700 font-semibold' : ($regIn !== null && $regIn <= self::REGULAR_SOON_DAYS ? 'text-amber-700 font-semibold' : 'text-gray-500') }}">
+                                            Regular {{ \Carbon\Carbon::parse($employee->regular_date)->format('M j, Y') }}
+                                            @if ($regIn !== null && $regIn < 0) · overdue @elseif ($regIn !== null && $regIn <= self::REGULAR_SOON_DAYS) · in {{ $regIn }} day{{ $regIn === 1 ? '' : 's' }} @endif
+                                        </div>
+                                    @endif
                                 </td>
                                 <td>
                                     <span class="status-badge
@@ -1105,7 +1288,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         @elseif ($employee->status === 'on_leave') status-onleave
                                         @elseif ($employee->status === 'terminated') status-terminated
                                         @else status-inactive @endif">
-                                        {{ $statuses[$employee->status] ?? $employee->status }}
+                                        {{ $statuses[$employee->status] ?? $employee->status }}{{ $employee->separation_date && $employee->has_attendance && in_array($employee->status, self::SEPARATED, true) ? ' · Last day '.\Carbon\Carbon::parse($employee->separation_date)->format('M j, Y') : '' }}
                                     </span>
                                 </td>
                                 <td>
@@ -1149,7 +1332,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 <div class="relative w-full max-w-lg bg-white rounded-xl shadow-xl">
                     <div class="px-6 py-4 border-b border-gray-200">
                         <h2 class="text-lg font-semibold text-gray-900">
-                            Remove {{ $removing['name'] }}?
+                            {{ $removing['deletes'] ? 'Remove' : 'Mark as leaving:' }} {{ $removing['name'] }}{{ $removing['deletes'] ? '?' : '' }}
                         </h2>
                     </div>
 
@@ -1165,9 +1348,23 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         @else
                             <p>
                                 They have {{ $removing['payslips'] }} payslip(s), which the company has to keep,
-                                so they are not deleted. They will be marked inactive and will no longer be able
-                                to sign in. Their attendance, payslips and documents stay as they are.
+                                so they are not deleted. They leave the employee list and can no longer sign in.
+                                Their attendance, payslips and documents stay as they are.
                             </p>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <label class="block"><span class="form-label">Leaving as</span>
+                                    <select wire:model="leaveAs" class="form-input">
+                                        <option value="resigned">Resigned</option>
+                                        <option value="terminated">Terminated</option>
+                                        <option value="awol">AWOL</option>
+                                    </select></label>
+                                <label class="block"><span class="form-label">Last day</span>
+                                    <input type="date" wire:model="separationDate" class="form-input">
+                                    @error('separationDate') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror</label>
+                                <label class="block sm:col-span-2"><span class="form-label">Reason</span>
+                                    <input type="text" wire:model="separationReason" maxlength="120" class="form-input" placeholder="e.g. Personal reasons, End of contract, No call no show since Sep 20">
+                                    @error('separationReason') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror</label>
+                            </div>
                             <p class="text-gray-600">Set their status back to active under Edit to undo this.</p>
                         @endif
                     </div>
@@ -1178,7 +1375,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         <button wire:click="remove" type="button"
                                 class="px-4 py-2 text-sm font-semibold text-white rounded-lg"
                                 style="background: var(--brand)">
-                            {{ $removing['deletes'] ? 'Delete permanently' : 'Deactivate' }}
+                            {{ $removing['deletes'] ? 'Delete permanently' : 'Save' }}
                         </button>
                     </div>
                 </div>
@@ -1296,9 +1493,14 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 @error('role') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
                             <div>
-                                <label class="form-label" for="hire_date">Hire date</label>
-                                <input id="hire_date" type="date" wire:model="hire_date" class="form-input">
-                                @error('hire_date') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                                <label class="form-label" for="probation_date">Probation date</label>
+                                <input id="probation_date" type="date" wire:model.live="probation_date" class="form-input">
+                                @error('probation_date') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="form-label" for="regular_date">Regular date <span class="font-normal normal-case text-gray-500">(6 months after probation)</span></label>
+                                <input id="regular_date" type="date" wire:model="regular_date" class="form-input">
+                                @error('regular_date') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
                             {{-- Two figures, because they are treated differently:
                                  basic carries the tax and the contributions, an
@@ -1370,13 +1572,26 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             </div>
                             <div>
                                 <label class="form-label" for="status">Status</label>
-                                <select id="status" wire:model="status" class="form-input">
+                                <select id="status" wire:model.live="status" class="form-input">
                                     @foreach ($statuses as $value => $label)
                                         <option value="{{ $value }}">{{ $label }}</option>
                                     @endforeach
                                 </select>
                                 @error('status') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
+                            @if (in_array($status, ['resigned', 'terminated', 'awol'], true))
+                                <div>
+                                    <label class="form-label" for="separationDate">Last day <span class="font-normal normal-case text-gray-500">(from their attendance)</span></label>
+                                    <input id="separationDate" type="date" wire:model="separationDate" class="form-input">
+                                    @error('separationDate') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="form-label" for="separationReason">Reason</label>
+                                    <input id="separationReason" type="text" wire:model="separationReason" maxlength="120" class="form-input"
+                                           placeholder="e.g. Personal reasons, End of contract, No call no show since Sep 20">
+                                    @error('separationReason') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                                </div>
+                            @endif
                         </div>
                     </div>
 

@@ -174,6 +174,23 @@ class BiometricImportTest extends TestCase
         $this->assertSame(['2020-06-26', '2020-06-27'], $dates, 'a check-in the next morning starts a new day');
     }
 
+    /** Scheduled 7AM-7PM, worked noon to midnight: the midnight scan still ends that duty. */
+    public function test_a_guard_noon_to_midnight_duty_is_one_day_whatever_the_schedule_said(): void
+    {
+        $bio = $this->freeBiometricId();
+        $id = $this->employee($bio, '07:00:00', 'SECURITY GUARD', '19:00:00');
+
+        (new PunchImporter)->import([
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-29 12:00:04', 'state' => 0],
+            ['biometric_id' => $bio, 'timestamp' => '2020-06-30 00:00:07', 'state' => 1],
+        ]);
+
+        $rows = DB::table('hr_attendance')->where('employee_id', $id)->get();
+        $this->assertCount(1, $rows, 'the midnight time-out is not a day of its own');
+        $this->assertSame('2020-06-29', substr((string) $rows[0]->date, 0, 10));
+        $this->assertSame('2020-06-30 00:00:07', (string) $rows[0]->time_out);
+    }
+
     /** With the shift set, the shift decides: 22:00 to 06:00 ends the next morning. */
     public function test_an_overnight_shift_set_on_the_employee(): void
     {

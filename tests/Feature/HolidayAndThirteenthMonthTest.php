@@ -189,6 +189,8 @@ class HolidayAndThirteenthMonthTest extends TestCase
     public function test_anything_above_the_exemption_is_flagged_rather_than_guessed(): void
     {
         // A year's basic big enough to push the 13th month past 90,000.
+        // The month cap is a month's salary, so this salary has to match.
+        DB::table('employees')->where('employee_id', $this->employeeId)->update(['salary' => 1200000, 'pay_basis' => 'monthly']);
         $this->payslip('2020-01-01', 1200000);
 
         $figures = (new ThirteenthMonth)->forEmployee($this->employeeId, 2020);

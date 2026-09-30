@@ -69,29 +69,36 @@ class PunchImporter
         $shift = self::$shiftMemo[$employee->employee_id.'|'.$yesterday]
             ??= ShiftSchedule::forEmployeeDate($employee, $yesterday);
 
+        $guard = ShiftSchedule::isGuard($employee);
         if ($shift['start'] && $shift['end']) {
             if ($shift['rest'] || ! ShiftSchedule::isOvernight($shift['start'], $shift['end'])) {
-                return $today;
-            }
-            $cutoff = $moment->copy()->setTimeFromTimeString($shift['end'])->addHours(self::NIGHT_OUT_GRACE_HOURS);
+                // Guards swap duties, so a scan in the small hours after an
+                // afternoon or evening start still ends yesterday's duty,
+                // whatever the schedule said.
+                if (! $guard || $moment->hour >= 6) {
+                    return $today;
+                }
+            } else {
+                $cutoff = $moment->copy()->setTimeFromTimeString($shift['end'])->addHours(self::NIGHT_OUT_GRACE_HOURS);
 
-            return $moment->lt($cutoff) ? $yesterday : $today;
+                return $moment->lt($cutoff) ? $yesterday : $today;
+            }
         }
 
-        if (! ShiftSchedule::isGuard($employee) || $moment->hour >= 12) {
+        if (! $guard || $moment->hour >= 12) {
             return $today;
         }
 
         // The evening scan that began the duty: in this batch, or already
         // stored from an earlier sync.
-        $evening = $previousPunch && $previousPunch->toDateString() === $yesterday && $previousPunch->hour >= 17
+        $evening = $previousPunch && $previousPunch->toDateString() === $yesterday && $previousPunch->hour >= 11
             ? $previousPunch
             : null;
         if (! $evening) {
             $storedIn = self::$storedInMemo[$employee->employee_id.'|'.$yesterday]
                 ??= (string) DB::table('hr_attendance')->where('employee_id', $employee->employee_id)
                     ->whereDate('date', $yesterday)->value('time_in');
-            $evening = $storedIn && Carbon::parse($storedIn)->hour >= 17 ? Carbon::parse($storedIn) : null;
+            $evening = $storedIn && Carbon::parse($storedIn)->hour >= 11 ? Carbon::parse($storedIn) : null;
         }
 
         return $evening && $evening->diffInHours($moment) <= 16 ? $yesterday : $today;

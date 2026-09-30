@@ -173,10 +173,15 @@ class EmployeeAccountsTest extends TestCase
         Volt::actingAs($this->hr())->test('hr.employees')
             ->call('confirmRemove', $employeeId)
             ->assertSet('removing.deletes', false)
-            ->call('remove');
+            ->call('remove')
+            ->assertHasErrors(['separationReason'])
+            ->set('leaveAs', 'resigned')->set('separationDate', '2018-02-01')->set('separationReason', 'Personal reasons')
+            ->call('remove')
+            ->assertHasNoErrors();
 
         // The payslip is a record the company keeps, so the person stays too.
-        $this->assertDatabaseHas('employees', ['employee_id' => $employeeId, 'status' => 'inactive']);
+        $this->assertDatabaseHas('employees', ['employee_id' => $employeeId, 'status' => 'resigned']);
+        $this->assertDatabaseHas('employee_separations', ['employee_id' => $employeeId, 'reason' => 'Personal reasons']);
         $this->assertDatabaseHas('hr_payroll', ['employee_id' => $employeeId]);
 
         // But the account no longer opens with the password they were given.

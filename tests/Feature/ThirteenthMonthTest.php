@@ -223,6 +223,7 @@ class ThirteenthMonthTest extends TestCase
     public function test_the_excess_over_90000_is_flagged_rather_than_guessed_at(): void
     {
         // A year big enough to clear the ceiling: 1,200,000 basic -> 100,000.
+        DB::table('employees')->where('employee_id', $this->employeeId)->update(['salary' => 100000, 'pay_basis' => 'monthly']);
         $this->aFullYear(['basic_pay' => 50000]);
 
         $f = $this->figures();
