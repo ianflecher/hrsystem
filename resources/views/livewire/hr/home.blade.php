@@ -32,6 +32,8 @@ class extends Component
     public $recentHires = [];
     public $upcomingLeave = [];
     public $attendanceToday = [];
+    /** The whole day by status - the list above holds only the latest few check-ins. */
+    public array $todayCounts = [];
     public $monthlyAttendance = [];
     public $salaryDistribution = [];
     public $applicationStats = [];
@@ -261,6 +263,12 @@ class extends Component
             ->orderBy('a.time_in', 'desc')
             ->limit(8)
             ->get();
+
+        $this->todayCounts = DB::table('hr_attendance as a')
+            ->join('employees as e', 'a.employee_id', '=', 'e.employee_id')
+            ->whereDate('a.date', $today)
+            ->selectRaw('a.status, count(*) as n')->groupBy('a.status')
+            ->pluck('n', 'status')->map(fn ($n) => (int) $n)->all();
     }
     
     private function loadMonthlyAttendance()
@@ -646,7 +654,7 @@ class extends Component
                     <h3 class="font-bold text-gray-900 mb-2">Attendance</h3>
                     <p class="text-sm text-gray-700 font-medium">Today's summary</p>
                     <div class="mt-2 text-green-600 text-xs font-bold">
-                        {{ $attendanceToday->where('status', 'present')->count() }} present
+                        {{ $todayCounts['present'] ?? 0 }} present
                     </div>
                 </div>
             </a>
@@ -992,24 +1000,24 @@ class extends Component
     <div class="space-y-4">
         <div class="flex justify-between items-center p-3 bg-green-50 border border-green-200 rounded-lg">
             <span class="font-medium text-green-800">Present</span>
-            <span class="text-2xl font-bold text-green-900">{{ $attendanceToday->where('status', 'present')->count() }}</span>
+            <span class="text-2xl font-bold text-green-900">{{ $todayCounts['present'] ?? 0 }}</span>
         </div>
         <div class="flex justify-between items-center p-3 bg-red-50 border border-red-200 rounded-lg">
             <span class="font-medium text-red-800">Absent</span>
-            <span class="text-2xl font-bold text-red-900">{{ $attendanceToday->where('status', 'absent')->count() }}</span>
+            <span class="text-2xl font-bold text-red-900">{{ $todayCounts['absent'] ?? 0 }}</span>
         </div>
         <div class="flex justify-between items-center p-3 bg-amber-50 border border-amber-200 rounded-lg">
             <span class="font-medium text-amber-800">Late</span>
-            <span class="text-2xl font-bold text-amber-900">{{ $attendanceToday->where('status', 'late')->count() }}</span>
+            <span class="text-2xl font-bold text-amber-900">{{ $todayCounts['late'] ?? 0 }}</span>
         </div>
         <div class="flex justify-between items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <span class="font-medium text-blue-800">On Leave</span>
-            <span class="text-2xl font-bold text-blue-900">{{ $attendanceToday->where('status', 'on_leave')->count() }}</span>
+            <span class="text-2xl font-bold text-blue-900">{{ $todayCounts['on_leave'] ?? 0 }}</span>
         </div>
         <div class="pt-4 border-t border-gray-200">
             <div class="flex justify-between items-center p-3 bg-slate-50 border border-slate-200 rounded-lg">
             <span class="font-medium text-gray-700">Total Check-ins</span>
-            <span class="text-2xl font-bold text-gray-900">{{ $attendanceToday->count() }}</span>
+            <span class="text-2xl font-bold text-gray-900">{{ ($todayCounts['present'] ?? 0) + ($todayCounts['late'] ?? 0) }}</span>
             </div>
         </div>
     </div>
