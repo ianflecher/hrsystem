@@ -12,6 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Behind a host's load balancer (Render): trust its forwarded HTTPS,
+        // so links and secure cookies are https:// and not http://.
+        $middleware->trustProxies(at: '*');
+
         // Appended to the whole web group rather than one route group, so no
         // corner of the app is a way round it. It does nothing unless
         // must_change_password is set, and that defaults to false.
