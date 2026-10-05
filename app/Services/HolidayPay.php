@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Support\Statutory;
 use App\Support\Tardiness;
 use App\Support\ShiftSchedule;
+use App\Support\WorkDay;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -31,18 +32,21 @@ class HolidayPay
         $attendance = DB::table('hr_attendance')
             ->where('employee_id', $employee->employee_id)
             ->whereBetween('date', [$periodStart, $periodEnd])
-            ->whereNotNull('time_in')->whereNotNull('time_out')->get();
+            ->whereNotNull('time_in')->get();
 
-        $dailyRate = Tardiness::dailyRate((float) $employee->salary);
+        $dailyRate = (float) ($employee->daily_rate ?? 0) > 0 ? (float) $employee->daily_rate : Tardiness::dailyRate((float) $employee->salary);
         $hourlyRate = $dailyRate / Tardiness::HOURS_PER_DAY;
         $hired = $employee->hire_date ? substr((string) $employee->hire_date, 0, 10) : null;
-        $amount = 0.0; $regularDays = 0; $specialDays = 0; $specialWorkingDays = 0;
+        $amount = 0.0; $legalAmount = 0.0; $regularDays = 0; $specialDays = 0; $specialWorkingDays = 0;
         $seen = [];
         $rules = Statutory::tableForDate('holiday', $periodStart);
 
         foreach ($attendance as $row) {
+            $effectiveOut = WorkDay::effectiveOut($row);
+            if (! $effectiveOut) continue;
+
             $start = Carbon::parse($row->time_in);
-            $end = Carbon::parse($row->time_out);
+            $end = $effectiveOut;
             if ($end->lessThanOrEqualTo($start)) $end->addDay();
 
             for ($date = $start->copy()->startOfDay(); $date->lte($end); $date->addDay()) {
@@ -69,7 +73,9 @@ class HolidayPay
                     default => 1.00,
                 };
 
-                $amount += $hourlyRate * $hours * max(0, $multiplier - 1.00);
+                $premium = $hourlyRate * $hours * max(0, $multiplier - 1.00);
+                $amount += $premium;
+                if ($type === 'regular') $legalAmount += $premium;
                 if (! isset($seen[$dateKey])) {
                     $seen[$dateKey] = true;
                     if ($type === 'regular') $regularDays++; elseif ($type === 'special_working') $specialWorkingDays++; else $specialDays++;
@@ -79,6 +85,8 @@ class HolidayPay
 
         return [
             'amount'=>round($amount,2),
+            'legal'=>round($legalAmount,2),
+            'special'=>round($amount - $legalAmount,2),
             'days'=>count($seen),
             'regularDays'=>$regularDays,
             'specialDays'=>$specialDays,

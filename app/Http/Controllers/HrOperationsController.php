@@ -13,7 +13,7 @@ class HrOperationsController extends Controller
 {
     public function payrollControl(Request $request)
     {
-        \App\Support\PeopleAccess::hr();
+        \App\Support\PeopleAccess::pay();
         $period = PayPeriod::fromStart($request->get('period', PayPeriod::recent(1)[0]->start));
         app(PayrollOperations::class)->refreshExceptions($period);
         $exceptions = DB::table('payroll_exceptions as x')->leftJoin('employees as e', 'x.employee_id', '=', 'e.employee_id')->leftJoin('users as u', 'e.user_id', '=', 'u.user_id')->where('x.period_start', $period->start)->where('x.resolved', false)->select('x.*', 'u.full_name')->orderByRaw("FIELD(x.severity, 'high','medium','low')")->orderBy('u.full_name')->get();
@@ -41,30 +41,36 @@ class HrOperationsController extends Controller
     {
         $employee = DB::table('employees as e')->join('users as u', 'e.user_id', '=', 'u.user_id')->leftJoin('departments as d', 'e.department_id', '=', 'd.department_id')->where('e.employee_id', $id)->select('e.*', 'u.full_name', 'u.email', 'd.department_name')->first();
         abort_unless($employee, 404);
+        $teamDepartmentIds = \App\Support\PeopleAccess::teamDashboardDepartmentIds();
+        // HR opens anybody; a supervisor or leader only their own team.
+        if (! \App\Support\PeopleAccess::isHr() && request()->routeIs('hr.operations.employee', 'employee.team.employee') && $teamDepartmentIds !== []) {
+            abort_unless(in_array((int) $employee->department_id, $teamDepartmentIds, true), 403);
+        }
         \App\Support\PeopleAccess::managerForEmployee($id);
-        $payroll = \App\Support\PeopleAccess::isHr()
+        $payroll = \App\Support\PeopleAccess::canSeePay()
             ? DB::table('hr_payroll')->where('employee_id', $id)->orderByDesc('period_end')->limit(12)->get()
             : collect();
         $attendance = DB::table('hr_attendance')->where('employee_id', $id)->orderByDesc('date')->limit(30)->get();
         $leave = DB::table('leaves')->where('employee_id', $id)->orderByDesc('start_date')->limit(20)->get();
-        $loans = \App\Support\PeopleAccess::isHr() ? DB::table('employee_loans')->where('employee_id', $id)->orderByDesc('id')->get() : collect();
+        $loans = \App\Support\PeopleAccess::canSeePay() ? DB::table('employee_loans')->where('employee_id', $id)->orderByDesc('id')->get() : collect();
         $documents = \App\Support\PeopleAccess::isHr() ? DB::table('employee_documents')->where('employee_id', $id)->orderByDesc('id')->get() : collect();
-        $salaryHistory = \App\Support\PeopleAccess::isHr() ? DB::table('employee_salary_history')->where('employee_id', $id)->orderByDesc('effective_from')->get() : collect();
+        $salaryHistory = \App\Support\PeopleAccess::canSeePay() ? DB::table('employee_salary_history')->where('employee_id', $id)->orderByDesc('effective_from')->get() : collect();
         return view('hr.operations.employee-360', compact('employee', 'payroll', 'attendance', 'leave', 'loans', 'documents', 'salaryHistory'));
     }
 
     public function manager()
     {
         \App\Support\PeopleAccess::manager();
-        $departmentIds = \App\Support\PeopleAccess::managedDepartmentIds();
+        $departmentIds = \App\Support\PeopleAccess::teamDashboardDepartmentIds();
         $employees = DB::table('employees as e')
             ->join('users as u', 'e.user_id', '=', 'u.user_id')
             ->leftJoin('departments as d', 'e.department_id', '=', 'd.department_id')
             ->where('e.status', 'active')
-            ->when(! \App\Support\PeopleAccess::isHr(), fn($q) => $q->whereIn('e.department_id', $departmentIds)->where('e.user_id', '!=', auth()->id())
+            ->when(\App\Support\PeopleAccess::isHr(), fn ($q) => $q->whereIn('e.department_id', $departmentIds))
+            ->when(! \App\Support\PeopleAccess::isHr(), fn($q) => \App\Support\PeopleAccess::scopeTeam($q)->where('e.user_id', '!=', auth()->id())
                 // Nobody opens their own profile here, and a leader does not open their supervisor's.
                 ->when(auth()->user()->role === 'leader', fn($q) => $q->where('u.role', '!=', 'supervisor')))
-            ->select('e.employee_id','e.job_title','e.department_id','u.full_name','d.department_name','e.shift_start','e.shift_end','e.rest_days')
+            ->select('e.employee_id','e.employee_no','e.job_title','e.department_id','e.pay_basis','u.full_name','d.department_name','e.shift_start','e.shift_end','e.rest_days')
             ->orderBy('u.full_name')
             ->get();
         // This cutoff's rest days per person: a calendar mark wins over the weekly default.
@@ -80,23 +86,57 @@ class HrOperationsController extends Controller
                 $e->cutoffRest[$day->toDateString()] = $mark ? (bool) $mark->rest_day : \App\Support\WorkWeek::restsOn($e->rest_days, $day);
             }
         }
+        $teamWorked = DB::table('hr_attendance')
+            ->whereIn('employee_id', $employees->pluck('employee_id'))
+            ->whereBetween('date', [$cutoff->start, $cutoff->end])
+            ->get()
+            ->keyBy(fn ($a) => $a->employee_id.'|'.substr((string) $a->date, 0, 10));
+        $teamLeaves = collect();
+        DB::table('leaves')
+            ->whereIn('employee_id', $employees->pluck('employee_id'))
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $cutoff->end)
+            ->whereDate('end_date', '>=', $cutoff->start)
+            ->get()
+            ->each(function ($leave) use ($cutoff, $teamLeaves) {
+                $start = \Carbon\Carbon::parse(max((string) $leave->start_date, $cutoff->start));
+                $end = \Carbon\Carbon::parse(min((string) $leave->end_date, $cutoff->end));
+                for ($day = $start; $day->lte($end); $day->addDay()) {
+                    $teamLeaves->put($leave->employee_id.'|'.$day->toDateString(), $leave);
+                }
+            });
         $pendingLeave = DB::table('leaves as l')->join('employees as e','l.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')
-            ->where('l.status', \App\Support\PeopleAccess::isHr() ? 'pending_hr' : 'pending')
-            // Their own team's leave - but a supervisor's leave, from any
-            // department, is only ever the supervisors' approver's to decide.
+            // HR sees everything waiting, to know - not to decide.
+            ->when(\App\Support\PeopleAccess::isHr(), fn($q) => $q->whereIn('l.status', ['pending', 'pending_hr'])->whereIn('e.department_id', $departmentIds))
+            // A team's staff for its supervisor or leader; supervisors' and
+            // leaders' leave, and everything already sent on, for Ma'am An.
             ->when(! \App\Support\PeopleAccess::isHr(), fn($q)=>$q->where('e.user_id','!=',auth()->id())
-                ->where(fn($q) => $q->where(fn($q) => $q->whereIn('e.department_id',$departmentIds)->where('u.role', '!=', 'supervisor'))
-                    ->when(\App\Support\PeopleAccess::isSupervisorLeaveApprover(), fn($q) => $q->orWhere('u.role', 'supervisor'))))
+                ->where(fn($q) => $q->where(fn($q) => \App\Support\PeopleAccess::scopeTeam($q->where('l.status', 'pending'))
+                        ->when(! \App\Support\PeopleAccess::isOperationsSupervisor(), fn($q) => $q->whereNotIn('u.role', ['supervisor', 'leader'])))
+                    ->when(\App\Support\PeopleAccess::isOperationsSupervisor(), fn($q) => $q->orWhere('l.status', 'pending_hr'))))
             ->select('l.*','u.full_name')->orderBy('l.start_date')->get();
+        $leaveBalances = app(\App\Services\LeaveBalances::class);
+        foreach ($pendingLeave as $leave) {
+            $year = (int) substr((string) $leave->start_date, 0, 4);
+            $balance = $leaveBalances->forEmployee((int) $leave->employee_id, $year)[$leave->leave_type] ?? null;
+            $leave->paid_balance = $balance;
+            $leave->paid_used = $balance ? (float) ($balance['used'] ?? 0) : null;
+            $leave->paid_pending = $balance ? (float) ($balance['pending'] ?? 0) : null;
+            $leave->paid_remaining = $balance ? $balance['remaining'] : null;
+            $leave->paid_entitled = $balance ? $balance['entitled'] : null;
+        }
         $pendingOt = DB::table('overtime_requests as o')->join('employees as e','o.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')
-            ->where('o.status', \App\Support\PeopleAccess::isHr() ? 'pending_hr' : 'pending')
-            ->when(! \App\Support\PeopleAccess::isHr(), fn($q)=>$q->whereIn('e.department_id',$departmentIds)->where('e.user_id','!=',auth()->id())
-                ->when(auth()->user()->role === 'leader', fn($q) => $q->where('u.role', '!=', 'supervisor')))
+            ->when(\App\Support\PeopleAccess::isHr(), fn($q) => $q->whereIn('o.status', ['pending', 'pending_hr'])->whereIn('e.department_id', $departmentIds))
+            ->when(! \App\Support\PeopleAccess::isHr(), fn($q)=>$q->where('e.user_id','!=',auth()->id())
+                ->where(fn($q) => $q->where(fn($q) => \App\Support\PeopleAccess::scopeTeam($q->where('o.status', 'pending'))
+                        ->when(auth()->user()->role === 'leader', fn($q) => $q->where('u.role', '!=', 'supervisor')))
+                    ->when(\App\Services\OvertimeApproval::isFinalApprover(), fn($q) => $q->orWhere('o.status', 'pending_hr'))))
             ->select('o.*','u.full_name')->orderBy('o.starts_at')->get();
         // Team members the scanner cannot see yet: their days are entered here.
         $noScanner = DB::table('employees as e')->join('users as u', 'e.user_id', '=', 'u.user_id')
             ->where('e.status', 'active')->where(fn ($q) => $q->whereNull('e.biometric_id')->orWhere('e.biometric_id', ''))
-            ->when(! \App\Support\PeopleAccess::isHr(), fn ($q) => $q->whereIn('e.department_id', $departmentIds)->where('e.user_id', '!=', auth()->id()))
+            ->when(\App\Support\PeopleAccess::isHr(), fn ($q) => $q->whereIn('e.department_id', $departmentIds))
+            ->when(! \App\Support\PeopleAccess::isHr(), fn ($q) => \App\Support\PeopleAccess::scopeTeam($q)->where('e.user_id', '!=', auth()->id()))
             ->orderBy('u.full_name')->get(['e.employee_id', 'e.employee_no', 'u.full_name']);
         $recentManual = DB::table('hr_attendance as a')->join('employees as e', 'e.employee_id', '=', 'a.employee_id')->join('users as u', 'u.user_id', '=', 'e.user_id')
             ->whereIn('a.employee_id', $noScanner->pluck('employee_id'))->where('a.date', '>=', now()->subDays(20)->toDateString())
@@ -104,10 +144,11 @@ class HrOperationsController extends Controller
 
         $pendingTimeLogs = DB::table('time_log_requests as t')->join('employees as e', 'e.employee_id', '=', 't.employee_id')->join('users as u', 'u.user_id', '=', 'e.user_id')
             ->where('t.status', 'pending')
-            ->when(! \App\Support\PeopleAccess::isHr(), fn ($q) => $q->whereIn('e.department_id', $departmentIds)->where('e.user_id', '!=', auth()->id()))
+            ->when(\App\Support\PeopleAccess::isHr(), fn ($q) => $q->whereIn('e.department_id', $departmentIds))
+            ->when(! \App\Support\PeopleAccess::isHr(), fn ($q) => \App\Support\PeopleAccess::scopeTeam($q)->where('e.user_id', '!=', auth()->id()))
             ->orderBy('t.date')->get(['t.*', 'u.full_name']);
 
-        return view('hr.operations.manager', compact('cutoff','employees','pendingLeave','pendingOt','noScanner','recentManual','pendingTimeLogs'));
+        return view('hr.operations.manager', compact('cutoff','employees','teamWorked','teamLeaves','pendingLeave','pendingOt','noScanner','recentManual','pendingTimeLogs'));
     }
 
     /**
@@ -210,11 +251,33 @@ class HrOperationsController extends Controller
         \App\Support\PeopleAccess::manager();
         $leave = DB::table('leaves')->where('leave_id', $id)->first();
         abort_unless($leave, 404);
-        abort_unless(\App\Support\PeopleAccess::isHr() || \App\Support\PeopleAccess::decidesLeaveOf((int) $leave->employee_id), 403);
+        // Leave: the team's supervisor or leader first, then Ma'am An, whose
+        // approval is final. Supervisors' and leaders' leave is hers alone. HR only sees it.
+        $ops = \App\Support\PeopleAccess::isOperationsSupervisor();
+        $final = $ops && ($leave->status === 'pending_hr' || \App\Support\PeopleAccess::decidesLeaveOf((int) $leave->employee_id));
+        abort_unless($final || ($leave->status === 'pending' && \App\Support\PeopleAccess::decidesLeaveOf((int) $leave->employee_id)), 403);
+        abort_if($ops && (int) DB::table('employees')->where('employee_id', $leave->employee_id)->value('user_id') === (int) auth()->id(), 403);
 
         $action = $request->input('action');
-        abort_unless(in_array($action, ['approve', 'reject'], true) && $leave->status === 'pending', 422);
+        abort_unless(in_array($action, ['approve', 'reject'], true) && in_array($leave->status, $final ? ['pending', 'pending_hr'] : ['pending'], true), 422);
         $data = $request->validate(['note' => ($action === 'reject' ? 'required' : 'nullable').'|string|max:2000']);
+
+        if ($final && $action === 'approve') {
+            $verdict = (new \App\Services\LeaveBalances)->canApprove($leave);
+            if (! $verdict['ok']) {
+                return back()->with('error', 'Not approved. '.$verdict['reason']);
+            }
+            DB::table('leaves')->where('leave_id', $id)->update([
+                'status' => 'approved', 'approved_by' => auth()->id(), 'approved_at' => now(),
+                'manager_reviewed_by' => $leave->manager_reviewed_by ?? auth()->id(),
+                'manager_reviewed_at' => $leave->manager_reviewed_at ?? now(),
+                'manager_decision_note' => $data['note'] ?? $leave->manager_decision_note,
+                'updated_at' => now(),
+            ]);
+            app(\App\Services\PayrollRun::class)->recalculateOpen((int) $leave->employee_id);
+
+            return back()->with('success', 'Leave approved.');
+        }
 
         DB::table('leaves')->where('leave_id', $id)->update([
             'status' => $action === 'approve' ? 'pending_hr' : 'rejected',
@@ -225,7 +288,7 @@ class HrOperationsController extends Controller
             'updated_at' => now(),
         ]);
 
-        return back()->with('success', $action === 'approve' ? 'Leave sent to HR.' : 'Leave rejected.');
+        return back()->with('success', $action === 'approve' ? "Leave sent to Ma'am An." : 'Leave rejected.');
     }
 
     public function managerOvertimeDecision(Request $request, int $id)
@@ -233,21 +296,10 @@ class HrOperationsController extends Controller
         \App\Support\PeopleAccess::manager();
         $row = DB::table('overtime_requests')->where('id', $id)->first();
         abort_unless($row, 404);
-        \App\Support\PeopleAccess::managerForEmployee((int) $row->employee_id);
-
-        $action = $request->input('action');
-        abort_unless(in_array($action, ['approve', 'reject'], true) && $row->status === 'pending', 422);
+        $action = (string) $request->input('action');
         $data = $request->validate(['note' => ($action === 'reject' ? 'required' : 'nullable').'|string|max:2000']);
 
-        DB::table('overtime_requests')->where('id', $id)->update([
-            'status' => $action === 'approve' ? 'pending_hr' : 'rejected',
-            'manager_reviewed_by' => auth()->id(),
-            'manager_reviewed_at' => now(),
-            'manager_decision_note' => $data['note'] ?? null,
-            'updated_at' => now(),
-        ]);
-
-        return back()->with('success', $action === 'approve' ? 'Overtime sent to HR.' : 'Overtime rejected.');
+        return back()->with('success', \App\Services\OvertimeApproval::decide($row, $action, $data['note'] ?? null));
     }
 
     public function inbox()
@@ -279,7 +331,7 @@ class HrOperationsController extends Controller
     }
     public function payrollApproval(Request $request)
     {
-        \App\Support\PeopleAccess::hr();
+        \App\Support\PeopleAccess::pay();
         $period = PayPeriod::fromStart($request->get('period', PayPeriod::recent(1)[0]->start));
         $control = app(\App\Services\PayrollControlCenter::class)->control($period);
         $summary = app(\App\Services\PayrollControlCenter::class)->summary($period);
@@ -288,14 +340,14 @@ class HrOperationsController extends Controller
 
     public function approvePayroll(Request $request)
     {
-        \App\Support\PeopleAccess::hr();
+        \App\Support\PeopleAccess::pay();
         try { $period=PayPeriod::fromStart($request->validate(['period'=>'required|date'])['period']); app(\App\Services\PayrollControlCenter::class)->approve($period); SecurityAudit::record('payroll.approved', $period->start.' to '.$period->end); return back()->with('success','Payroll approved.'); }
         catch (\Throwable $e) { return back()->with('error',$e->getMessage()); }
     }
 
     public function paidPayroll(Request $request)
     {
-        \App\Support\PeopleAccess::hr();
+        \App\Support\PeopleAccess::pay();
         try { $period=PayPeriod::fromStart($request->validate(['period'=>'required|date'])['period']); app(\App\Services\PayrollControlCenter::class)->markPaid($period); SecurityAudit::record('payroll.paid', $period->start.' to '.$period->end); return back()->with('success','Payroll marked paid and locked.'); }
         catch (\Throwable $e) { return back()->with('error',$e->getMessage()); }
     }
@@ -323,8 +375,10 @@ class HrOperationsController extends Controller
             'pending_ot' => DB::table('overtime_requests')->where('status','pending_hr')->count(),
             'payroll_cost' => (float) DB::table('hr_payroll')->whereMonth('period_end',now()->month)->whereYear('period_end',now()->year)->sum('employer_total_cost'),
         ];
-        $departmentCosts = DB::table('hr_payroll as p')->join('employees as e','p.employee_id','=','e.employee_id')->leftJoin('departments as d','e.department_id','=','d.department_id')->whereMonth('p.period_end',now()->month)->whereYear('p.period_end',now()->year)->groupBy('d.department_name')->selectRaw("COALESCE(d.department_name,'Unassigned') department, SUM(p.employer_total_cost) cost, COUNT(DISTINCT p.employee_id) employees")->orderByDesc('cost')->get();
-        return view('hr.operations.analytics', compact('stats','departmentCosts'));
+        $pay = \App\Support\PeopleAccess::canSeePay();
+        if (! $pay) $stats['payroll_cost'] = null;
+        $departmentCosts = ! $pay ? collect() : DB::table('hr_payroll as p')->join('employees as e','p.employee_id','=','e.employee_id')->leftJoin('departments as d','e.department_id','=','d.department_id')->whereMonth('p.period_end',now()->month)->whereYear('p.period_end',now()->year)->groupBy('d.department_name')->selectRaw("COALESCE(d.department_name,'Unassigned') department, SUM(p.employer_total_cost) cost, COUNT(DISTINCT p.employee_id) employees")->orderByDesc('cost')->get();
+        return view('hr.operations.analytics', compact('stats','departmentCosts','pay'));
     }
 
     public function attendanceExceptions()

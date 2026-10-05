@@ -25,7 +25,8 @@ class ScheduleUpload
      * @param  list<list<string>>  $rows
      * @return array{period: array{start: string, end: string, label: string}, people: list<array>, unmatched: list<string>, unknown: list<string>, days: list<string>}
      */
-    public function read(array $rows, PayPeriod $period): array
+    /** @param  list<int>|null  $onlyEmployeeIds  a team leader's upload: names are matched within the team */
+    public function read(array $rows, PayPeriod $period, ?array $onlyEmployeeIds = null): array
     {
         [$headerAt, $dateColumns] = $this->findDates($rows, $period);
         if ($headerAt === null) {
@@ -34,6 +35,9 @@ class ScheduleUpload
 
         $firstDateColumn = min(array_keys($dateColumns));
         $staff = $this->staff();
+        if ($onlyEmployeeIds !== null) {
+            $staff = $staff->whereIn('employee_id', $onlyEmployeeIds)->values();
+        }
         $people = [];
         $unmatched = [];
         $unknown = [];
@@ -93,7 +97,20 @@ class ScheduleUpload
     {
         $text = strtoupper(trim(preg_replace('/\s+/', ' ', $raw)));
 
+        // Excel turns "8-5" typed in a cell into a date (5 August) and saves it
+        // as the day number 46239. Read it back as month-day: 8-5.
+        if (preg_match('/^\d{5}(\.0+)?$/', $text) && (int) $text > 30000 && (int) $text < 60000) {
+            $day = Carbon::create(1899, 12, 30)->addDays((int) $text);
+            $text = $day->month.'-'.$day->day;
+        }
+
         if ($text === '') {
+            return ['type' => 'blank'];
+        }
+        // What happened rather than what was planned - the attendance already says so:
+        // an absence, or the times somebody actually came and went ("7:57 am 5:11 pm").
+        if (preg_match('/^\d{1,2}[:;.]\d{2}\s*(AM|PM)\b/', $text) || preg_match('/^(ABSENT|AWOL|NO WORK|CONTRACT END|RESIGNED|TERMINATED)\b/', $text)
+            || in_array($text, ['REGULAR HOLIDAY', 'SPECIAL HOLIDAY', 'HOLIDAY', 'LEGAL HOLIDAY'], true)) {
             return ['type' => 'blank'];
         }
         if (in_array($text, ['RD', 'REST', 'REST DAY', 'DAY OFF', 'OFF'], true)) {
@@ -106,7 +123,7 @@ class ScheduleUpload
             return ['type' => 'school'];
         }
         if (str_contains($text, 'LEAVE')) {
-            return ['type' => str_contains($text, 'WITH PAY') || str_contains($text, 'W/ PAY') ? 'leave_paid' : 'leave_unpaid'];
+            return ['type' => preg_match('/WITH\s*PAY|W\/\s*PAY/', $text) && ! preg_match('/W\/\s*O|WITHOUT/', $text) ? 'leave_paid' : 'leave_unpaid'];
         }
         if (in_array($text, ['LWP', 'VL', 'SL'], true)) {
             return ['type' => 'leave_paid'];
@@ -115,6 +132,12 @@ class ScheduleUpload
             return ['type' => 'ob', 'note' => trim($raw)];
         }
         if ($shift = self::times($text)) {
+            return ['type' => 'shift'] + $shift;
+        }
+        // A time with a note after it: "8am-7pm (2hrs OT)", "HALFDAY 1-5PM", "9-3pm undertime".
+        $clean = trim(preg_replace('/^HALF\s*DAY\s*/', '', $text));
+        if (preg_match('/^(\d{1,2}(?::\d{2})?\s*(?:AM|PM|NN|N|MN)?\s*(?:-|–|TO)\s*\d{1,2}(?::\d{2})?\s*(?:AM|PM|NN|N|MN)?)(?![\d:])/', $clean, $m)
+            && ($shift = self::times(trim($m[1])))) {
             return ['type' => 'shift'] + $shift;
         }
 
@@ -166,12 +189,72 @@ class ScheduleUpload
         if ($start === null) {
             return null;
         }
+        // "6-3": an early start ending on a smaller number is a morning shift
+        // (6AM-3PM), not an evening one running into the next afternoon.
+        if (($m[3] ?? '') === '' && ($m[6] ?? '') === '' && (int) $m[1] <= 6 && (int) $m[4] < (int) $m[1]) {
+            $start = (int) $m[1];
+        }
         $end = $hour((int) $m[4], $m[6] ?? '', $start * 60 + $startMinute);
         if ($end === null) {
             return null;
         }
 
         return ['start' => sprintf('%02d:%02d', $start, $startMinute), 'end' => sprintf('%02d:%02d', $end, $endMinute)];
+    }
+
+    /**
+     * The sheet of a workbook that holds a cutoff: named for its month ("SEPT
+     * 1-30 SCHEDULE", "OCT 1-15"), the half of the month when the name says.
+     * Null when no name looks like it, so the first sheet is read.
+     *
+     * @param  list<string>  $names
+     */
+    /**
+     * The months a sheet says it is for, from its first rows: a full date
+     * (an Excel date like 10/1/2026) or a month's name ("OCTOBER 1-15").
+     * Empty when it does not say - day numbers alone name no month.
+     *
+     * @return list<string>  "2026-10"
+     */
+    public static function sheetMonths(array $rows, int $year): array
+    {
+        $months = [];
+        $names = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        foreach (array_slice($rows, 0, 6) as $row) {
+            foreach ($row as $cell) {
+                $cell = strtoupper(trim((string) $cell));
+                if (preg_match('/^\d{5}(\.0+)?$/', $cell) && (int) $cell > 40000 && (int) $cell < 60000) {
+                    $months[] = Carbon::create(1899, 12, 30)->addDays((int) $cell)->format('Y-m');
+                } elseif (preg_match('/\b('.implode('|', $names).')[A-Z]*\.?\s*(\d{4})?/', $cell, $m) && ! preg_match('/^(MON|TUE|WED|THU|FRI|SAT|SUN)/', $cell)) {
+                    $y = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : $year;
+                    $months[] = sprintf('%04d-%02d', $y, array_search($m[1], $names, true) + 1);
+                }
+            }
+        }
+
+        return array_values(array_unique($months));
+    }
+
+    public static function pickSheet(array $names, PayPeriod $period): ?string
+    {
+        $start = Carbon::parse($period->start);
+        $month = strtoupper($start->format('M'));
+        $best = null;
+        $bestScore = 0;
+        foreach ($names as $name) {
+            $n = strtoupper($name);
+            if (! preg_match('/\b'.$month.'/', $n)) continue;
+            $score = 10 + (str_contains($n, (string) $start->year) ? 1 : 0);
+            if (preg_match('/\b1\s*-\s*15\b/', $n)) $score += $period->isSecondCutoff ? -20 : 3;
+            if (preg_match('/\b16\s*-\s*3\d\b/', $n)) $score += $period->isSecondCutoff ? 3 : -20;
+            if (str_contains($n, 'SCHED')) $score += 1;
+            if ($score > $bestScore) {
+                $best = $name;
+                $bestScore = $score;
+            }
+        }
+
+        return $best;
     }
 
     /**
@@ -237,15 +320,24 @@ class ScheduleUpload
                         if ($covered) {
                             continue;
                         }
-                        DB::table('leaves')->insert([
-                            'employee_id' => $id, 'leave_type' => $type === 'leave_paid' ? 'vacation' : 'unpaid',
-                            'start_date' => $from, 'end_date' => $to,
-                            'total_days' => Carbon::parse($from)->diffInDays(Carbon::parse($to)) + 1,
-                            'reason' => ($type === 'leave_paid' ? 'Leave with pay' : 'Leave without pay')." (from the {$plan['period']['label']} schedule)",
-                            'status' => 'approved', 'approved_by' => $byUserId, 'approved_at' => now(),
-                            'created_at' => now(), 'updated_at' => now(),
-                        ]);
-                        $done['leave']++;
+                        // "Leave with pay" is paid only while the yearly balance lasts; past it, unpaid.
+                        $days = Carbon::parse($from)->diffInDays(Carbon::parse($to)) + 1;
+                        $paid = $type === 'leave_paid'
+                            ? (int) (new LeaveBalances)->paidDaysFor($id, 'vacation', (float) $days, (int) substr($from, 0, 4)) : 0;
+                        $parts = [];
+                        if ($paid > 0) $parts[] = ['paid', $from, Carbon::parse($from)->addDays($paid - 1)->toDateString(), $paid];
+                        if ($paid < $days) $parts[] = ['unpaid', Carbon::parse($from)->addDays($paid)->toDateString(), $to, $days - $paid];
+                        foreach ($parts as [$pay, $a, $b, $n]) {
+                            DB::table('leaves')->insert([
+                                'employee_id' => $id, 'leave_type' => $pay === 'paid' ? 'vacation' : 'unpaid',
+                                'pay_status' => $pay,
+                                'start_date' => $a, 'end_date' => $b, 'total_days' => $n,
+                                'reason' => ($pay === 'paid' ? 'Leave with pay' : ($type === 'leave_paid' ? 'Leave with pay - no paid balance left, so unpaid' : 'Leave without pay'))." (from the {$plan['period']['label']} schedule)",
+                                'status' => 'approved', 'approved_by' => $byUserId, 'approved_at' => now(),
+                                'created_at' => now(), 'updated_at' => now(),
+                            ]);
+                            $done['leave']++;
+                        }
                     }
                 }
             }
@@ -321,7 +413,7 @@ class ScheduleUpload
             return null;
         }
         $date = null;
-        if (preg_match('/^\d{1,2}$/', $cell)) {
+        if (preg_match('/^\d{1,2}(\.0+)?$/', $cell)) {
             $day = (int) $cell;
             if ($day >= 1 && $day <= 31) {
                 $date = $start->copy()->day(min($day, $start->daysInMonth));
@@ -377,30 +469,24 @@ class ScheduleUpload
         foreach ($before as $cell) {
             if (preg_match('/\b(IC|CAFE|SL)\s*-\s*(\d+)\b/i', (string) $cell, $m)) {
                 $number = strtoupper($m[1]).'-'.str_pad($m[2], 5, '0', STR_PAD_LEFT);
-                if ($found = $staff->firstWhere('employee_no', $number)) {
+                if (($found = $staff->firstWhere('employee_no', $number)) && $this->sameName($before, $found)) {
                     return $found;
                 }
+                // A number belonging to somebody else (a typo in the sheet): the name decides.
             }
         }
 
         $words = fn (string $s) => array_values(array_filter(preg_split('/[^a-z0-9ñ]+/u', mb_strtolower($s)), fn ($w) => $w !== ''));
-        $written = [];
-        foreach ($before as $cell) {
-            if (preg_match('/^\s*(IC|CAFE|SL)\s*-/i', (string) $cell) || preg_match('/^\d+$/', trim((string) $cell))) {
-                continue;
-            }
-            $written = array_merge($written, $words((string) $cell));
-        }
-        if (! $written) {
-            return null;
-        }
-
-        $hits = $staff->filter(function ($person) use ($written, $words) {
+        $hitsFor = fn (array $written) => $staff->filter(function ($person) use ($written, $words) {
             $name = $words($person->full_name.' '.$person->first_name.' '.$person->last_name);
             foreach ($written as $w) {
+                // A long word one or two letters off still counts: "Catorse" is Catorce.
                 $ok = strlen($w) === 1
                     ? (bool) array_filter($name, fn ($n) => str_starts_with($n, $w))
-                    : in_array($w, $name, true);
+                    : (in_array($w, $name, true)
+                        || (mb_strlen($w) >= 5 && (bool) array_filter($name, fn ($n) => mb_strlen($n) >= 5 && levenshtein($w, $n) <= 2))
+                        // A short name for a longer one: "Aila" is Ailamarie.
+                        || (mb_strlen($w) >= 3 && (bool) array_filter($name, fn ($n) => mb_strlen($n) > mb_strlen($w) && str_starts_with($n, $w))));
                 if (! $ok) {
                     return false;
                 }
@@ -409,6 +495,48 @@ class ScheduleUpload
             return true;
         });
 
+        // Each cell on its own first: a sheet may carry job titles and notes
+        // beside the name ("CONCEPCION SACRIZ | Production Team Leader").
+        $cells = array_values(array_filter(array_map('strval', $before), fn ($c) => ! $this->notAName($c)));
+        foreach ($cells as $cell) {
+            $hits = $hitsFor($words($cell));
+            if ($hits->count() === 1) {
+                return $hits->first();
+            }
+        }
+        // Then the name written across several cells (first name, surname).
+        $written = array_merge(...array_map($words, $cells ?: ['']));
+        if (! $written) {
+            return null;
+        }
+        $hits = $hitsFor($written);
+
         return $hits->count() === 1 ? $hits->first() : null;
+    }
+
+    /**
+     * Cells before the dates that are not part of a name: an employee number,
+     * a row number, or a schedule cell (RD, 8-5) from an earlier cutoff's columns.
+     */
+    private function notAName(string $cell): bool
+    {
+        $cell = trim($cell);
+
+        return $cell === '' || preg_match('/^\s*(IC|CAFE|SL)\s*-/i', $cell) || preg_match('/^\d+(\.\d+)?$/', $cell)
+            || self::understand($cell)['type'] !== 'unknown'
+            || (preg_match('/^[A-Z ]+$/', $cell) && in_array(self::understand($cell)['type'], ['ob'], true));
+    }
+
+    /** Whether a row's written name, if it has one, shares a word with the person's. */
+    private function sameName(array $before, object $person): bool
+    {
+        $words = fn (string $s) => array_filter(preg_split('/[^a-z0-9ñ]+/u', mb_strtolower($s)), fn ($w) => mb_strlen($w) > 1);
+        $written = [];
+        foreach ($before as $cell) {
+            if ($this->notAName((string) $cell)) continue;
+            $written = array_merge($written, $words((string) $cell));
+        }
+
+        return ! $written || (bool) array_intersect($written, $words($person->full_name.' '.$person->first_name.' '.$person->last_name));
     }
 }

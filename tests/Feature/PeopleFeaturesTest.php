@@ -25,7 +25,7 @@ class PeopleFeaturesTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->hr = $this->user('hr');
+        $this->hr = $this->user('admin');
         $this->staff = $this->user('employee');
         $this->other = $this->user('employee');
         $this->employeeId = (int) DB::table('employees')->where('user_id', $this->staff->user_id)->value('employee_id');
@@ -149,21 +149,50 @@ class PeopleFeaturesTest extends TestCase
         return $department;
     }
 
+    public function test_a_supervisor_sets_the_team_schedule_on_the_grid(): void
+    {
+        $supervisor = $this->user('supervisor');
+        $this->assignSupervisor($supervisor);
+        $cutoff = \App\Support\PayPeriod::fromStart(now()->toDateString());
+        $day = $cutoff->start;
+        $this->actingAs($supervisor)->get('/employee/people/shifts?grid='.$cutoff->start)->assertOk()->assertSee('Team schedule')
+            ->assertSee('cells['.$this->employeeId.']['.$day.']', false);
+        $this->post('/employee/people/shifts', ['kind' => 'schedule-grid', 'cutoff' => $cutoff->start,
+            'cells' => [$this->employeeId => [$day => '10-7', \Carbon\Carbon::parse($day)->addDay()->toDateString() => 'RD']]])->assertRedirect();
+        $this->assertDatabaseHas('shift_assignments', ['employee_id' => $this->employeeId, 'work_date' => $day, 'starts_at' => '10:00:00', 'ends_at' => '19:00:00', 'rest_day' => 0]);
+        $this->assertDatabaseHas('shift_assignments', ['employee_id' => $this->employeeId, 'work_date' => \Carbon\Carbon::parse($day)->addDay()->toDateString(), 'rest_day' => 1]);
+        $this->post('/employee/people/shifts', ['kind' => 'schedule-grid', 'cutoff' => $cutoff->start,
+            'cells' => [$this->employeeId => [$day => 'LEAVE']]])->assertSessionHasErrors('cells');
+        // A suspension is the supervisor's to set, and to take back.
+        $this->post('/employee/people/shifts', ['kind' => 'schedule-grid', 'cutoff' => $cutoff->start,
+            'cells' => [$this->employeeId => [$day => 'S']]])->assertRedirect();
+        $this->assertDatabaseHas('hr_attendance', ['employee_id' => $this->employeeId, 'date' => $day, 'notes' => 'Suspension']);
+        $this->post('/employee/people/shifts', ['kind' => 'schedule-grid', 'cutoff' => $cutoff->start,
+            'cells' => [$this->employeeId => [$day => '8-5']]])->assertRedirect();
+        $this->assertDatabaseMissing('hr_attendance', ['employee_id' => $this->employeeId, 'date' => $day, 'notes' => 'Suspension']);
+        $this->post('/employee/people/shifts', ['kind' => 'schedule-grid', 'cutoff' => $cutoff->start,
+            'cells' => [(int) DB::table('employees')->where('user_id', $this->other->user_id)->value('employee_id') => [$day => '8-5']]])->assertForbidden();
+        DB::table('shift_assignments')->where('employee_id', $this->employeeId)->delete();
+    }
     public function test_overtime_ownership_overlap_approval_and_display(): void
     {
         $id = $this->overtime();
         $this->assertDatabaseHas('overtime_requests', ['id' => $id, 'employee_id' => $this->employeeId, 'minutes' => 120]);
         $this->post('/employee/people/overtime', ['starts_at' => '2018-01-02T19:00', 'ends_at' => '2018-01-02T21:00', 'reason' => 'Overlapping request'])->assertSessionHasErrors('starts_at');
         $this->post('/employee/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 300])->assertForbidden();
-        $this->actingAs($this->hr)->post('/hr/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 300])->assertStatus(422);
+        // HR only sees overtime: the supervisor approves, then Ma'am An.
+        $this->actingAs($this->hr)->post('/hr/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 300])->assertForbidden();
         $supervisor = $this->user('supervisor');
         $this->assignSupervisor($supervisor);
         $this->actingAs($supervisor)->post('/employee/people/overtime/'.$id, ['action' => 'approve'])->assertRedirect();
         $this->assertDatabaseHas('overtime_requests', ['id' => $id, 'status' => 'pending_hr', 'manager_reviewed_by' => $supervisor->user_id]);
-        $this->actingAs($this->hr)->post('/hr/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 300])->assertRedirect();
-        $this->assertDatabaseHas('overtime_requests', ['id' => $id, 'status' => 'approved', 'approved_amount' => 300]);
-        $this->get('/hr/people/overtime')->assertOk()->assertSee('300.00');
-        $this->post('/hr/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 500])->assertStatus(422);
+        $this->actingAs($this->hr)->post('/hr/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 300])->assertForbidden();
+        $final = $this->user('supervisor');
+        config(['leave.supervisor_approver_user_id' => $final->user_id]);
+        $this->actingAs($final)->post('/employee/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 300])->assertRedirect();
+        $this->assertDatabaseHas('overtime_requests', ['id' => $id, 'status' => 'approved', 'approved_amount' => 300, 'reviewed_by' => $final->user_id]);
+        $this->actingAs($this->hr)->get('/hr/people/overtime')->assertOk()->assertSee('300.00');
+        $this->actingAs($final)->post('/employee/people/overtime/'.$id, ['action' => 'approve', 'approved_amount' => 500])->assertForbidden();
     }
 
     public function test_supervisors_can_only_review_their_assigned_department(): void
@@ -184,7 +213,7 @@ class PeopleFeaturesTest extends TestCase
 
         // 2018-01-07 was a Sunday, 2018-01-08 a Monday.
         $this->actingAs($this->staff)->get('/employee/people/shifts?month=2018-01')
-            ->assertOk()->assertSee('08:00')->assertSee('Rest day')->assertSee('Sunday');
+            ->assertOk()->assertSee('08:00')->assertSee('Rest day')->assertSee('Sunday')->assertSee('RD');
 
         // The holiday is the only thing HR enters, and it covers everybody.
         $this->actingAs($this->hr)->post('/hr/people/shifts',
@@ -213,21 +242,78 @@ class PeopleFeaturesTest extends TestCase
 
         $this->attend($this->employeeId, '2018-01-01', '2018-01-15');
 
-        // On time in, half an hour early out.
+        // On time in, left before completing an eight-hour duty.
         DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-01-03')
-            ->update(['time_out' => '2018-01-03 16:30:00']);
+            ->update(['time_out' => '2018-01-03 15:30:00']);
 
-        // A day with no clock-out at all must cost nothing.
+        // A day with no clock-out is worked but incomplete, so it is undertime.
         DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-01-04')
             ->update(['time_out' => null]);
 
         (new PayrollRun)->generate($this->employeeId, PayPeriod::fromStart('2018-01-01'));
         $payslip = DB::table('hr_payroll')->where('employee_id', $this->employeeId)->first();
 
-        $half = round(22000 / 22 / 2, 2);
-        $this->assertStringContainsString('Undertime (1 day)', $payslip->notes);
-        $this->assertStringContainsString(number_format($half, 2), $payslip->notes);
+        $day = round(22000 / 22, 2);
+        $this->assertStringContainsString('Undertime (2 days)', $payslip->notes);
+        $this->assertStringContainsString(number_format($day, 2), $payslip->notes);
         $this->assertStringNotContainsString('Late', $payslip->notes);
+    }
+
+    public function test_schedule_still_wins_when_the_employee_completed_eight_hours(): void
+    {
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'shift_end' => '17:00:00', 'rest_days' => null, 'salary' => 22000]);
+
+        $this->attend($this->employeeId, '2018-01-01', '2018-01-15');
+
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-01-03')
+            ->update(['time_in' => '2018-01-03 07:30:00', 'time_out' => '2018-01-03 15:30:00']);
+
+        (new PayrollRun)->generate($this->employeeId, PayPeriod::fromStart('2018-01-01'));
+        $payslip = DB::table('hr_payroll')->where('employee_id', $this->employeeId)->first();
+
+        $this->assertStringContainsString('Undertime', $payslip->notes ?? '');
+        $this->assertStringNotContainsString('Late', $payslip->notes ?? '');
+    }
+
+    public function test_guard_is_late_when_the_schedule_was_six_to_six_but_they_worked_seven_to_seven(): void
+    {
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['job_title' => 'Security Guard', 'shift_start' => '06:00:00', 'shift_end' => '18:00:00',
+                'rest_days' => null, 'salary' => 22000]);
+
+        for ($day = \Carbon\Carbon::parse('2018-01-01'); $day->lte(\Carbon\Carbon::parse('2018-01-15')); $day->addDay()) {
+            DB::table('hr_attendance')->updateOrInsert(
+                ['employee_id' => $this->employeeId, 'date' => $day->toDateString()],
+                ['time_in' => $day->toDateString().' 06:00:00', 'time_out' => $day->toDateString().' 18:00:00',
+                    'status' => 'present', 'created_at' => now(), 'updated_at' => now()]
+            );
+        }
+
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-01-03')
+            ->update(['time_in' => '2018-01-03 07:00:00', 'time_out' => '2018-01-03 19:00:00']);
+
+        (new PayrollRun)->generate($this->employeeId, PayPeriod::fromStart('2018-01-01'));
+        $payslip = DB::table('hr_payroll')->where('employee_id', $this->employeeId)->first();
+
+        $this->assertStringContainsString('Late (1 day)', $payslip->notes ?? '');
+    }
+
+    public function test_a_four_hour_half_day_counts_as_paid_work_time(): void
+    {
+        DB::table('employees')->where('employee_id', $this->employeeId)
+            ->update(['shift_start' => '08:00:00', 'shift_end' => '17:00:00', 'rest_days' => null, 'salary' => 22000]);
+
+        $this->attend($this->employeeId, '2018-01-01', '2018-01-15');
+
+        DB::table('hr_attendance')->where('employee_id', $this->employeeId)->where('date', '2018-01-03')
+            ->update(['time_in' => '2018-01-03 08:00:00', 'time_out' => '2018-01-03 13:00:00']);
+
+        $employee = DB::table('employees')->where('employee_id', $this->employeeId)->first();
+        $work = app(\App\Services\WorkTimePayroll::class)->forPeriod($employee, '2018-01-01', '2018-01-15');
+
+        // The 8-1 day is a four-hour half day now, and paid.
+        $this->assertSame(116.0, $work['hours']);
     }
 
     public function test_late_and_undertime_on_one_day_cost_one_day(): void
@@ -599,7 +685,9 @@ class PeopleFeaturesTest extends TestCase
         $supervisor = $this->user('supervisor');
         $this->assignSupervisor($supervisor);
         $this->actingAs($supervisor)->post('/employee/people/overtime/'.$overtime, ['action' => 'approve'])->assertRedirect();
-        $this->actingAs($this->hr)->post('/hr/people/overtime/'.$overtime, ['action' => 'approve', 'approved_amount' => 300])->assertRedirect();
+        $final = $this->user('supervisor');
+        config(['leave.supervisor_approver_user_id' => $final->user_id]);
+        $this->actingAs($final)->post('/employee/people/overtime/'.$overtime, ['action' => 'approve', 'approved_amount' => 300])->assertRedirect();
         $this->actingAs($this->staff)->post('/employee/people/loans', ['type' => 'cash_advance', 'amount' => 1000, 'installment' => 600, 'starts_on' => '2018-01-01', 'reason' => 'Travel expenses'])->assertRedirect();
         $loan = DB::table('employee_loans')->where('employee_id', $this->employeeId)->value('id');
         $this->actingAs($this->hr)->post('/hr/people/loans/'.$loan, ['action' => 'approve'])->assertRedirect();

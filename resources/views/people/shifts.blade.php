@@ -2,71 +2,9 @@
 @php($teamShiftManager = !$hr && in_array(auth()->user()->role, ['supervisor', 'leader'], true))
 @if($hr || $teamShiftManager)
 
-    {{-- The team's supervisor or leader uploads the schedule; HR does not. --}}
+    {{-- The team's supervisor or leader sets the schedule on the grid; HR does not. --}}
     @if($teamShiftManager)
-    @php($thisCutoff = \App\Support\PayPeriod::fromStart(now()->toDateString()))
-    @php($nextCutoff = \App\Support\PayPeriod::fromStart(\Carbon\Carbon::parse($thisCutoff->end)->addDay()->toDateString()))
-    @php($plan = session('schedule_upload'))
-    <div class="card">
-        <h2>Upload a cutoff's schedule</h2>
-        <p class="muted">Your schedule spreadsheet as you keep it: names down the side, the days across the top, and in each cell <strong>8-5</strong>, <strong>12NN-9PM</strong>, <strong>RD</strong>, <strong>S</strong> (suspension), <strong>LEAVE</strong>, <strong>LEAVE WITH PAY</strong>, an <strong>EVENT</strong> or <strong>OB</strong>, or <strong>SCHOOL</strong>. You see what was read before anything is saved.</p>
-        <form method="POST" action="{{ $base }}" enctype="multipart/form-data" class="schedule-upload">@csrf
-            <input type="hidden" name="kind" value="schedule-upload">
-            <label class="people-field"><span>Cutoff</span>
-                <select name="cutoff">
-                    @foreach([$nextCutoff, $thisCutoff] as $option)
-                        <option value="{{ $option->start }}" @selected(old('cutoff', $nextCutoff->start) === $option->start)>{{ $option->label() }}</option>
-                    @endforeach
-                </select>
-            </label>
-            <label class="people-field"><span>Spreadsheet (.xlsx or .csv)</span>
-                <input type="file" name="schedule_file" accept=".xlsx,.csv" required>
-            </label>
-            <div class="schedule-upload-actions">
-                <button><i class="fas fa-upload"></i> Read schedule</button>
-            </div>
-        </form>
-
-        @if($plan)
-            @php($counts = fn ($days, $type) => collect($days)->where('type', $type)->count())
-            <div class="schedule-preview">
-                <h3>Check before saving · {{ $plan['period']['label'] }}</h3>
-                <p class="muted">{{ count($plan['people']) }} {{ \Illuminate\Support\Str::plural('person', count($plan['people'])) }} read. Nothing is saved until you confirm; blank cells change nothing.</p>
-                <div class="scroll"><table>
-                    <thead><tr><th>Employee</th><th>Shifts</th><th>Rest</th><th>Suspension</th><th>Leave</th><th>OB</th><th>School</th></tr></thead>
-                    <tbody>
-                        @foreach($plan['people'] as $person)
-                            <tr>
-                                <td>{{ $person['name'] }}@if(mb_strtolower($person['sheet_name']) !== mb_strtolower($person['name']))<br><span class="muted">as "{{ $person['sheet_name'] }}"</span>@endif</td>
-                                <td>{{ $counts($person['days'], 'shift') }}</td>
-                                <td>{{ $counts($person['days'], 'rest') }}</td>
-                                <td>{{ $counts($person['days'], 'suspension') }}</td>
-                                <td>{{ $counts($person['days'], 'leave_paid') + $counts($person['days'], 'leave_unpaid') }}</td>
-                                <td>{{ $counts($person['days'], 'ob') }}</td>
-                                <td>{{ $counts($person['days'], 'school') }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table></div>
-                @if($plan['unmatched'])
-                    <div class="alert error"><strong>Not matched to anybody - these rows will be skipped:</strong> {{ implode(', ', $plan['unmatched']) }}.
-                        Put their employee number (like IC-00235 or CAFE-00016) in a column before the dates, or write the name as it is in Employees.</div>
-                @endif
-                @if(! empty($plan['hr_only']))
-                    <div class="alert"><strong>For HR to record - leave, suspensions and official business are not saved from here:</strong>
-                        <ul>@foreach($plan['hr_only'] as $cell)<li>{{ $cell }}</li>@endforeach</ul></div>
-                @endif
-                @if($plan['unknown'])
-                    <div class="alert error"><strong>Cells that were not understood - left unchanged:</strong>
-                        <ul>@foreach($plan['unknown'] as $cell)<li>{{ $cell }}</li>@endforeach</ul></div>
-                @endif
-                <div class="schedule-upload-actions">
-                    <form method="POST" action="{{ $base }}">@csrf<input type="hidden" name="kind" value="schedule-confirm"><button @disabled(! $plan['people'])>Confirm and save</button></form>
-                    <form method="POST" action="{{ $base }}">@csrf<input type="hidden" name="kind" value="schedule-cancel"><button class="secondary">Cancel</button></form>
-                </div>
-            </div>
-        @endif
-    </div>
+    @include('people.partials.shift-grid')
     @endif
 
     @if($hr)
@@ -171,12 +109,21 @@
      plus anything marked for this cutoff. Nothing here is edited. --}}
 <div class="card scroll">
     <h2>Shift schedule · {{ $extra['period']->label() }}</h2>
-    <p class="muted">Who works which hours, and who rests. For viewing only - change shifts and rest days under Employees.</p>
+    <p class="muted">Who works which hours, and who rests. Supervisors and team leaders change it with Edit schedule; below it is what the scanner saw.</p>
     @php($departments = $extra['staff']->pluck('department_name')->map(fn ($name) => $name ?: 'No department')->unique()->sort()->values())
     @php($pickedDepartment = request('department'))
     @php($shiftStaff = $pickedDepartment ? $extra['staff']->filter(fn ($p) => ($p->department_name ?: 'No department') === $pickedDepartment)->values() : $extra['staff'])
-    @if($departments->count() > 1)
-        <form method="GET" class="shift-picker">
+    <form method="GET" class="shift-period-filter">
+        <label class="people-field"><span>Cutoff</span>
+            <select name="cutoff" onchange="this.form.submit()">
+                @foreach($extra['periods'] as $optionPeriod)
+                    <option value="{{ $optionPeriod->start }}" @selected($optionPeriod->start === $extra['period']->start)>
+                        {{ $optionPeriod->label() }}
+                    </option>
+                @endforeach
+            </select>
+        </label>
+        @if($departments->count() > 1)
             <label class="people-field"><span>Department</span>
                 <select name="department" onchange="this.form.submit()">
                     <option value="">All departments ({{ $extra['staff']->count() }})</option>
@@ -187,11 +134,23 @@
                     @endforeach
                 </select>
             </label>
-            <noscript><button>Show</button></noscript>
-        </form>
-    @endif
+        @endif
+        <noscript><button>Show</button></noscript>
+    </form>
 @php($shortTime = fn ($t) => $t ? ltrim(\Carbon\Carbon::parse($t)->format('g'), '0') : null)
+@php($fullTime = fn ($t) => $t ? \Carbon\Carbon::parse($t)->format('H:i') : null)
+@php($leavePaid = fn ($l) => $l->leave_type !== 'unpaid' && ($l->pay_status === null || $l->pay_status === 'paid'))
 @php($shiftLabel = fn ($start, $end) => $start ? $shortTime($start).($end ? '-'.$shortTime($end) : '') : '—')
+@php($shiftTitle = fn ($start, $end) => $start ? $fullTime($start).($end ? '-'.$fullTime($end) : '') : 'No shift set')
+@php($monthlyCutoff = function ($person) use ($periodStart, $periodEnd) {
+    if (($person->pay_basis ?? null) !== 'monthly') return null;
+    $total = $periodStart->diffInDays($periodEnd) + 1;
+    $rest = 0;
+    for ($d = $periodStart->copy(); $d->lte($periodEnd); $d->addDay()) {
+        if ($d->isSunday()) $rest++;
+    }
+    return ['paid' => max(0, $total - $rest), 'rest' => $rest];
+})
 <div class="shift-grid-wrap">
 <table class="shift-grid">
     <thead>
@@ -199,21 +158,30 @@
             <th class="sg-name">Name</th>
             @for($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay())
                 @php($holiday = $extra['holidays']->get($day->toDateString()))
-                <th class="{{ $day->isWeekend() ? 'sg-weekend' : '' }} {{ $holiday ? 'sg-holiday' : '' }} {{ $day->isToday() ? 'sg-today' : '' }}" title="{{ $holiday->name ?? '' }}">
+                <th class="{{ $day->isWeekend() ? 'sg-weekend' : '' }} {{ $holiday ? 'sg-holiday' : '' }} {{ $day->isToday() ? 'sg-today' : '' }}" title="{{ $day->format('l, M j, Y') }}{{ $holiday ? ' - '.$holiday->name : '' }}">
                     <span>{{ strtoupper(substr($day->format('D'), 0, 2)) }}</span>{{ $day->day }}
                 </th>
             @endfor
+            <th class="sg-leave-total" title="Leave days this cutoff">Leave</th>
         </tr>
     </thead>
     <tbody>
         @forelse($shiftStaff->groupBy(fn ($p) => $p->department_name ?: 'No department')->sortKeys() as $department => $people)
             @if(! $pickedDepartment && $shiftStaff->pluck('department_name')->unique()->count() > 1)
-                <tr class="sg-dept"><td colspan="{{ $periodStart->diffInDays($periodEnd) + 2 }}"><span>{{ $department }}</span></td></tr>
+                <tr class="sg-dept"><td colspan="{{ $periodStart->diffInDays($periodEnd) + 3 }}"><span>{{ $department }}</span></td></tr>
             @endif
             @foreach($people as $person)
                 <tr class="sg-name-row"><td colspan="{{ $periodStart->diffInDays($periodEnd) + 1 }}">{{ $person->full_name }}</td></tr>
+                @php($paidDays = 0)
+                @php($unpaidDays = 0)
+                @php($monthly = $monthlyCutoff($person))
                 <tr>
-                    <td class="sg-name">{{ $person->full_name }}</td>
+                    <td class="sg-name">
+                        {{ $person->full_name }}
+                        @if($monthly)
+                            <span class="sg-monthly-note">{{ $monthly['paid'] }} working · {{ $monthly['rest'] }} resting</span>
+                        @endif
+                    </td>
                     @for($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay())
                         @php($date = $day->toDateString())
                         @php($mark = $extra['assignments']->get($date, collect())->firstWhere('employee_id', $person->employee_id))
@@ -225,15 +193,22 @@
                         @elseif($dayMark)
                             <td class="sg-susp" title="Suspension">S</td>
                         @elseif($leave)
-                            <td class="sg-leave" title="{{ ucwords(str_replace('_', ' ', (string) $leave->leave_type)) }}">LEAVE</td>
+                            @php($isPaid = $leavePaid($leave))
+                            @php($isPaid ? $paidDays++ : $unpaidDays++)
+                            <td class="{{ $isPaid ? 'sg-leave' : 'sg-leave-unpaid' }}" title="{{ ucwords(str_replace('_', ' ', (string) $leave->leave_type)) }} - {{ $isPaid ? 'paid' : 'unpaid' }}">{{ $isPaid ? 'PAID' : 'UNPAID' }}</td>
                         @elseif($mark ? $mark->rest_day : WorkWeek::restsOn($person->rest_days, $day))
-                            <td class="sg-rest">RD</td>
+                            <td class="sg-rest" title="Rest day">RD</td>
                         @elseif($mark && $mark->starts_at)
-                            <td class="{{ $day->isWeekend() ? 'sg-weekend' : '' }}">{{ $shiftLabel($mark->starts_at, $mark->ends_at) }}</td>
+                            <td class="{{ $day->isWeekend() ? 'sg-weekend' : '' }}" title="{{ $shiftTitle($mark->starts_at, $mark->ends_at) }}">{{ $shiftLabel($mark->starts_at, $mark->ends_at) }}</td>
                         @else
-                            <td class="{{ $day->isWeekend() ? 'sg-weekend' : '' }} {{ $person->shift_start ? '' : 'sg-none' }}">{{ $shiftLabel($person->shift_start, $person->shift_end) }}</td>
+                            <td class="{{ $day->isWeekend() ? 'sg-weekend' : '' }} {{ $person->shift_start ? '' : 'sg-none' }}" title="{{ $shiftTitle($person->shift_start, $person->shift_end) }}">{{ $shiftLabel($person->shift_start, $person->shift_end) }}</td>
                         @endif
                     @endfor
+                    <td class="sg-leave-total">
+                        @if($paidDays)<span class="sg-count sg-leave">{{ $paidDays }} paid</span>@endif
+                        @if($unpaidDays)<span class="sg-count sg-leave-unpaid">{{ $unpaidDays }} unpaid</span>@endif
+                        @if(! $paidDays && ! $unpaidDays)<span class="sg-none">—</span>@endif
+                    </td>
                 </tr>
             @endforeach
         @empty
@@ -242,5 +217,91 @@
     </tbody>
 </table>
 </div>
-<p class="muted sg-legend"><span class="sg-rest">RD</span> rest day <span class="sg-leave">LEAVE</span> approved leave <span class="sg-susp">S</span> suspension <span class="sg-ob">OB</span> official business <span class="sg-none">—</span> no shift set yet</p>
+<p class="muted sg-legend"><span class="sg-rest">RD</span> rest day <span class="sg-leave">PAID</span> paid leave <span class="sg-leave-unpaid">UNPAID</span> unpaid leave <span class="sg-susp">S</span> suspension <span class="sg-ob">OB</span> official business <span class="sg-none">—</span> no shift set yet</p>
 </div>
+
+{{-- What actually happened: each day's first in and final out from the scanner,
+     in red when it was late or short against that day's shift. --}}
+@php($worked = \Illuminate\Support\Facades\DB::table('hr_attendance')->whereIn('employee_id', $shiftStaff->pluck('employee_id'))->whereBetween('date', [$periodStart->toDateString(), $periodEnd->toDateString()])->get()->keyBy(fn ($a) => $a->employee_id.'|'.substr((string) $a->date, 0, 10)))
+@php($clock = fn ($t) => $t ? \Carbon\Carbon::parse($t)->format('g:i') : '?')
+@php($lateTotals = [])
+<div class="card scroll">
+    <h2>Worked · from the scanner · {{ $extra['period']->label() }}</h2>
+    <p class="muted">Each day's first in and final out. <span style="color:#dc2626;font-weight:600">Red</span>: late or left early against that day's shift.</p>
+    <div class="shift-grid-wrap">
+    <table class="shift-grid worked-grid">
+        <thead>
+            <tr>
+                <th class="sg-name">Name</th>
+                @for($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay())
+                    <th class="{{ $day->isWeekend() ? 'sg-weekend' : '' }} {{ $day->isToday() ? 'sg-today' : '' }}" title="{{ $day->format('l, M j, Y') }}"><span>{{ strtoupper(substr($day->format('D'), 0, 2)) }}</span>{{ $day->day }}</th>
+                @endfor
+                <th class="sg-leave-total">Late</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($shiftStaff->groupBy(fn ($p) => $p->department_name ?: 'No department')->sortKeys() as $department => $people)
+                @if(! $pickedDepartment && $shiftStaff->pluck('department_name')->unique()->count() > 1)
+                    <tr class="sg-dept"><td colspan="{{ $periodStart->diffInDays($periodEnd) + 3 }}"><span>{{ $department }}</span></td></tr>
+                @endif
+                @foreach($people as $person)
+                    <tr>
+                        <td class="sg-name">{{ $person->full_name }}</td>
+                        @for($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay())
+                            @php($date = $day->toDateString())
+                            @php($a = $worked[$person->employee_id.'|'.$date] ?? null)
+                            @php($leave = $extra['leaves']->get($date, collect())->first(fn ($l) => $l->employee_id == $person->employee_id && $l->status === 'approved'))
+                            @php($plan = \App\Support\ShiftSchedule::forEmployeeDate($person, $date))
+                            @if($a && $a->time_in)
+                                @php($effectiveOut = \App\Support\WorkDay::effectiveOut($a))
+                                @php($usedFallbackOut = ! $a->time_out && $effectiveOut)
+                                @php($lateMin = ! $plan['rest'] && $plan['start'] ? (int) (\App\Support\Tardiness::minutesLate(\Carbon\Carbon::parse($a->time_in), $plan['start']) ?? 0) : 0)
+                                @php($missingFinalOut = ! $plan['rest'] && $plan['end'] && ! $effectiveOut)
+                                @php($shortMin = $missingFinalOut ? 15 : (! $plan['rest'] && $plan['end'] && $effectiveOut ? (int) (\App\Support\Undertime::minutesShort($effectiveOut, $plan['end']) ?? 0) : 0))
+                                @php($late = $lateMin > 5)
+                                @php($short = $shortMin > 5)
+                                @php($late ? $lateTotals[$person->employee_id][0] = ($lateTotals[$person->employee_id][0] ?? 0) + 1 : null)
+                                @php($late ? $lateTotals[$person->employee_id][1] = ($lateTotals[$person->employee_id][1] ?? 0) + $lateMin : null)
+                                @php($cellClass = ! $effectiveOut ? 'wk-missing' : ($late || $short ? 'wk-alert' : 'wk-ok'))
+                                <td class="wk-cell {{ $cellClass }}" title="In {{ $clock($a->time_in) }}, out {{ $effectiveOut ? $clock($effectiveOut).($usedFallbackOut ? ' last punch' : '') : 'no out' }}">
+                                    <span class="{{ $late ? 'wk-off' : '' }}">{{ $clock($a->time_in) }}</span>@if($late)<span class="wk-min">{{ $lateMin }}m late</span>@endif<br>
+                                    <span class="{{ $short || ! $effectiveOut ? 'wk-off' : '' }}">{{ $effectiveOut ? $clock($effectiveOut) : 'no out' }}</span>@if($usedFallbackOut)<span class="wk-min">last punch</span>@endif @if($short)<span class="wk-min">{{ $missingFinalOut ? 'undertime' : $shortMin.'m early' }}</span>@endif
+                                </td>
+                            @elseif($leave)
+                                @php($isPaid = $leavePaid($leave))
+                                <td class="{{ $isPaid ? 'sg-leave' : 'sg-leave-unpaid' }}" title="{{ ucwords(str_replace('_', ' ', (string) $leave->leave_type)) }} - {{ $isPaid ? 'paid' : 'unpaid' }}">{{ $isPaid ? 'PAID' : 'UNPAID' }}</td>
+                            @elseif($a && $a->status === 'official_business')
+                                <td class="sg-ob">OB</td>
+                            @elseif($a && $a->notes === 'Suspension')
+                                <td class="sg-susp">S</td>
+                            @elseif($plan['rest'])
+                                <td class="wk-rest" title="Rest day">RD</td>
+                            @elseif($day->lt(\Carbon\Carbon::today()) && ! $plan['rest'] && ! $leave)
+                                <td class="wk-absent" title="Absent">ABS</td>
+                            @else
+                                <td class="sg-none">{{ $day->lt(\Carbon\Carbon::today()) ? '—' : '' }}</td>
+                            @endif
+                        @endfor
+                        <td class="sg-leave-total">@if($t = $lateTotals[$person->employee_id] ?? null)<span class="wk-off">{{ $t[0] }}× · {{ $t[1] }}m</span>@else<span class="sg-none">—</span>@endif</td>
+                    </tr>
+                @endforeach
+            @endforeach
+        </tbody>
+    </table>
+    </div>
+</div>
+<style>
+    .people .worked-grid .wk-cell { font-size:10px; line-height:1.25; white-space:nowrap; border-left-width:3px; }
+    .people .worked-grid .wk-ok { background:#ecfdf5; border-left-color:#22c55e; color:#14532d; }
+    .people .worked-grid .wk-alert { background:#fff7ed; border-left-color:#f97316; color:#7c2d12; }
+    .people .worked-grid .wk-missing { background:#fef2f2; border-left-color:#ef4444; color:#7f1d1d; }
+    .people .worked-grid .wk-absent { background:#dc2626; color:#fff; font-weight:800; font-size:10px; letter-spacing:.04em; }
+    .people .worked-grid .wk-rest { background:#dc2626; color:#fff; font-weight:800; font-size:10px; letter-spacing:.04em; }
+    .people .worked-grid .wk-off { color:#dc2626; font-weight:700; }
+    .people .worked-grid .wk-min { display:block; font-size:9px; color:#dc2626; }
+    .people .worked-grid tbody tr:hover .wk-ok { background:#dcfce7; }
+    .people .worked-grid tbody tr:hover .wk-alert { background:#ffedd5; }
+    .people .worked-grid tbody tr:hover .wk-missing { background:#fee2e2; }
+    .people .worked-grid tbody tr:hover .wk-absent { background:#b91c1c; }
+    .people .worked-grid tbody tr:hover .wk-rest { background:#b91c1c; }
+</style>

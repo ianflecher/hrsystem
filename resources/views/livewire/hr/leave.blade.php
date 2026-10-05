@@ -29,7 +29,6 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         'maternity' => 'Maternity Leave',
         'paternity' => 'Paternity Leave',
         'bereavement' => 'Bereavement Leave',
-        'study' => 'Study Leave',
         'unpaid' => 'Unpaid Leave',
         'others' => 'Others'
     ];
@@ -42,7 +41,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     ];
     public $statusLabels = [
         'pending' => 'Supervisor review',
-        'pending_hr' => 'HR review',
+        'pending_hr' => "Waiting for Ma'am An",
         'approved' => 'Approved',
         'rejected' => 'Rejected',
         'cancelled' => 'Cancelled',
@@ -89,6 +88,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 DB::raw('COUNT(*) as total_count'),
                 DB::raw('SUM(CASE WHEN status = "approved" THEN total_days ELSE 0 END) as total_approved_days')
             )
+            ->when(! \App\Support\PeopleAccess::isSupervisorLeaveApprover(), function ($query) {
+                $query->where('status', 'approved')
+                    ->where('approved_by', config('leave.supervisor_approver_user_id'));
+            })
             ->first();
 
         $this->stats = [
@@ -134,12 +137,13 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->leftJoin('users as approver', 'l.approved_by', '=', 'approver.user_id')
             ->orderBy('l.created_at', 'desc');
 
-        // Apply filters
-        if ($this->filters['status']) {
+        // HR is a viewer: it sees only leave already approved by Ma'am Ann.
+        // Ma'am Ann keeps the decision queue on this same screen.
+        if (! \App\Support\PeopleAccess::isSupervisorLeaveApprover()) {
+            $query->where('l.status', 'approved')
+                ->where('l.approved_by', config('leave.supervisor_approver_user_id'));
+        } elseif ($this->filters['status']) {
             $query->where('l.status', $this->filters['status']);
-        } else {
-            // HR sees requests after the supervisor/leader has reviewed them.
-            $query->where('l.status', 'pending_hr');
         }
 
         if ($this->filters['type']) {
@@ -189,6 +193,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             (int) $this->selectedLeave->employee_id,
             (int) substr((string) $this->selectedLeave->start_date, 0, 4)
         );
+    }
+
+    public function paidLeaveUsedFor(int $employeeId, int $year): float
+    {
+        return collect((new \App\Services\LeaveBalances)->forEmployee($employeeId, $year))
+            ->sum(fn (array $balance) => (float) ($balance['used'] ?? 0));
     }
 
     public function saveEntitlement(): void
@@ -248,6 +258,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             return;
         }
 
+        if (! \App\Support\PeopleAccess::isSupervisorLeaveApprover()) {
+            session()->flash('error', "Only Ma'am An can approve leave.");
+
+            return;
+        }
+
         if (! in_array($leave->status, ['pending_hr', 'pending'], true)) {
             session()->flash('error', 'Only requests waiting for approval can be approved.');
 
@@ -303,6 +319,19 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             return; // Will be handled by modal form
         }
 
+        $row = DB::table('leaves')->where('leave_id', $leaveId)->first();
+        if (! $row) {
+            session()->flash('error', 'That leave request no longer exists.');
+
+            return;
+        }
+
+        if (! \App\Support\PeopleAccess::isSupervisorLeaveApprover()) {
+            session()->flash('error', "Only Ma'am An can reject leave.");
+
+            return;
+        }
+
         // If direct rejection without modal
         DB::table('leaves')
             ->where('leave_id', $leaveId)
@@ -331,6 +360,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public function saveRejection()
     {
         if (!$this->selectedLeave) return;
+        if (! \App\Support\PeopleAccess::isSupervisorLeaveApprover()) {
+            session()->flash('error', "Only Ma'am An can reject leave.");
+
+            return;
+        }
 
         $this->validate([
             'selectedLeave.rejection_reason' => 'required|string|min:5|max:500'
@@ -364,6 +398,19 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
     public function cancelLeave($leaveId)
     {
+        if (! \App\Support\PeopleAccess::isSupervisorLeaveApprover()) {
+            session()->flash('error', "Only Ma'am An can cancel leave.");
+
+            return;
+        }
+
+        $leave = DB::table('leaves')->where('leave_id', $leaveId)->first();
+        if (! $leave) {
+            session()->flash('error', 'That leave request no longer exists.');
+
+            return;
+        }
+
         DB::table('leaves')
             ->where('leave_id', $leaveId)
             ->update([
@@ -376,7 +423,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             'action' => 'update',
             'table_name' => 'leaves',
             'record_id' => $leaveId,
-            'old_values' => json_encode(['status' => 'pending']),
+            'old_values' => json_encode(['status' => $leave->status]),
             'new_values' => json_encode(['status' => 'cancelled']),
             'user_id' => auth()->id() ?? 1,
             'created_at' => now(),
@@ -590,7 +637,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 <select wire:model.live="filters.status" class="form-input">
                     <option value="">All Status</option>
                     <option value="pending">Supervisor review</option>
-                    <option value="pending_hr">HR review</option>
+                    <option value="pending_hr">Waiting for Ma'am An</option>
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                     <option value="cancelled">Cancelled</option>
@@ -735,6 +782,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         <th>Leave Type</th>
                         <th>Date Range</th>
                         <th>Duration</th>
+                        <th>Paid Used</th>
                         <th>Reason</th>
                         <th>Status</th>
                         <th>Actions</th>
@@ -751,11 +799,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     'maternity' => 'bg-pink-100 text-pink-800',
                                     'paternity' => 'bg-indigo-100 text-indigo-800',
                                     'bereavement' => 'bg-gray-100 text-gray-800',
-                                    'study' => 'bg-yellow-100 text-yellow-800',
                                     'unpaid' => 'bg-orange-100 text-orange-800',
                                     'others' => 'bg-teal-100 text-teal-800',
                                 ];
                                 $typeColor = $typeColors[$leave->leave_type] ?? 'bg-gray-100 text-gray-800';
+                                $leaveYear = (int) date('Y', strtotime($leave->start_date));
+                                $paidUsed = $this->paidLeaveUsedFor((int) $leave->employee_id, $leaveYear);
                             @endphp
                             <tr>
                                 <td>
@@ -794,6 +843,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     </div>
                                 </td>
                                 <td>
+                                    <div class="text-sm">
+                                        <span class="font-semibold text-gray-900">
+                                            {{ rtrim(rtrim(number_format($paidUsed, 1), '0'), '.') }}
+                                        </span>
+                                        <span class="text-gray-500">paid day(s)</span>
+                                        <div class="text-xs text-gray-500">{{ $leaveYear }}</div>
+                                    </div>
+                                </td>
+                                <td>
                                     <div class="max-w-xs truncate" title="{{ $leave->reason }}">
                                         {{ $leave->reason }}
                                     </div>
@@ -829,7 +887,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                             </button>
                                         @endif
                                         
-                                        @if($leave->status === 'pending_hr')
+                                        @if(in_array($leave->status, ['pending', 'pending_hr'], true) && \App\Support\PeopleAccess::isSupervisorLeaveApprover())
                                             <button wire:click="approveLeave('{{ $leave->leave_id }}')" 
                                                     onclick="return confirm('Approve leave request for {{ $leave->full_name }}?')"
                                                     class="px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-slate-100">
@@ -848,7 +906,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                             </button>
                                         @endif
                                         
-                                        @if(in_array($leave->status, ['approved', 'rejected']) && $leave->status !== 'cancelled')
+                                        @if(\App\Support\PeopleAccess::isSupervisorLeaveApprover() && in_array($leave->status, ['approved', 'rejected']) && $leave->status !== 'cancelled')
                                             <button wire:click="cancelLeave('{{ $leave->leave_id }}')" 
                                                     onclick="return confirm('Cancel this leave? This action cannot be undone.')"
                                                     class="px-3 py-1 text-xs bg-gray-50 text-gray-600 rounded hover:bg-gray-100">
@@ -861,7 +919,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         @endforeach
                     @else
                         <tr>
-                            <td colspan="7" class="text-center py-8 text-gray-500">
+                            <td colspan="8" class="text-center py-8 text-gray-500">
                                 <div class="flex flex-col items-center">
                                     <i class="fas fa-calendar-times text-4xl text-gray-300 mb-3"></i>
                                     <p class="text-lg">No leave requests found</p>
@@ -938,9 +996,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     <span class="px-3 py-1 rounded-full text-sm font-medium {{ $typeColors[$selectedLeave->leave_type] ?? 'bg-gray-100 text-gray-800' }}">
                                         {{ $leaveTypes[$selectedLeave->leave_type] ?? ucfirst($selectedLeave->leave_type) }}
                                     </span>
+                                    @if($selectedLeave->leave_type !== 'unpaid')
                                     <span class="ml-2 px-3 py-1 rounded-full text-sm font-medium {{ ($selectedLeave->pay_status ?? ($selectedLeave->leave_type === 'unpaid' ? 'unpaid' : 'paid')) === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-orange-100 text-orange-800' }}">
                                         {{ ucfirst($selectedLeave->pay_status ?? ($selectedLeave->leave_type === 'unpaid' ? 'unpaid' : 'paid')) }}
                                     </span>
+                                    @endif
                                 </div>
                                 <div>
                                     <label class="text-xs text-gray-500">Date Range</label>
@@ -981,7 +1041,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="text-xs text-gray-500">Approved By</label>
-                                    <p class="font-medium">{{ $selectedLeave->approver_name ?? 'N/A' }}</p>
+                                    <p class="font-medium">{{ $selectedLeave->approver_name ?? (str_contains((string) $selectedLeave->reason, 'schedule)') ? 'From the uploaded schedule' : 'N/A') }}</p>
                                 </div>
                                 <div>
                                     <label class="text-xs text-gray-500">Approved At</label>
@@ -1021,7 +1081,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         @endif
 
                         <!-- Actions (if pending) -->
-                        @if($selectedLeave->status === 'pending_hr')
+                        @if(in_array($selectedLeave->status, ['pending', 'pending_hr'], true) && \App\Support\PeopleAccess::isSupervisorLeaveApprover())
                         @php($balance = $this->selectedBalances[$selectedLeave->leave_type] ?? null)
                         <div class="md:col-span-2 border-t pt-4">
                             {{-- The figures belong next to the button, not on
@@ -1031,7 +1091,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     <strong>{{ $leaveTypes[$selectedLeave->leave_type] ?? $selectedLeave->leave_type }}</strong>
                                     for {{ substr((string) $selectedLeave->start_date, 0, 4) }}:
                                     {{ rtrim(rtrim(number_format($balance['entitled'], 1), '0'), '.') }} days entitled,
-                                    {{ rtrim(rtrim(number_format($balance['used'], 1), '0'), '.') }} taken,
+                                    {{ rtrim(rtrim(number_format($balance['used'], 1), '0'), '.') }} paid taken,
                                     <strong>{{ rtrim(rtrim(number_format(max(0, $balance['entitled'] - $balance['used']), 1), '0'), '.') }} left</strong>
                                     before this request of {{ rtrim(rtrim(number_format((float) $selectedLeave->total_days, 1), '0'), '.') }}.
                                     @unless($balance['eligible'])
@@ -1102,7 +1162,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         @endif
 
                         <!-- Additional Actions for non-pending leaves -->
-                        @if(in_array($selectedLeave->status, ['approved', 'rejected']) && $selectedLeave->status !== 'cancelled')
+                        @if(\App\Support\PeopleAccess::isSupervisorLeaveApprover() && in_array($selectedLeave->status, ['approved', 'rejected']) && $selectedLeave->status !== 'cancelled')
                         <div class="md:col-span-2 border-t pt-4">
                             <h4 class="text-sm font-medium text-gray-700 mb-3">Additional Actions</h4>
                             <button wire:click="cancelLeave('{{ $selectedLeave->leave_id }}')" 

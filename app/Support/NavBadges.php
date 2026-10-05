@@ -69,13 +69,17 @@ class NavBadges
                 ->count(),
 
             // Leave already checked by the team lead and waiting for HR.
-            'hr.leave' => (int) DB::table('leaves')->where('status', 'pending_hr')->count(),
+            // HR no longer approves leave; only Ma'am An's own waits for the HR supervisor.
+            'hr.leave' => (int) DB::table('leaves as l')->join('employees as e', 'e.employee_id', '=', 'l.employee_id')
+                ->whereIn('l.status', ['pending', 'pending_hr'])->where('e.user_id', \App\Services\OvertimeApproval::finalApproverId())->count(),
 
             // Payslips calculated and waiting on approval.
             'hr.payroll' => (int) DB::table('hr_payroll')->where('status', 'calculated')->count(),
 
             // Overtime the same.
-            'overtime' => (int) DB::table('overtime_requests')->where('status', 'pending_hr')->count(),
+            // HR no longer decides overtime; only Ma'am An's own requests wait for the HR supervisor.
+            'overtime' => (int) DB::table('overtime_requests as o')->join('employees as e', 'e.employee_id', '=', 'o.employee_id')
+                ->whereIn('o.status', ['pending', 'pending_hr'])->where('e.user_id', \App\Services\OvertimeApproval::finalApproverId())->count(),
         ]);
     }
 
@@ -97,13 +101,15 @@ class NavBadges
 
             // Only what this person can actually decide: never their own
             // request, and a supervisor's leave only for its approver.
-            $leaveIds = DB::table('leaves')->where('status', 'pending')->pluck('employee_id');
-            $otIds = $departmentIds
-                ? DB::table('overtime_requests as o')->join('employees as e', 'e.employee_id', '=', 'o.employee_id')
-                    ->where('o.status', 'pending')->whereIn('e.department_id', $departmentIds)->pluck('o.employee_id')
+            $leaveIds = DB::table('leaves')->where('status', 'pending')->pluck('employee_id')
+                ->merge(PeopleAccess::isOperationsSupervisor() ? DB::table('leaves')->where('status', 'pending_hr')->pluck('employee_id')->map(fn () => -1) : []);
+            $otIds = ($departmentIds || PeopleAccess::isOperationsSupervisor())
+                ? PeopleAccess::scopeTeam(DB::table('overtime_requests as o')->join('employees as e', 'e.employee_id', '=', 'o.employee_id')
+                    ->where('o.status', 'pending'))->pluck('o.employee_id')
                 : collect();
-            $teamPending = $leaveIds->filter(fn ($id) => PeopleAccess::decidesLeaveOf((int) $id))->count()
-                + $otIds->filter(fn ($id) => PeopleAccess::managesEmployee((int) $id))->count();
+            $teamPending = $leaveIds->filter(fn ($id) => $id === -1 || PeopleAccess::decidesLeaveOf((int) $id))->count()
+                + $otIds->filter(fn ($id) => PeopleAccess::managesEmployee((int) $id))->count()
+                + (\App\Services\OvertimeApproval::isFinalApprover() ? (int) DB::table('overtime_requests')->where('status', 'pending_hr')->count() : 0);
 
             return [
             // Interviews given to them that they have not reported on. Whether

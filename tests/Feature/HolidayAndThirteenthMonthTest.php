@@ -116,7 +116,7 @@ class HolidayAndThirteenthMonthTest extends TestCase
             $this->actingAs($hr)
                 ->get(route('payslip.show', $payslip->payroll_id))
                 ->assertOk()
-                ->assertSee('Holiday premium');
+                ->assertSee('Legal Holiday:');
         }
     }
 

@@ -63,6 +63,7 @@ Volt::route('/applicant/login', 'auth.applicantlogin')->name('applicant.login');
 Route::middleware('auth')->group(function () {
     Route::get('/applications/{id}/resume', [\App\Http\Controllers\ApplicationFileController::class, 'resume'])->whereNumber('id')->name('applications.resume');
     Route::get('/applications/documents/{id}', [\App\Http\Controllers\ApplicationFileController::class, 'document'])->whereNumber('id')->name('applications.document');
+    Route::get('/payslips/print', [\App\Http\Controllers\PayslipController::class, 'batch'])->name('payslips.batch');
     Route::get('/payslip/{id}', \App\Http\Controllers\PayslipController::class)->whereNumber('id')->name('payslip.show');
     Route::get('/hr/reports/download', \App\Http\Controllers\HrReportController::class)->name('people.reports.download');
     Route::post('/people/notices/{id}', [\App\Http\Controllers\PeopleController::class, 'notice'])->whereNumber('id')->name('people.notices.act');
@@ -90,6 +91,7 @@ Route::middleware('auth')->group(function () {
         Volt::route('/hr/positions', 'hr.positions')->name('hr.positions');
         Volt::route('/hr/applications', 'hr.applications')->name('hr.applications');
         Volt::route('/hr/attendance', 'hr.attendance')->name('hr.attendance');
+        Volt::route('/hr/attendance-summary', 'hr.attendance-summary')->name('hr.attendance-summary');
         Volt::route('/hr/leave', 'hr.leave')->name('hr.leave');
         Volt::route('/hr/payroll', 'hr.payroll')->name('hr.payroll');
 

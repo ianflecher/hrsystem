@@ -60,12 +60,13 @@ class PayslipTest extends TestCase
 
     public function test_an_employee_can_open_their_own_payslip(): void
     {
+        DB::table('hr_payroll')->where('payroll_id', $this->payrollId)->update(['status' => 'approved']);
         $this->actingAs($this->staff)->get('/payslip/'.$this->payrollId)
             ->assertOk()
             ->assertSee($this->staff->full_name)
-            ->assertSee('Screen Printing Operator')
-            ->assertSee('Imprint Customs PH')
-            ->assertSee('Net pay');
+            ->assertSee('SCREEN PRINTING OPERATOR')
+            ->assertSee('EMPLOYEE SIGNATURE')
+            ->assertSee('NET PAY');
     }
 
     public function test_it_is_nobody_elses_to_open(): void
@@ -95,6 +96,7 @@ class PayslipTest extends TestCase
             'every peso withheld must be named on the payslip');
         $this->assertEqualsWithDelta((float) $row->gross_pay - (float) $row->deductions, (float) $row->net_pay, 0.01);
 
+        DB::table('hr_payroll')->where('payroll_id', $this->payrollId)->update(['status' => 'approved']);
         $this->actingAs($this->staff)->get('/payslip/'.$this->payrollId)
             ->assertSee(number_format((float) $row->net_pay, 2))
             ->assertSee(number_format((float) $row->gross_pay, 2));
@@ -106,15 +108,24 @@ class PayslipTest extends TestCase
 
         $id = DB::table('hr_payroll')->where('employee_id', $this->employeeId)
             ->where('kind', ThirteenthMonth::KIND)->value('payroll_id');
+        DB::table('hr_payroll')->where('payroll_id', $id)->update(['status' => 'approved']);
 
         $this->actingAs($this->staff)->get('/payslip/'.$id)
             ->assertOk()
-            ->assertSee('13th month pay')
+            ->assertSee('13th Month Pay')
             ->assertDontSee('Basic pay for the period');
     }
 
     public function test_a_payslip_that_does_not_exist_is_a_404(): void
     {
         $this->actingAs($this->hr)->get('/payslip/99999999')->assertNotFound();
+    }
+
+    public function test_an_employee_waits_for_approval(): void
+    {
+        DB::table('hr_payroll')->where('payroll_id', $this->payrollId)->update(['status' => 'calculated']);
+
+        $this->actingAs($this->staff)->get('/payslip/'.$this->payrollId)->assertNotFound();
+        $this->actingAs($this->hr)->get('/payslip/'.$this->payrollId)->assertOk();
     }
 }

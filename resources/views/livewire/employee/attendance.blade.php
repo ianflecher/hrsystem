@@ -19,6 +19,8 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
     public $isClockedIn = false;
     public bool $showAllAttendance = false;
     public int $cutoffWorkedMinutes = 0;
+    public string $selectedCutoffStart = '';
+    public array $cutoffOptions = [];
 
     /** A day's times from somebody the scanner cannot record yet. */
     public string $logDate = '';
@@ -91,6 +93,22 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
 
         abort_unless($this->employee, 403, 'An employee record is required.');
 
+        $this->cutoffOptions = collect(PayPeriod::recent(6))
+            ->map(fn (PayPeriod $period) => ['start' => $period->start, 'label' => $period->label()])
+            ->all();
+        $this->selectedCutoffStart = $this->cutoffOptions[0]['start'] ?? PayPeriod::fromStart(now()->toDateString())->start;
+
+        $this->loadData();
+    }
+
+    public function updatedSelectedCutoffStart(): void
+    {
+        $valid = collect($this->cutoffOptions)->pluck('start')->contains($this->selectedCutoffStart);
+        if (! $valid) {
+            $this->selectedCutoffStart = $this->cutoffOptions[0]['start'] ?? PayPeriod::fromStart(now()->toDateString())->start;
+        }
+
+        $this->showAllAttendance = false;
         $this->loadData();
     }
     
@@ -105,10 +123,8 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             ->whereDate('date', $today)
             ->first();
             
-        // Load attendance history for the current semi-monthly cutoff.
-        $cutoff = PayPeriod::fromStart(now()->day >= 16
-            ? now()->copy()->day(16)->toDateString()
-            : now()->copy()->day(1)->toDateString());
+        // Load attendance history for the selected semi-monthly cutoff.
+        $cutoff = PayPeriod::fromStart($this->selectedCutoffStart ?: now()->toDateString());
 
         $this->currentCutoff = $cutoff->label();
         
@@ -121,6 +137,18 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
 
         $this->cutoffWorkedMinutes = collect($this->attendanceHistory)
             ->sum(fn ($row) => \App\Support\WorkDay::workedMinutes($row));
+
+        // Absent days have no record - nobody punched - so they are added from the
+        // same count payroll uses (up to yesterday), and listed like any other day.
+        $last = min($cutoff->end, now()->subDay()->toDateString());
+        $deductions = $last >= $cutoff->start
+            ? (new \App\Services\TimeDeductions)->forPeriod($this->employee, $cutoff->start, $last) : ['dates' => []];
+        $absentDates = $deductions['dates']['absent'] ?? [];
+        foreach ($absentDates as $date) {
+            $this->attendanceHistory[] = (object) ['date' => $date, 'status' => 'absent', 'time_in' => null, 'lunch_in' => null,
+                'lunch_out' => null, 'cb_in' => null, 'cb_out' => null, 'time_out' => null, 'notes' => 'No scan, leave or official business'];
+        }
+        usort($this->attendanceHistory, fn ($x, $y) => strcmp(substr((string) $y->date, 0, 10), substr((string) $x->date, 0, 10)));
             
         // Load cut-off summary
         $this->monthlySummary = DB::table('hr_attendance')
@@ -135,6 +163,13 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             ->where('employee_id', $employeeId)
             ->whereBetween('date', [$cutoff->start, $cutoff->end])
             ->first();
+        // Absences and suspensions as payroll counts them (a suspension is saved as absent).
+        if ($this->monthlySummary) {
+            $suspended = collect($this->attendanceHistory)->filter(fn ($r) => ($r->notes ?? '') === 'Suspension' && ! $r->time_in)->count();
+            $this->monthlySummary->absent_days = count($absentDates);
+            $this->monthlySummary->suspended_days = $suspended;
+            $this->monthlySummary->total_days = (int) $this->monthlySummary->total_days - $suspended + count($absentDates);
+        }
             
         // Check clock status
         $this->checkClockStatus();
@@ -440,6 +475,7 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                         <div class="bg-slate-50 rounded-lg p-5 text-center border border-gray-200">
                             <div class="text-3xl font-bold text-gray-900 mb-2">{{ $monthlySummary->absent_days ?? 0 }}</div>
                             <p class="text-gray-500 text-sm">Absent Days</p>
+                            @if($monthlySummary->suspended_days ?? 0)<p class="text-xs text-gray-500 mt-1">+ {{ $monthlySummary->suspended_days }} suspended</p>@endif
                         </div>
                     </div>
                     
@@ -477,14 +513,43 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
             
             <!-- Recent Attendance -->
             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <h2 class="text-xl font-bold text-gray-900 mb-1">Recent Attendance</h2>
-                <p class="text-sm text-gray-500 mb-6">{{ $currentCutoff }}</p>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-6">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900 mb-1">Attendance Punches</h2>
+                        <p class="text-sm text-gray-500">{{ $currentCutoff }}</p>
+                    </div>
+                    <label class="text-sm text-gray-600">
+                        <span class="block mb-1 font-medium text-gray-700">Cut-off</span>
+                        <select wire:model.live="selectedCutoffStart" class="form-input min-w-[14rem]">
+                            @foreach($cutoffOptions as $option)
+                                <option value="{{ $option['start'] }}">{{ $option['label'] }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                </div>
                 
                 @if(count($attendanceHistory) > 0)
                     <div class="space-y-4">
                         @foreach(array_slice($attendanceHistory, 0, $showAllAttendance ? count($attendanceHistory) : 7) as $record)
-                            <div class="flex items-center justify-between p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition">
-                                <div class="flex items-center">
+                            @php
+                                $problems = \App\Support\WorkDay::problems($record);
+                                $hasNoOut = $record->time_in && ! $record->time_out;
+                                $status = $hasNoOut ? 'undertime' : (($record->notes ?? '') === 'Suspension' && ! $record->time_in ? 'suspended' : $record->status);
+                                $statusClasses = [
+                                    'present' => 'bg-emerald-100 text-emerald-800',
+                                    'late' => 'bg-amber-100 text-amber-800',
+                                    'undertime' => 'bg-orange-100 text-orange-800',
+                                    'on_leave' => 'bg-blue-100 text-blue-800',
+                                    'half_day' => 'bg-yellow-100 text-yellow-800',
+                                    'absent' => 'bg-red-100 text-red-800',
+                                    'suspended' => 'bg-gray-200 text-gray-800',
+                                ];
+                                $statusClass = $statusClasses[$status] ?? 'bg-gray-100 text-gray-800';
+                                $worked = \App\Support\WorkDay::workedMinutes($record, 60, $employee);
+                            @endphp
+                            <div class="p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition">
+                                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                    <div class="flex items-center">
                                     <div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center mr-4 border border-gray-200">
                                         <span class="text-gray-900 font-bold">{{ \Carbon\Carbon::parse($record->date)->format('d') }}</span>
                                     </div>
@@ -492,36 +557,33 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                                         <p class="font-medium text-gray-900">
                                             {{ \Carbon\Carbon::parse($record->date)->format('l, M j') }}
                                         </p>
-                                        <div class="flex items-center space-x-4 mt-1">
-                                            @if($record->time_in)
-                                                <span class="text-sm text-gray-500">
-                                                    <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
-                                                    </svg>
-                                                    {{ \Carbon\Carbon::parse($record->time_in)->format('h:i A') }}
-                                                </span>
+                                        <div class="mt-1 flex flex-wrap items-center gap-2">
+                                            <span class="px-3 py-1 rounded-full text-xs font-medium {{ $statusClass }}">
+                                                {{ ucfirst(str_replace('_', ' ', $status)) }}
+                                            </span>
+                                            @if($worked > 0)
+                                                <span class="text-xs text-gray-500">{{ intdiv($worked, 60) }}h {{ $worked % 60 }}m</span>
                                             @endif
-                                            @if($record->time_out)
-                                                <span class="text-sm text-gray-500">
-                                                    <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd" />
-                                                    </svg>
-                                                    {{ \Carbon\Carbon::parse($record->time_out)->format('h:i A') }}
-                                                </span>
+                                            @if($problems)
+                                                <span class="text-xs font-medium text-amber-700">{{ $problems[0] }}</span>
                                             @endif
                                         </div>
                                     </div>
                                 </div>
-                                <span class="px-3 py-1 rounded-full text-xs font-medium
-                                    {{ $record->status === 'present' ? 'bg-emerald-100 text-emerald-800' : 
-                                       ($record->status === 'late' ? 'bg-amber-100 text-amber-800' : 
-                                       ($record->status === 'on_leave' ? 'bg-blue-100 text-blue-800' : 
-                                       ($record->status === 'half_day' ? 'bg-yellow-100 text-yellow-800' : 
-                                       ($record->status === 'absent' ? 'bg-red-100 text-red-800' : 
-                                       'bg-gray-100 text-gray-800')))) 
-                                    }}">
-                                    {{ ucfirst(str_replace('_', ' ', $record->status)) }}
-                                </span>
+                                    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6 lg:min-w-[34rem]">
+                                        @foreach(\App\Support\WorkDay::PUNCHES as $column => $label)
+                                            @php
+                                                $punch = $record->{$column} ?? null;
+                                            @endphp
+                                            <div class="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                                                <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{{ $label }}</p>
+                                                <p class="mt-1 font-mono text-sm font-semibold text-gray-900">
+                                                    {{ $punch ? \Carbon\Carbon::parse($punch)->format('h:i A') : '—' }}
+                                                </p>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
                             </div>
                         @endforeach
                     </div>

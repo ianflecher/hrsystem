@@ -678,24 +678,32 @@
                 ],
                 'People' => [
                     ['route' => 'hr.employees', 'label' => 'Employees', 'icon' => 'users'],
+                    ['route' => 'hr.operations.manager', 'label' => 'Team Dashboard', 'icon' => 'users-gear'],
                     ['route' => 'people.hr', 'module' => 'documents', 'icon' => 'folder-open'],
                     ['route' => 'people.hr', 'module' => 'checklists', 'icon' => 'list-check'],
                     ['route' => 'people.hr', 'module' => 'reviews', 'icon' => 'star'],
                 ],
                 'Time & attendance' => [
                     ['route' => 'hr.attendance', 'label' => 'Attendance', 'icon' => 'clock'],
+                    ['route' => 'hr.attendance-summary', 'label' => 'Cutoff summary', 'icon' => 'list-check'],
                     ['route' => 'hr.leave', 'label' => 'Leave', 'icon' => 'umbrella-beach'],
                     ['route' => 'people.hr', 'module' => 'overtime', 'icon' => 'stopwatch'],
                     ['route' => 'people.hr', 'module' => 'shifts', 'icon' => 'calendar-days'],
                 ],
-                'Payroll' => [
-                    ['route' => 'hr.payroll', 'label' => 'Payroll', 'icon' => 'money-bill-wave'],
-                    ['route' => 'people.hr', 'module' => 'loans', 'icon' => 'wallet'],
-                ],
+                // The payroll screen is not an HR officer's; recording
+                // government loans is, since a loan shows no salary.
+                'Payroll' => array_merge(
+                    \App\Support\PeopleAccess::canSeePay() ? [['route' => 'hr.payroll', 'label' => 'Payroll', 'icon' => 'money-bill-wave']] : [],
+                    [['route' => 'people.hr', 'module' => 'loans', 'icon' => 'wallet']],
+                ),
                 'Recruitment' => [
                     ['route' => 'hr.positions', 'label' => 'Openings', 'icon' => 'briefcase'],
                     ['route' => 'hr.applications', 'label' => 'Applications', 'icon' => 'file-lines'],
                 ],
+                // HR staff are employees too: their own payslips, whoever may see others'.
+                ...(\Illuminate\Support\Facades\DB::table('employees')->where('user_id', auth()->id())->exists() ? ['Me' => [
+                    ['route' => 'employee.payroll', 'label' => 'My payslips', 'icon' => 'receipt'],
+                ]] : []),
             ] : [
                 'Overview' => [
                     ['route' => 'employee.dashboard', 'label' => 'Dashboard', 'icon' => 'gauge-high'],
@@ -813,5 +821,6 @@
 
 
 @stack('scripts')
+    <script src="{{ asset('js/date-dmy.js') }}" defer></script>
 </body>
 </html>

@@ -210,8 +210,31 @@ class ZktecoDevice extends ZKTeco
      *
      * @return list<array{biometric_id: string, timestamp: string}>
      */
+    /**
+     * What the scanner holds, from its own counter (CMD_GET_FREE_SIZES): people,
+     * fingerprints and attendance records. Null when it does not say.
+     *
+     * @return array{people: int, fingerprints: int, records: int}|null
+     */
+    public function counts(): ?array
+    {
+        $this->_command(50, '');
+        $body = substr((string) $this->_data_recv, 8, 80);
+        if (strlen($body) < 40) {
+            return null;
+        }
+        $v = array_values(unpack('V*', $body));
+
+        return ['people' => (int) $v[4], 'fingerprints' => (int) $v[6], 'records' => (int) $v[8]];
+    }
+
     public function readAttendance(): array
     {
+        // A cleared log sends nothing, which looks just like a dropped download:
+        // ask first, and an empty log is simply no punches.
+        if (($this->counts()['records'] ?? null) === 0) {
+            return [];
+        }
         $this->_command(Util::CMD_ATT_LOG_RRQ, '', Util::COMMAND_TYPE_DATA);
 
         // Three silent waits, not the library's ten: at sixty seconds each a
@@ -232,8 +255,11 @@ class ZktecoDevice extends ZKTeco
         // off - not a format problem, and not worth sending anyone to check one.
         if (strlen($raw) < 12 + 40) {
             throw new \RuntimeException(
-                'The scanner did not send its attendance log in time - the download came back empty. '
-                .'If this keeps happening, restart the scanner and sync again.'
+                'The scanner did not send its attendance log in time - the download came back empty, usually a weak Wi-Fi connection on the biometric scanner. '
+                .'To check, open Command Prompt (cmd) and type: ping 192.168.150.250. '
+                .'If it replies, sync by hand now - paste this into cmd: cd /d D:\\GitHub\\hris && C:\\xampp\\php\\php.exe artisan attendance:sync --full . '
+                .'If it says "Request timed out" or "Destination host unreachable", the scanner\'s Wi-Fi needs to be fixed. '
+                .'If it keeps failing even with a reply, restart the scanner and sync again.'
             );
         }
 

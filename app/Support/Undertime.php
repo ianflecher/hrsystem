@@ -17,8 +17,8 @@ use Carbon\CarbonInterface;
  * start does. If undertime should instead be charged by the minute, or with a
  * different grace, this class is the only thing that changes.
  *
- * A day with no clock-out is not undertime: nobody knows when they left, and
- * guessing would take money off somebody for a scanner that missed a scan.
+ * A raw no-clock-out cannot be measured here; payroll treats a worked day with
+ * no final out as undertime at the service layer so it is named correctly.
  */
 class Undertime
 {

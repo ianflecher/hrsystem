@@ -73,8 +73,18 @@ class SyncAttendance extends Command
         return $alive;
     }
 
+    /** "1m 23s" - how long a sync took, for the attendance page and the log. */
+    public static function took(float $seconds): string
+    {
+        $seconds = (int) round($seconds);
+
+        return $seconds >= 60 ? intdiv($seconds, 60).'m '.($seconds % 60).'s' : $seconds.'s';
+    }
+
     private function sync(PunchImporter $importer): int
     {
+        // Timed from the first knock on the device to the last day written.
+        $clock = microtime(true);
         try {
             if ($file = $this->option('file')) {
                 $this->info("Reading {$file}...");
@@ -92,13 +102,26 @@ class SyncAttendance extends Command
             $this->error($e->getMessage());
             if (! $this->option('file')) {
                 // The HR attendance page reads this and warns until a run succeeds.
-                Cache::forever('attendance.sync.last', ['ok' => false, 'at' => now()->toDateTimeString(), 'message' => $e->getMessage()]);
+                Cache::forever('attendance.sync.last', ['ok' => false, 'at' => now()->toDateTimeString(), 'message' => $e->getMessage(),
+                    'seconds' => round(microtime(true) - $clock, 1)]);
             }
 
             return self::FAILURE;
         }
 
         $this->info('Found '.count($punches).' punch(es).');
+
+        // Every punch kept, as the scanner held it - so its log can be cleared
+        // without losing anything, linked to somebody here or not.
+        if (! $this->option('file') && \Illuminate\Support\Facades\Schema::hasTable('scanner_punches')) {
+            $kept = 0;
+            foreach (array_chunk($punches, 1000) as $chunk) {
+                $kept += DB::table('scanner_punches')->insertOrIgnore(array_map(fn ($p) => [
+                    'biometric_id' => (string) $p['biometric_id'], 'punched_at' => $p['timestamp'], 'created_at' => now(),
+                ], $chunk));
+            }
+            $this->info("Kept {$kept} new punch(es) in the scanner archive.");
+        }
 
         // The device can only hand over its whole log, so what is cut is the
         // import: the days already written are left alone. Three days back
@@ -123,13 +146,21 @@ class SyncAttendance extends Command
         }
 
         $summary = $importer->import($punches, (bool) $this->option('overwrite'));
+
+        // A day worked as a whole different shift (6-3 on an 8-5 day) takes that shift,
+        // so it is not read as lateness or undertime. The last month is enough.
+        $matched = (new \App\Services\ScheduleMatcher)->run(now()->subMonth()->toDateString(), now()->toDateString());
+        if ($matched) $this->info('Matched '.count($matched).' day(s) to the shift actually worked.');
         if (! $this->option('file')) {
-            Cache::forever('attendance.sync.last', ['ok' => true, 'at' => now()->toDateTimeString(), 'message' => null]);
+            Cache::forever('attendance.sync.last', ['ok' => true, 'at' => now()->toDateTimeString(), 'message' => null,
+                'seconds' => round(microtime(true) - $clock, 1), 'punches' => count($punches), 'days' => $summary['days'],
+                'full' => $since === null]);
             Cache::forever('attendance.sync.last_ok_at', $startedAt->toDateTimeString());
         }
 
         $this->newLine();
         $this->info("Wrote {$summary['days']} day(s) across {$summary['employees']} employee(s).");
+        $this->info('Finished in '.self::took(microtime(true) - $clock).' ('.now()->format('M j, g:i:s A').').');
 
         if ($summary['unknown']) {
             $this->newLine();

@@ -214,7 +214,7 @@ class PayrollCalculator
         if (($c['late'] ?? 0) > 0) {
             $named = 0.0;
             foreach ([
-                'absentDays' => ['Absent', 'absence'], 'unpaidLeaveDays' => ['Unpaid leave', 'unpaidLeave'],
+                'absentDays' => ['Absent', 'absence'], 'suspendedDays' => ['Suspended', 'suspension'], 'unpaidLeaveDays' => ['Unpaid leave', 'unpaidLeave'],
                 'lateDays' => ['Late', 'late'], 'undertimeDays' => ['Undertime', 'undertime'],
             ] as $dayKey => [$label, $amountKey]) {
                 $days = (int) ($time[$dayKey] ?? 0); if ($days === 0) continue;

@@ -21,6 +21,8 @@ class HrReportController extends Controller
         ]);
 
         $report = $data['report'];
+        // Pay reports - and the salary column in headcount - are for pay only.
+        if (in_array($report, ['payroll', 'sss', 'philhealth', 'pagibig', 'bir'], true)) PeopleAccess::pay();
         $from = $data['from'] ?? '1900-01-01';
         // Leave is filed before it is taken, so a window ending today hides
         // every upcoming request - which is most of what a leave report is
@@ -104,7 +106,7 @@ class HrReportController extends Controller
                 ->leftJoin('departments as d', 'd.department_id', '=', 'e.department_id')
                 ->when($departmentId, fn ($q) => $q->where('e.department_id', $departmentId))
                 ->when($company, fn ($q) => $q->whereRaw("COALESCE(NULLIF(e.company, ''), 'GKLASAM OPC') = ?", [$company]))
-                ->where('e.hire_date', '<=', $to)->orderBy('u.full_name')->select('u.full_name', 'd.department_name', 'e.job_title', 'e.status', 'e.hire_date', 'e.salary')->cursor(),
+                ->where('e.hire_date', '<=', $to)->orderBy('u.full_name')->select('u.full_name', 'd.department_name', 'e.job_title', 'e.status', 'e.hire_date', PeopleAccess::canSeePay() ? 'e.salary' : DB::raw('NULL as salary'))->cursor(),
         };
     }
 }

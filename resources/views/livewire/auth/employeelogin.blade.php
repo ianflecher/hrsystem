@@ -52,9 +52,10 @@ new #[Layout('components.layouts.landing')] class extends Component
     }
 
 
-    // The staff portal is for the people it serves: employees and the two
-    // tiers above them. Admin and HR sign in through the back office.
-    if (!in_array($user->role, ['employee', 'supervisor', 'leader'])) {
+    // The staff portal is for the people it serves: employees, the two tiers
+    // above them, and the HR officer, who is staff first. Admin signs in
+    // through the back office.
+    if (!in_array($user->role, ['employee', 'supervisor', 'leader', 'hr'])) {
         \Log::warning('User role not allowed', ['role' => $user->role]);
         throw ValidationException::withMessages([
             'username' => __('Access denied. This sign-in is for staff accounts.'),
@@ -67,7 +68,7 @@ new #[Layout('components.layouts.landing')] class extends Component
         ->where('status', 'active')
         ->first();
 
-    if (!$employee) {
+    if (!$employee && $user->role !== 'hr') {
         \Log::warning('No active employee record', ['user_id' => $user->user_id]);
         throw ValidationException::withMessages([
             'username' => __('This staff account is not active. Please contact HR.'),
@@ -92,7 +93,8 @@ new #[Layout('components.layouts.landing')] class extends Component
     
     session()->regenerate();
     
-    return redirect()->route('employee.dashboard');
+    // The HR officer works in HR's screens (without pay) from here.
+    return redirect()->route($user->role === 'hr' ? 'hr.home' : 'employee.dashboard');
 }
 }
 ?>

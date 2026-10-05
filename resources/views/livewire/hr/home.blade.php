@@ -70,13 +70,14 @@ class extends Component
     {
         $this->loadEmployeeStats();
         $this->loadAttendanceStats();
-        $this->loadPayrollStats();
+        // Public state reaches the browser, so pay is not even loaded for an HR officer.
+        if (\App\Support\PeopleAccess::canSeePay()) $this->loadPayrollStats();
         $this->loadDepartmentStats();
         $this->loadRecentHires();
         $this->loadUpcomingLeave();
         $this->loadAttendanceToday();
         $this->loadMonthlyAttendance();
-        $this->loadSalaryDistribution();
+        if (\App\Support\PeopleAccess::canSeePay()) $this->loadSalaryDistribution();
         $this->loadApplicationStats();
         $this->loadRecentApplications();
         $this->loadPositionStats();
@@ -676,6 +677,7 @@ class extends Component
             </a>
 
             <!-- Process Payroll -->
+            @if (\App\Support\PeopleAccess::canSeePay())
             <a href="{{ route('hr.payroll') }}" class="group">
                 <div class="bg-white border-2 border-gray-200 rounded-xl p-6 text-center hover:border-teal-500 hover:shadow-sm transition-all duration-300 transform hover:-translate-y-1">
                     <div class="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-xl flex items-center justify-center transition-transform duration-300">
@@ -690,6 +692,7 @@ class extends Component
                     </div>
                 </div>
             </a>
+            @endif
 
             <!-- Manage Leave -->
             <a href="{{ route('hr.leave') }}" class="group">

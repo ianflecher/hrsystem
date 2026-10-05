@@ -98,6 +98,8 @@
     .people .holiday {background:#fef3c7;border-color:#d97706;color:#78350f}
     .people .shift button {font-size:11px;min-height:30px;padding:4px 7px;margin-top:6px}
     .people .shift-picker {max-width:420px;margin-top:14px}
+    .people .shift-period-filter {display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-top:14px}
+    .people .shift-period-filter .people-field {min-width:220px}
     .people .current-rest-day {display:inline-flex;margin-top:12px;padding:8px 11px;border-radius:999px;background:#f1f5f9;color:#334155;font-size:13px;font-weight:600}
     .people .quick-rest-form {margin-top:8px}
     .people .quick-rest-form button {font-size:11px;min-height:30px;padding:4px 8px}
@@ -145,13 +147,17 @@
 .people .shift-grid thead th { background: #f8fafc; font-weight: 700; color: #0f172a; }
 .people .shift-grid thead th span { display: block; font-size: 10px; color: #64748b; letter-spacing: .04em; }
 .people .shift-grid .sg-name { text-align: left; padding-left: 10px; font-weight: 600; position: sticky; left: 0; background: #fff; min-width: 190px; z-index: 1; }
+.people .shift-grid .sg-monthly-note { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; color: #64748b; }
 .people .shift-grid thead .sg-name { background: #f8fafc; }
 .people .shift-grid .sg-weekend { background: #fdf2f2; }
 .people .shift-grid .sg-holiday { background: #fef3c7; }
 .people .shift-grid .sg-today { box-shadow: inset 0 -3px 0 #dc2626; }
 .people .shift-grid .sg-dept td { background: #eef2ff; text-align: left; font-weight: 700; color: #3730a3; padding-left: 10px; }
 .people .sg-rest { background: #dc2626 !important; color: #fff; font-weight: 700; }
-.people .sg-leave { background: #fde047 !important; color: #713f12; font-weight: 700; font-size: 11px; }
+.people .sg-leave { background: #bbf7d0 !important; color: #166534; font-weight: 700; font-size: 11px; }
+.people .sg-leave-unpaid { background: #fed7aa !important; color: #9a3412; font-weight: 700; font-size: 11px; }
+.people .sg-count { display: inline-block; border-radius: 9999px; padding: 1px 7px; margin: 1px; white-space: nowrap; }
+.people .sg-leave-total { min-width: 70px; text-align: center; }
 .people .sg-none { color: #94a3b8; }
 .people .sg-legend span { display: inline-block; padding: 1px 6px; border-radius: 4px; margin: 0 4px 0 10px; }
 .people .sg-legend span:first-child { margin-left: 0; }
@@ -181,7 +187,7 @@
     .people .shift-grid .sg-name { min-width: 0; width: 112px; max-width: 112px; white-space: normal; line-height: 1.25; font-size: 12px; padding: 6px 8px; box-shadow: 1px 0 0 #e2e8f0; }
     .people .shift-grid th, .people .shift-grid td { padding: 6px 3px; }
     .people .shift-grid td:not(.sg-name) { min-width: 34px; }
-    .people .sg-leave { font-size: 9px; }
+    .people .sg-leave, .people .sg-leave-unpaid { font-size: 9px; }
 }
 </style>
 <style>

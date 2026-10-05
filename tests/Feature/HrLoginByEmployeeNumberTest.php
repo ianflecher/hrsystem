@@ -139,7 +139,7 @@ class HrLoginByEmployeeNumberTest extends TestCase
         $number = $this->number();
         $this->account('hr', $number);
 
-        Volt::test('auth.adminlogin')
+        Volt::test('auth.employeelogin')
             ->set('username', $number)
             ->set('password', 'correct-horse-9')
             ->call('login')

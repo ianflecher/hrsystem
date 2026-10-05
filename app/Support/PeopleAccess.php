@@ -16,6 +16,20 @@ class PeopleAccess
         abort_unless(self::isHr(), 403);
     }
 
+    /**
+     * Pay - salaries, payslips, payroll, loans - is for admins only. An HR
+     * officer does everything else HR does, but never sees what anybody earns.
+     */
+    public static function canSeePay(): bool
+    {
+        return auth()->check() && auth()->user()->role === 'admin';
+    }
+
+    public static function pay(): void
+    {
+        abort_unless(self::canSeePay(), 403, 'Pay and payroll are for the HR supervisor.');
+    }
+
     public static function isManager(): bool
     {
         return auth()->check() && in_array(auth()->user()->role, ['admin','hr','supervisor','leader'], true);
@@ -71,6 +85,63 @@ class PeopleAccess
             ->all();
     }
 
+    /**
+     * Departments explicitly assigned to this user as supervisor.
+     *
+     * HR/admin still have broad HR access elsewhere, but Team Dashboard should
+     * read as the person's actual team when departments name them directly.
+     *
+     * @return array<int, int>
+     */
+    public static function assignedDepartmentIds(): array
+    {
+        if (! auth()->check()) {
+            return [];
+        }
+
+        return DB::table('departments')
+            ->where('supervisor_id', auth()->id())
+            ->pluck('department_id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Team Dashboard scope: assigned departments when present, otherwise the
+     * normal managed-department rule.
+     *
+     * @return array<int, int>
+     */
+    public static function teamDashboardDepartmentIds(): array
+    {
+        $assigned = self::assignedDepartmentIds();
+
+        return $assigned !== [] ? $assigned : self::managedDepartmentIds();
+    }
+
+    /**
+     * The operations supervisor (Ma'am An, config/leave.php) leads the
+     * supervisors and team leaders of every department - not a department's staff.
+     */
+    public static function isOperationsSupervisor(): bool
+    {
+        return auth()->check() && (int) auth()->id() === (int) config('leave.supervisor_approver_user_id');
+    }
+
+    /**
+     * Limits an employees query (aliased $alias) to the signed-in manager's team:
+     * their departments, or for the operations supervisor, every supervisor and leader.
+     */
+    public static function scopeTeam($query, string $alias = 'e')
+    {
+        if (self::isOperationsSupervisor()) {
+            return $query->whereIn($alias.'.user_id', DB::table('users')->whereIn('role', ['supervisor', 'leader'])->select('user_id'));
+        }
+
+        return $query->whereIn($alias.'.department_id', self::managedDepartmentIds());
+    }
+
     public static function managesEmployee(int $employeeId): bool
     {
         $employee = DB::table('employees')->where('employee_id', $employeeId)->first();
@@ -81,6 +152,10 @@ class PeopleAccess
 
         if ((int) $employee->user_id === (int) auth()->id()) {
             return false;
+        }
+
+        if (! self::isHr() && self::isOperationsSupervisor()) {
+            return in_array(DB::table('users')->where('user_id', $employee->user_id)->value('role'), ['supervisor', 'leader'], true);
         }
 
         // A leader answers to the supervisor, not the other way round: a
@@ -109,11 +184,18 @@ class PeopleAccess
         if (! $userId || (int) $userId === (int) auth()->id()) {
             return false;
         }
-        if (DB::table('users')->where('user_id', $userId)->value('role') === 'supervisor') {
+        if (in_array(DB::table('users')->where('user_id', $userId)->value('role'), ['supervisor', 'leader'], true)) {
             return self::isSupervisorLeaveApprover();
         }
 
         return self::managesEmployee($employeeId);
+    }
+
+    /** HR only decides Ma'am An's own leave and overtime; everybody else's ends with her. */
+    public static function hrDecidesFor(int $employeeId): bool
+    {
+        return self::canSeePay() && (int) DB::table('employees')->where('employee_id', $employeeId)->value('user_id')
+            === (int) config('leave.supervisor_approver_user_id');
     }
 
     public static function managerForEmployee(int $employeeId): void
@@ -126,6 +208,6 @@ class PeopleAccess
         $employee = DB::table('employees')->where('employee_id', $employeeId)->first();
         abort_unless($employee, 404);
         abort_if((int) $employee->user_id === (int) auth()->id(), 403, 'You cannot approve your own request.');
-        abort_unless(self::isHr() || self::managesEmployee($employeeId), 403);
+        abort_unless(self::isHr() || self::managesEmployee($employeeId) || \App\Services\OvertimeApproval::isFinalApprover(), 403);
     }
 }

@@ -77,12 +77,12 @@ class ZktecoPuller
 
         if (! $device->connect()) {
             throw new RuntimeException(
-                "The scanner at {$this->host}:{$this->port} did not answer. ".
-                'If it shows up on the network but stays silent, it is most likely set to '.
-                'push rather than pull - check Menu > Comm > Cloud Server (ADMS) on the '.
-                'device, and clear it to pull from here. Otherwise check it is switched on '.
-                'and still at that address. Attendance can be uploaded from its export in '.
-                'the meantime.'
+                // "did not answer" is what the retry above looks for.
+                "The biometric scanner did not answer - it has no Wi-Fi connection. ".
+                "To check, open Command Prompt (cmd) and type: ping {$this->host}. ".
+                'If it replies, the connection is back and the next sync will work again - or sync by hand now: '.
+                'paste this into cmd: cd /d D:\\GitHub\\hris && C:\\xampp\\php\\php.exe artisan attendance:sync --full . '.
+                "If it says \"Request timed out\" or \"Destination host unreachable\", the scanner's Wi-Fi needs to be fixed."
             );
         }
 

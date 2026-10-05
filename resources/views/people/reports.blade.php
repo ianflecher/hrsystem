@@ -7,7 +7,7 @@
                 <option value="headcount">Headcount</option>
                 <option value="attendance">Attendance</option>
                 <option value="leave">Leave</option>
-                <option value="payroll">Payroll</option>
+                @if(\App\Support\PeopleAccess::canSeePay())<option value="payroll">Payroll</option>@endif
             </select>
         </label>
         <x-people.field name="from" label="From" type="date" :required="false" />

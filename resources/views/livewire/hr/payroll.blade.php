@@ -14,7 +14,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 
     public function boot(): void
     {
-        \App\Support\PeopleAccess::hr();
+        \App\Support\PeopleAccess::pay();
     }
     
     public $search = '';
@@ -143,7 +143,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->when($this->statusFilter, function ($query) {
                 $query->where('employees.status', $this->statusFilter);
             })
-            ->orderBy('users.full_name')
+            // By surname, like the employee list.
+            ->orderByRaw("COALESCE(NULLIF(users.last_name, ''), users.full_name)")
+            ->orderByRaw("COALESCE(NULLIF(users.first_name, ''), users.full_name)")
             ->paginate(20);
     }
     
@@ -195,7 +197,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 $join->on('employees.employee_id', '=', 'hr_payroll.employee_id')
                     ->where('hr_payroll.period_start', '=', $this->payPeriod);
             })
+            // The payslip's columns first: with no payslip yet they are all
+            // null, and employee_id among them must not blank the person's own.
             ->select(
+                'hr_payroll.*',
                 'employees.employee_id',
                 'employees.employee_no',
                 'employees.user_id',
@@ -205,8 +210,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'departments.department_name',
                 'employees.salary',
                 'employees.hire_date',
-                'employees.status as employee_status',
-                'hr_payroll.*'
+                'employees.status as employee_status'
             )
             ->where('employees.employee_id', $employeeId)
             ->first();
@@ -270,7 +274,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         \App\Support\PeopleAccess::hr();
         $this->validate([
-            'adjustType' => ['required', 'in:addition,deduction'],
+            'adjustType' => ['required', 'in:addition,deduction,basic'],
             'adjustAmount' => ['required', 'numeric', 'min:0.01', 'max:10000000'],
             'adjustReason' => ['required', 'string', 'max:255'],
         ], [], ['adjustAmount' => 'amount', 'adjustReason' => 'description']);
@@ -281,7 +285,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 $id = DB::table('payroll_adjustments')->insertGetId([
                     'employee_id' => $employeeId, 'effective_date' => $this->period()->start,
                     'type' => $this->adjustType, 'amount' => round((float) $this->adjustAmount, 2),
-                    'taxable' => $this->adjustType === 'addition' && $this->adjustTaxable,
+                    'taxable' => $this->adjustType === 'basic' || ($this->adjustType === 'addition' && $this->adjustTaxable),
                     'recurring' => false, 'reason' => trim($this->adjustReason), 'status' => 'approved',
                     'approved_by' => auth()->id(), 'approved_at' => now(), 'created_at' => now(), 'updated_at' => now(),
                 ]);
@@ -567,7 +571,8 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     public function getAttendanceGapsProperty(): array
     {
         $start = $this->period()->start;
-        $end   = min($this->period()->end, today()->toDateString());
+        // Today is not over - a later shift may not have scanned in yet.
+        $end   = min($this->period()->end, today()->subDay()->toDateString());
 
         if ($end < $start) {
             return ['days' => 0, 'people' => 0];
@@ -577,9 +582,12 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->map(fn ($date) => substr((string) $date, 0, 10))->all();
 
         $employees = DB::table('employees')->where('status', 'active')->where('salary', '>', 0)
-            ->select('employee_id', 'rest_days', 'hire_date')->get();
+            ->whereRaw("COALESCE(NULLIF(company, ''), 'GKLASAM OPC') = ?", [$this->company])
+            ->select('employee_id', 'rest_days', 'hire_date', 'shift_start', 'shift_end', 'job_title')->get();
 
-        $present = DB::table('hr_attendance')->whereBetween('date', [$start, $end])->where(fn ($q) => $q->whereNotNull('time_in')->orWhere('status', 'official_business'))
+        $present = DB::table('hr_attendance')->whereBetween('date', [$start, $end])->where(fn ($q) => $q->whereNotNull('time_in')->orWhere('status', 'official_business')
+                // A suspension is a recorded absence, not a missing one.
+                ->orWhere(fn ($s) => $s->where('status', 'absent')->where('notes', 'Suspension')))
             ->get(['employee_id', 'date'])
             ->map(fn ($row) => $row->employee_id.'|'.substr((string) $row->date, 0, 10))->flip();
 
@@ -593,8 +601,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             for ($day = \Carbon\Carbon::parse($start); $day->lte(\Carbon\Carbon::parse($end)); $day->addDay()) {
                 $date = $day->toDateString();
 
+                // The schedule decides rest days - an uploaded swap as much as
+                // the weekly default - exactly as the payslip does.
                 if (in_array($date, $holidays, true)
-                    || \App\Support\WorkWeek::restsOn($employee->rest_days, $day)
+                    || \App\Support\ShiftSchedule::forEmployeeDate($employee, $date)['rest']
                     || ($employee->hire_date && $date < substr((string) $employee->hire_date, 0, 10))
                     || $present->has($employee->employee_id.'|'.$date)) {
                     continue;
@@ -698,26 +708,13 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     
     public function exportPayroll()
     {
-        $employees = $this->employees->items();
-        $period = $this->period()->label();
-        
-        // An Excel workbook: the amounts are numbers, formatted with two
-        // decimals, that can be summed straight away.
-        $money = fn ($amount) => round((float) $amount, 2);
-        $rows = [];
-        foreach ($employees as $emp) {
-            $rows[] = [
-                (string) $emp->full_name, (string) $emp->department_name, (string) $emp->job_title,
-                $money($emp->salary), $money($emp->gross_pay ?? 0), $money($emp->deductions ?? 0), $money($emp->net_pay ?? 0),
-                (string) $emp->payroll_status,
-            ];
-        }
+        \App\Support\PeopleAccess::pay();
+        $period = $this->period();
 
-        return \App\Support\SpreadsheetWriter::download(
+        // The company's own payroll sheet: two header rows, one line per payslip by surname.
+        return \App\Support\SpreadsheetWriter::downloadSheets(
             'payroll-'.\Illuminate\Support\Str::slug($this->company)."-{$this->payPeriod}-".date('YmdHis').'.xlsx',
-            $this->company.' payroll '.$period,
-            ['Employee Name', 'Department', 'Position', 'Basic Salary', 'Gross Pay', 'Deductions', 'Net Pay', 'Status'],
-            $rows
+            [[$this->company.' '.$period->start, \App\Support\PayrollExport::header(), \App\Support\PayrollExport::rows($period->start, $this->company)]]
         );
     }
 }
@@ -736,6 +733,10 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 </p>
             </div>
             <div class="mt-4 flex md:mt-0 md:ml-4 space-x-3">
+                <a href="{{ route('payslips.batch', ['period' => $payPeriod, 'company' => $company]) }}" target="_blank"
+                   class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    <i class="fas fa-print"></i> Print all payslips (4 per page)
+                </a>
                 <button wire:click="exportPayroll" 
                         class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                     <svg class="mr-2 h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1538,23 +1539,30 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         </div>
                         
                         <div>
-                            <h4 class="text-sm font-medium text-gray-500 mb-2">Contact Information</h4>
+                            <h4 class="text-sm font-medium text-gray-500 mb-2">Pay</h4>
                             <div class="space-y-2">
-                                <div>
-                                    <span class="text-xs text-gray-500">Email:</span>
-                                    <p class="text-sm">{{ $selectedEmployee->email }}</p>
-                                </div>
-                                <div>
-                                    <span class="text-xs text-gray-500">Status:</span>
-                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                        {{ $selectedEmployee->employee_status === 'active' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800' }}">
-                                        {{ ucfirst($selectedEmployee->employee_status) }}
-                                    </span>
-                                </div>
                                 <div>
                                     <span class="text-xs text-gray-500">Basic Salary:</span>
                                     <p class="text-sm font-medium">₱{{ number_format($selectedEmployee->salary, 2) }}</p>
                                 </div>
+                                @if($selectedEmployee->payroll_id)
+                                    <div>
+                                        <span class="text-xs text-gray-500">Hours rendered:</span>
+                                        <p class="text-sm font-medium">{{ rtrim(rtrim(number_format((float) $selectedEmployee->paid_hours, 2), '0'), '.') }} hrs · {{ (int) $selectedEmployee->paid_days }} day(s)</p>
+                                    </div>
+                                    @php
+                                        $suspendedOn = \Illuminate\Support\Facades\DB::table('hr_attendance')->where('employee_id', $selectedEmployee->employee_id)
+                                            ->whereBetween('date', [$selectedEmployee->period_start, $selectedEmployee->period_end])
+                                            ->where('notes', 'Suspension')->whereNull('time_in')->orderBy('date')->pluck('date')
+                                            ->map(fn ($d) => \Carbon\Carbon::parse($d)->format('M j'));
+                                    @endphp
+                                    @if($suspendedOn->isNotEmpty())
+                                        <div>
+                                            <span class="text-xs text-gray-500">Suspended (unpaid):</span>
+                                            <p class="text-sm font-medium text-gray-800">{{ $suspendedOn->count() }} day(s) · {{ $suspendedOn->implode(', ') }}</p>
+                                        </div>
+                                    @endif
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -1571,22 +1579,27 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     {{-- What was earned this cutoff, not the monthly rate: the
                                          rate is already shown above, and printing it here made the
                                          earnings lines add up to more than the gross beneath them. --}}
-                                    <div class="flex justify-between">
-                                        <span class="text-sm">Basic pay:</span>
-                                        <span class="text-sm">₱{{ number_format($selectedEmployee->basic_pay ?? 0, 2) }}</span>
-                                    </div>
-                                    @if(($selectedEmployee->allowance ?? 0) > 0)
-                                    <div class="flex justify-between"><span class="text-sm">Allowance:</span><span class="text-sm">₱{{ number_format($selectedEmployee->allowance, 2) }}</span></div>
-                                    @endif
-                                    @if(($selectedEmployee->overtime_pay ?? 0) > 0)
-                                    <div class="flex justify-between"><span class="text-sm">Overtime:</span><span class="text-sm">₱{{ number_format($selectedEmployee->overtime_pay, 2) }}</span></div>
-                                    @endif
-                                    @if(($selectedEmployee->holiday_pay ?? 0) > 0)
-                                    <div class="flex justify-between"><span class="text-sm">Holiday premium:</span><span class="text-sm">₱{{ number_format($selectedEmployee->holiday_pay, 2) }}</span></div>
-                                    @endif
-                                    @if(($selectedEmployee->nsd_pay ?? 0) > 0)
-                                    <div class="flex justify-between"><span class="text-sm">Night shift differential:</span><span class="text-sm">₱{{ number_format($selectedEmployee->nsd_pay, 2) }}</span></div>
-                                    @endif
+                                    @php
+                                        $sel = $selectedEmployee;
+                                        $lateCut = (float) ($sel->late_deduction ?? 0);
+                                        $line = fn ($v) => (float) $v == 0 ? '-' : '₱'.number_format((float) $v, 2);
+                                        $earn = [
+                                            ['Basic pay', null, (float) $sel->basic_pay - (float) ($sel->basic_adjustment ?? 0) + $lateCut],
+                                            ['Late', null, -$lateCut],
+                                            ['Basic pay adj.', null, (float) ($sel->basic_adjustment ?? 0)],
+                                            ['Allowance', null, (float) ($sel->allowance ?? 0)],
+                                            ['Legal holiday', null, (float) ($sel->legal_holiday_pay ?? 0)],
+                                            ['Special holiday', null, (float) ($sel->special_holiday_pay ?? 0)],
+                                            ['Overtime', rtrim(rtrim(number_format((float) ($sel->overtime_hours ?? 0), 2), '0'), '.').' hrs', (float) ($sel->overtime_pay ?? 0)],
+                                        ];
+                                        if ((float) ($sel->nsd_pay ?? 0) > 0) $earn[] = ['Night shift differential', null, (float) $sel->nsd_pay];
+                                    @endphp
+                                    @foreach($earn as [$label, $qty, $amount])
+                                        <div class="flex justify-between gap-2 text-sm">
+                                            <span>{{ $label }}:@if($qty) <span class="text-gray-500">{{ $qty }}</span>@endif</span>
+                                            <span class="{{ $amount < 0 ? 'text-red-600' : '' }}">{{ $amount < 0 ? '-₱'.number_format(-$amount, 2) : $line($amount) }}</span>
+                                        </div>
+                                    @endforeach
                                     <div class="flex justify-between border-t border-gray-200 pt-1 font-medium">
                                         <span>Total Gross Pay:</span>
                                         <span class="text-red-600">₱{{ number_format($selectedEmployee->gross_pay, 2) }}</span>
@@ -1616,6 +1629,15 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         <span class="text-sm">-₱{{ number_format($this->payrollBreakdown['pagibig'], 2) }}</span>
                                     </div>
                                     @endif
+                                    @php
+                                        $loanParts = \Illuminate\Support\Facades\DB::table('loan_installments as i')->join('employee_loans as l', 'l.id', '=', 'i.loan_id')
+                                            ->where('i.payroll_id', $selectedEmployee->payroll_id)->selectRaw('l.type, SUM(i.amount) as amount')->groupBy('l.type')->pluck('amount', 'type');
+                                    @endphp
+                                    <div class="flex justify-between"><span class="text-sm">SSS Loan:</span><span class="text-sm">{{ (float) ($loanParts['sss'] ?? 0) > 0 ? '-₱'.number_format($loanParts['sss'], 2) : '-' }}</span></div>
+                                    <div class="flex justify-between"><span class="text-sm">HDMF Loan:</span><span class="text-sm">{{ (float) ($loanParts['pagibig'] ?? 0) > 0 ? '-₱'.number_format($loanParts['pagibig'], 2) : '-' }}</span></div>
+                                    @if((float) ($loanParts['government'] ?? 0) > 0)
+                                    <div class="flex justify-between"><span class="text-sm">Other government loan:</span><span class="text-sm">-₱{{ number_format($loanParts['government'], 2) }}</span></div>
+                                    @endif
                                     @if($this->payrollBreakdown['tax'] > 0)
                                     <div class="flex justify-between">
                                         <span class="text-sm">Tax:</span>
@@ -1636,7 +1658,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                             <span class="text-sm">-₱{{ number_format($this->payrollBreakdown['time'], 2) }}</span>
                                         </div>
                                     @endif
-                                    @if(($this->payrollBreakdown['loan'] ?? 0) > 0)
+                                    @if(false)
                                         <div class="flex justify-between">
                                             <span class="text-sm">Loan repayment:</span>
                                             <span class="text-sm">-₱{{ number_format($this->payrollBreakdown['loan'], 2) }}</span>
@@ -1652,17 +1674,6 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                             </div>
                             @endif
                             
-                            <div class="mb-4 border-t border-gray-200 pt-3">
-                                <h5 class="text-xs font-medium text-gray-500 mb-2">EMPLOYER COST</h5>
-                                <div class="grid grid-cols-2 gap-1 text-sm">
-                                    <span>SSS + EC</span><span class="text-right">₱{{ number_format((float)($selectedEmployee->employer_sss ?? 0) + (float)($selectedEmployee->employer_ec ?? 0), 2) }}</span>
-                                    <span>PhilHealth</span><span class="text-right">₱{{ number_format((float)($selectedEmployee->employer_philhealth ?? 0), 2) }}</span>
-                                    <span>Pag-IBIG</span><span class="text-right">₱{{ number_format((float)($selectedEmployee->employer_pagibig ?? 0), 2) }}</span>
-                                </div>
-                                @if($selectedEmployee->statutory_rule_version)
-                                    <p class="mt-2 text-xs text-gray-500">Rules: {{ $selectedEmployee->statutory_rule_version }}</p>
-                                @endif
-                            </div>
 
                             <!-- Plus and minus rows -->
                             <div class="mb-4 border-t border-gray-200 pt-3">
@@ -1671,7 +1682,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                     <div class="flex items-center justify-between gap-2 text-sm py-0.5">
                                         <span class="min-w-0 truncate">{{ $a->reason }}@if($a->type === 'addition' && $a->taxable) <span class="text-xs text-gray-500">(taxable)</span>@endif</span>
                                         <span class="flex items-center gap-2 shrink-0">
-                                            <span class="{{ $a->type === 'addition' ? 'text-green-700' : 'text-red-600' }}">{{ $a->type === 'addition' ? '+' : '-' }}₱{{ number_format($a->amount, 2) }}</span>
+                                            <span class="{{ $a->type !== 'deduction' ? 'text-green-700' : 'text-red-600' }}">{{ $a->type === 'basic' ? 'Basic adj. +' : ($a->type === 'addition' ? '+' : '-') }}₱{{ number_format($a->amount, 2) }}</span>
                                             @if(($selectedEmployee->status ?? 'calculated') === 'calculated')
                                                 <button type="button" wire:click="removeAdjustment({{ $a->id }})" wire:confirm="Remove this row?" class="text-xs text-gray-400 hover:text-red-600">Remove</button>
                                             @endif
@@ -1683,6 +1694,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                         <select wire:model.live="adjustType" class="rounded-md border-gray-300 text-sm">
                                             <option value="addition">+ Add</option>
                                             <option value="deduction">- Deduct</option>
+                                            <option value="basic">+ Basic pay adj.</option>
                                         </select>
                                         <input type="text" wire:model="adjustReason" maxlength="255" placeholder="Description (e.g. Incentive, Cash advance)" class="rounded-md border-gray-300 text-sm">
                                         <input type="number" step="0.01" min="0" wire:model="adjustAmount" placeholder="Amount" class="rounded-md border-gray-300 text-sm">

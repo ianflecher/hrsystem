@@ -52,9 +52,9 @@ new #[Layout('components.layouts.employee')] class extends Component
     }
 
     // Check if user has admin role
-    if (! in_array($user->role, ['admin', 'hr'], true)) {
+    if (! in_array($user->role, ['admin'], true)) {
         throw ValidationException::withMessages([
-            'username' => __('Access denied. Administrator credentials required.'),
+            'username' => __($user->role === 'hr' ? 'HR officers sign in through the employee portal.' : 'Access denied. Administrator credentials required.'),
         ]);
     }
 
@@ -68,7 +68,7 @@ new #[Layout('components.layouts.employee')] class extends Component
     // Get the authenticated user
     $user = Auth::user();
     
-    if (! in_array($user->role, ['admin', 'hr'], true)) {
+    if (! in_array($user->role, ['admin'], true)) {
         Auth::logout();
         throw ValidationException::withMessages([
             'username' => __('Insufficient permissions. Administrator access required.'),

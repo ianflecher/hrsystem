@@ -49,7 +49,8 @@ new #[Layout('components.layouts.account')] class extends Component
         return DB::table('employees as e')
             ->leftJoin('departments as d', 'e.department_id', '=', 'd.department_id')
             ->where('e.user_id', Auth::user()->user_id)
-            ->select('e.job_title', 'e.hire_date', 'e.status', 'e.shift_start', 'd.department_name')
+            ->select('e.job_title', 'e.hire_date', 'e.status', 'e.shift_start', 'd.department_name',
+                'e.employee_no', 'e.sss_number', 'e.philhealth_number', 'e.pagibig_number', 'e.tin')
             ->first();
     }
 
@@ -295,6 +296,17 @@ new #[Layout('components.layouts.account')] class extends Component
                             {{ $this->employment->hire_date ? date('M j, Y', strtotime($this->employment->hire_date)) : '—' }}
                         </dd>
                     </div>
+                </dl>
+
+                {{-- Their own government numbers, as HR has them on file. --}}
+                <h3 class="text-sm font-semibold text-gray-900 mt-6 mb-3">Government numbers</h3>
+                <dl class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                    @foreach (['SSS' => 'sss_number', 'PhilHealth' => 'philhealth_number', 'Pag-IBIG' => 'pagibig_number', 'TIN' => 'tin'] as $label => $column)
+                        <div>
+                            <dt class="text-gray-500">{{ $label }}</dt>
+                            <dd class="font-medium text-gray-900 mt-0.5">{{ $this->employment->{$column} ?: 'Not on file' }}</dd>
+                        </div>
+                    @endforeach
                 </dl>
             </div>
         @endif

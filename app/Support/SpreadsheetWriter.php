@@ -88,11 +88,25 @@ class SpreadsheetWriter
         return $path;
     }
 
+    /**
+     * $headers is one header row, or ['rows' => [row, row], 'merges' => ['A1:A2', ...]]
+     * for a header of several rows with merged cells, as the company's own sheets have.
+     */
     private static function sheet(array $headers, iterable $rows): string
     {
-        $sheetRows = [self::row(1, $headers, true)];
-        $widths = array_map(fn ($h) => mb_strlen((string) $h), $headers);
-        $r = 2;
+        $headRows = isset($headers['rows']) ? $headers['rows'] : [$headers];
+        $merges = $headers['merges'] ?? [];
+        $sheetRows = [];
+        $widths = [];
+        foreach ($headRows as $n => $head) {
+            $sheetRows[] = self::row($n + 1, $head, true);
+            foreach (array_values($head) as $i => $h) {
+                $widths[$i] = max($widths[$i] ?? 0, min(18, mb_strlen((string) $h)));
+            }
+        }
+        $headers = $headRows[count($headRows) - 1];
+        $top = count($headRows);
+        $r = $top + 1;
         foreach ($rows as $row) {
             $row = array_values((array) $row);
             foreach ($row as $i => $v) {
@@ -109,10 +123,11 @@ class SpreadsheetWriter
 
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             .'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-            .'<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+            .'<sheetViews><sheetView workbookViewId="0"><pane ySplit="'.$top.'" topLeftCell="A'.($top + 1).'" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
             .($cols !== '' ? '<cols>'.$cols.'</cols>' : '')
             .'<sheetData>'.implode('', $sheetRows).'</sheetData>'
-            .'<autoFilter ref="A1:'.$lastCol.max(1, $r - 1).'"/>'
+            .($merges ? '' : '<autoFilter ref="A1:'.$lastCol.max(1, $r - 1).'"/>')
+            .($merges ? '<mergeCells count="'.count($merges).'">'.implode('', array_map(fn ($m) => '<mergeCell ref="'.$m.'"/>', $merges)).'</mergeCells>' : '')
             .'</worksheet>';
 
     }

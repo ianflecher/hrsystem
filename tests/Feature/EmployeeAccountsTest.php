@@ -20,6 +20,7 @@ class EmployeeAccountsTest extends TestCase
     protected function tearDown(): void
     {
         foreach ($this->createdUserIds as $id) {
+            DB::table('hr_payroll')->whereIn('employee_id', DB::table('employees')->where('user_id', $id)->select('employee_id'))->delete();
             DB::table('employees')->where('user_id', $id)->delete();
             DB::table('users')->where('user_id', $id)->delete();
         }
@@ -224,6 +225,33 @@ class EmployeeAccountsTest extends TestCase
     public function test_the_employees_screen_is_closed_to_guests(): void
     {
         $this->get('/hr/employees')->assertRedirect('/admin/login');
+    }
+
+    public function test_self_service_hides_calculated_payslips_until_released(): void
+    {
+        $user = $this->makeStarter();
+        DB::table('users')->where('user_id', $user->user_id)->update(['must_change_password' => false]);
+        $user = $user->fresh();
+        $employeeId = DB::table('employees')->where('user_id', $user->user_id)->value('employee_id');
+
+        DB::table('hr_payroll')->insert([
+            'employee_id' => $employeeId,
+            'period_start' => '2026-09-01',
+            'period_end' => '2026-09-15',
+            'gross_pay' => 10000,
+            'deductions' => 528.58,
+            'net_pay' => 9471.42,
+            'status' => 'calculated',
+            'kind' => 'regular',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get('/employee/self-service')
+            ->assertOk()
+            ->assertSee('No payslips yet.')
+            ->assertDontSee('9,471.42');
     }
 
     private function makeStarter(): User

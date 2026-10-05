@@ -27,7 +27,11 @@ class PhilippineOvertime
         $holiday = DB::table('holidays')->whereDate('date', $date)->first();
         $classification = $holiday ? (string) ($holiday->classification ?? ($holiday->type === 'special' ? 'special_non_working' : 'regular')) : null;
 
-        $base = Tardiness::hourlyRate((float) $employee->salary);
+        // Pay is set by the day: an hour is the day rate / 8 (PHP 600 -> 75).
+        // Only somebody still on a monthly salary is worked back from it.
+        $base = (float) ($employee->daily_rate ?? 0) > 0
+            ? (float) $employee->daily_rate / Tardiness::HOURS_PER_DAY
+            : Tardiness::hourlyRate((float) $employee->salary);
         $multiplier = match (true) {
             $classification === 'regular' && $shift['rest'] => 3.38,
             $classification === 'regular' => 2.60,

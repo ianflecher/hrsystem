@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Support\Tardiness;
 use App\Support\Undertime;
+use App\Support\WorkDay;
 use App\Support\ShiftSchedule;
 use App\Support\Statutory;
 use Carbon\Carbon;
@@ -48,6 +49,12 @@ class TimeDeductions
     public function forPeriod(object $employee, string $periodStart, string $periodEnd): array
     {
         $salary = (float) $employee->salary;
+        // A monthly salary is docked a day's worth of it: the salary over 26
+        // days in a 30-day month, 27 in a 31-day month (the days less four Sundays).
+        if (($employee->pay_basis ?? null) === 'monthly' && $salary > 0 && (float) ($employee->daily_rate ?? 0) > 0) {
+            $monthDays = Carbon::parse($periodStart)->daysInMonth - 4;
+            $salary = $salary / $monthDays * Tardiness::WORKING_DAYS_PER_MONTH;
+        }
         $dailyRate = round(Tardiness::dailyRate($salary), 2);
 
         $holidays = DB::table('holidays')->whereBetween('date', [$periodStart, $periodEnd])->get()
@@ -66,7 +73,9 @@ class TimeDeductions
 
         $totals = ['late' => 0.0, 'lateDays' => 0, 'undertime' => 0.0, 'undertimeDays' => 0,
             'absence' => 0.0, 'absentDays' => 0, 'unpaidLeave' => 0.0, 'unpaidLeaveDays' => 0,
-            'leaveDays' => 0, 'total' => 0.0];
+            'leaveDays' => 0, 'total' => 0.0, 'suspension' => 0.0, 'suspendedDays' => 0,
+            // Which days, for the attendance summary.
+            'dates' => ['absent' => [], 'undertime' => [], 'unpaid_leave' => [], 'suspended' => []]];
 
         // Never past today: the rest of the cutoff has not happened.
         $last = Carbon::parse($periodEnd)->min(Carbon::today());
@@ -103,8 +112,20 @@ class TimeDeductions
                 continue;
             }
 
+            // Suspended: not worked and not paid, like an absence - but named as what it is.
+            if ($row && ! $row->time_in && $row->notes === 'Suspension') {
+                $totals['suspension'] += $dailyRate;
+                $totals['suspendedDays']++;
+                $totals['total'] += $dailyRate;
+                $totals['dates']['suspended'][] = $date;
+
+                continue;
+            }
+
             if ($row && $row->time_in) {
+                $short = $totals['undertimeDays'];
                 $this->chargeWorkedDay($totals, $row, $shift, $salary);
+                if ($totals['undertimeDays'] > $short) $totals['dates']['undertime'][] = $date;
 
                 continue;
             }
@@ -113,6 +134,7 @@ class TimeDeductions
                 if ($this->unpaidLeaveOn($leaves, $date)) {
                     $totals['unpaidLeave'] += $dailyRate;
                     $totals['unpaidLeaveDays']++;
+                    $totals['dates']['unpaid_leave'][] = $date;
                     $totals['total'] += $dailyRate;
                 } else {
                     $totals['leaveDays']++;
@@ -123,10 +145,11 @@ class TimeDeductions
 
             $totals['absence'] += $dailyRate;
             $totals['absentDays']++;
+            $totals['dates']['absent'][] = $date;
             $totals['total'] += $dailyRate;
         }
 
-        foreach (['late', 'undertime', 'absence', 'unpaidLeave', 'total'] as $money) {
+        foreach (['late', 'undertime', 'absence', 'unpaidLeave', 'suspension', 'total'] as $money) {
             $totals[$money] = round($totals[$money], 2);
         }
 
@@ -140,9 +163,14 @@ class TimeDeductions
             ? Tardiness::deduction(Tardiness::minutesLate(Carbon::parse($row->time_in), $shift['start']), $salary)
             : 0.0;
 
-        $shortCost = $shift['end'] && $row->time_out
-            ? Undertime::deduction(Undertime::minutesShort(Carbon::parse($row->time_out), $shift['end']), $salary)
-            : 0.0;
+        $shortCost = 0.0;
+
+        if ($shift['end']) {
+            $effectiveOut = WorkDay::effectiveOut($row);
+            $shortCost = $effectiveOut
+                ? Undertime::deduction(Undertime::minutesShort($effectiveOut, $shift['end']), $salary)
+                : Undertime::deduction(15, $salary);
+        }
 
         if ($lateCost > 0) {
             $totals['late'] += $lateCost;

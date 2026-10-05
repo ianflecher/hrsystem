@@ -134,6 +134,15 @@ class PortalSmokeTest extends TestCase
         $this->actingAs($this->userWithUsername('hr'))->get($uri)->assertOk();
     }
 
+    public function test_admin_sidebar_keeps_the_team_dashboard_link(): void
+    {
+        $this->actingAs($this->accountWithNoEmployeeRecord())
+            ->get(route('hr.home'))
+            ->assertOk()
+            ->assertSee('Team Dashboard')
+            ->assertSee(route('hr.operations.manager'), false);
+    }
+
     /**
      * The back office is for HR and admin.
      *

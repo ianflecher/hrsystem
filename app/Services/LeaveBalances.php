@@ -107,6 +107,8 @@ class LeaveBalances
 
         // Paid every time, so nothing is used up across the year.
         foreach (config('leave.per_occasion', []) as $type => $days) {
+            // The days HR set for the type, when it has one, are the days per occasion.
+            $days = (float) (DB::table('leave_entitlements')->where('leave_type', $type)->value('days_per_year') ?? $days);
             $balances[$type] = [
                 'entitled' => (float) $days, 'used' => $used($type), 'pending' => $pending($type),
                 'remaining' => (float) $days, 'usedAgainst' => 0.0, 'eligible' => true,
@@ -180,6 +182,26 @@ class LeaveBalances
         }
 
         return ['ok' => true, 'reason' => null];
+    }
+
+    /**
+     * How many of a request's days the balance still pays: all of them, some,
+     * or none. The rest is filed as unpaid leave alongside.
+     */
+    public function paidDaysFor(int $employeeId, string $type, float $days, ?int $year = null): float
+    {
+        if ($type === 'unpaid' || in_array($type, self::UNLIMITED_TYPES, true)) {
+            return 0.0;
+        }
+        $balance = $this->forEmployee($employeeId, $year)[$type] ?? null;
+        if (! $balance || ! $balance['eligible']) {
+            return 0.0;
+        }
+        if ($balance['entitled'] === null || ! empty($balance['perOccasion'])) {
+            return $days;
+        }
+
+        return min($days, floor(max(0, (float) $balance['remaining'])));
     }
 
     public function payStatusForRequest(int $employeeId, string $type, float $days, string $requested, ?int $year = null): string

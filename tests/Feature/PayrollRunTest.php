@@ -195,6 +195,45 @@ class PayrollRunTest extends TestCase
         DB::table('hr_payroll')->where('period_start', '2019-03-01')->delete();
     }
 
+    public function test_monthly_staff_show_fixed_cutoff_paid_days(): void
+    {
+        $id = $this->employee(15600);
+        DB::table('employees')->where('employee_id', $id)->update([
+            'pay_basis' => 'monthly',
+            'daily_rate' => 600,
+            'rest_days' => '7',
+        ]);
+
+        $this->screen()->call('generatePeriod');
+        $second = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->first();
+        $this->assertEquals(14, (int) $second->paid_days);
+        $this->assertEquals(112, (float) $second->paid_hours);
+
+        $this->screen()->set('payPeriod', '2019-03-01')->call('generatePeriod');
+        $first = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', '2019-03-01')->first();
+        $this->assertEquals(13, (int) $first->paid_days);
+        $this->assertEquals(104, (float) $first->paid_hours);
+
+        DB::table('hr_payroll')->where('period_start', '2019-03-01')->delete();
+    }
+
+    public function test_weekend_off_monthly_staff_show_calendar_weekdays(): void
+    {
+        $id = $this->employee(15600);
+        DB::table('employees')->where('employee_id', $id)->update([
+            'pay_basis' => 'monthly',
+            'daily_rate' => 600,
+            'rest_days' => '6,7',
+        ]);
+
+        $this->screen()->call('generatePeriod');
+
+        $row = DB::table('hr_payroll')->where('employee_id', $id)->where('period_start', $this->period)->first();
+
+        $this->assertEquals(10, (int) $row->paid_days, 'March 16-31, 2019 has ten weekdays.');
+        $this->assertEquals(80, (float) $row->paid_hours);
+    }
+
     public function test_someone_below_the_threshold_pays_no_tax(): void
     {
         // 15,000 a month is 7,500 a payslip, well under the 10,417 exemption.

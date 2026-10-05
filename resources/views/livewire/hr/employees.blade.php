@@ -59,6 +59,32 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     /** Per day. */
     public $salary = '';
     public $allowance = '';
+    // Paid a fixed monthly salary (half each cutoff, less absences) rather than by the hours worked.
+    public $paid_monthly = false;
+
+    /**
+     * The pay columns from the form's two figures. Paid monthly: they are the
+     * monthly salary and allowance, and the day rate (for overtime and holiday
+     * pay) is the salary over 26. Otherwise they are per day.
+     */
+    private function payColumns($salary, $allowance): array
+    {
+        if ($this->paid_monthly) {
+            return ['salary' => round((float) $salary, 2), 'allowance' => round((float) $allowance, 2),
+                'pay_basis' => 'monthly', 'daily_rate' => round((float) $salary / self::DAYS_A_MONTH, 2)];
+        }
+
+        return ['salary' => round((float) $salary * self::DAYS_A_MONTH, 2), 'allowance' => round((float) $allowance, 2),
+            'pay_basis' => 'daily', 'daily_rate' => round((float) $salary, 2)];
+    }
+
+    /** Ticking or unticking Paid monthly turns the figures into the other kind. */
+    public function updatedPaidMonthly($value): void
+    {
+        $factor = $value ? self::DAYS_A_MONTH : 1 / self::DAYS_A_MONTH;
+        if ($this->salary !== '' && $this->salary !== null) $this->salary = round((float) $this->salary * $factor, 2);
+        if ($this->allowance !== '' && $this->allowance !== null) $this->allowance = round((float) $this->allowance * $factor, 2);
+    }
     /** Why the pay changed. Only asked for when it actually has. */
     public string $payChangeReason = '';
     /** What they were on when the form opened, to spot a change. */
@@ -380,13 +406,22 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->probation_date = $row->probation_date ? substr((string) $row->probation_date, 0, 10) : '';
         $this->regular_date  = $row->regular_date ? substr((string) $row->regular_date, 0, 10) : '';
         // Pay is entered by the day; an older monthly figure is shown as its day rate.
-        $this->salary        = ($row->pay_basis ?? 'monthly') === 'monthly'
-            ? round((float) $row->salary / self::DAYS_A_MONTH, 2) : (float) ($row->daily_rate ?? 0);
+        // An HR officer's form never holds it at all.
+        // Paid monthly (set here, so with a day rate): the monthly figures as
+        // they are. Otherwise by the day - an older monthly record as its day rate.
+        $isPaidMonthly = ($row->pay_basis ?? 'monthly') === 'monthly' && (float) ($row->daily_rate ?? 0) > 0;
+        $this->salary        = $isPaidMonthly ? (float) $row->salary
+            : (($row->pay_basis ?? 'monthly') === 'monthly' ? round((float) $row->salary / self::DAYS_A_MONTH, 2) : (float) ($row->daily_rate ?? 0));
         $this->employment_type = $this->knownEmploymentType($row->employment_type);
         $this->company       = array_key_exists((string) $row->company, $this->companies) ? (string) $row->company : 'GKLASAM OPC';
-        $this->allowance     = ($row->pay_basis ?? 'monthly') === 'monthly'
+        $this->allowance     = ! $isPaidMonthly && ($row->pay_basis ?? 'monthly') === 'monthly'
             ? round((float) ($row->allowance ?? 0) / self::DAYS_A_MONTH, 2) : (float) ($row->allowance ?? 0);
-        $this->payWas        = ['salary' => (float) $this->salary, 'allowance' => (float) $this->allowance];
+        if (! \App\Support\PeopleAccess::canSeePay()) {
+            $this->salary = '';
+            $this->allowance = '';
+        }
+        $this->paid_monthly  = $isPaidMonthly;
+        $this->payWas        = ['salary' => (float) $this->salary, 'allowance' => (float) $this->allowance, 'monthly' => $this->paid_monthly];
         $this->status        = $row->status === 'inactive' ? 'resigned' : $row->status;
         $left = DB::table('employee_separations')->where('employee_id', $row->employee_id)->orderByDesc('id')->first();
         $this->separationDate = $left ? substr((string) $left->separation_date, 0, 10) : '';
@@ -588,7 +623,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 Rule::unique('employees', 'biometric_id')->ignore($this->editingId, 'employee_id')],
             'department_id' => ['nullable'],
             'probation_date' => ['nullable', 'date_format:Y-m-d'],
-            'regular_date'  => ['nullable', 'date_format:Y-m-d', 'after_or_equal:probation_date'],
+            'regular_date'  => ['nullable', 'date_format:Y-m-d'],
             'salary'        => ['nullable', 'numeric', 'min:0'],
             'allowance'     => ['nullable', 'numeric', 'min:0'],
             'status'        => ['required', Rule::in(array_keys($this->statuses))],
@@ -600,6 +635,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         ]);
 
         $departmentId = $data['department_id'] !== '' ? (int) $data['department_id'] : null;
+        $canSeePay = \App\Support\PeopleAccess::canSeePay();
         // Service is counted from the start of probation; without one, the
         // date already on record (or today, for somebody new) stands.
         $hireDate = ($data['probation_date'] ?? '') ?: ($this->hire_date ?: now()->toDateString());
@@ -624,7 +660,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $allowance = $data['allowance'] === '' || $data['allowance'] === null ? 0 : $data['allowance'];
 
         if ($this->editingId) {
-            DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $userId, $hireDate) {
+            DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $userId, $hireDate, $canSeePay) {
                 DB::table('users')->where('user_id', $userId)->update([
                     'full_name'  => PersonName::full($data['first_name'], $data['middle_name'] ?? '', $data['last_name']),
                     'first_name' => PersonName::tidy($data['first_name']),
@@ -654,10 +690,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     'hire_date'     => $hireDate,
                     'probation_date' => $data['probation_date'] ?: null,
                     'regular_date'  => $data['regular_date'] ?: null,
-                    'salary'        => round((float) $salary * self::DAYS_A_MONTH, 2),
-                    'allowance'     => $allowance,
-                    'pay_basis'     => 'daily',
-                    'daily_rate'    => $salary,
+                    ...($canSeePay ? [
+                        ...$this->payColumns($salary, $allowance),
+                    ] : []),
                     'status'        => $data['status'],
                     'employment_type' => $data['employment_type'],
                     'company'       => $data['company'],
@@ -669,17 +704,18 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 // because somebody edited their shift, and writing a baseline
                 // entry dated today would claim their pay moved when it did
                 // not. The figures the form opened with are what decides it.
-                $payMoved = $this->payWas === null
+                $payMoved = $canSeePay && ($this->payWas === null
                     || round((float) $salary, 2) !== round((float) $this->payWas['salary'], 2)
-                    || round((float) $allowance, 2) !== round((float) $this->payWas['allowance'], 2);
+                    || round((float) $allowance, 2) !== round((float) $this->payWas['allowance'], 2)
+                    || (bool) $this->paid_monthly !== (bool) ($this->payWas['monthly'] ?? false));
 
                 if ($payMoved) {
                     SalaryHistory::record(
                         employeeId: $this->editingId,
-                        salary: round((float) $salary * self::DAYS_A_MONTH, 2),
-                        allowance: (float) $allowance,
-                        payBasis: 'daily',
-                        dailyRate: (float) $salary,
+                        salary: $this->payColumns($salary, $allowance)['salary'],
+                        allowance: $this->payColumns($salary, $allowance)['allowance'],
+                        payBasis: $this->payColumns($salary, $allowance)['pay_basis'],
+                        dailyRate: $this->payColumns($salary, $allowance)['daily_rate'],
                         reason: $this->payChangeReason !== '' ? $this->payChangeReason : null,
                     );
                 }
@@ -697,7 +733,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         // one the masterlist import gives, and must replace it at first sign-in.
         $password = \App\Console\Commands\ImportMasterlist::PASSWORD;
 
-        DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $password, $hireDate) {
+        DB::transaction(function () use ($data, $departmentId, $shiftStart, $shiftEnd, $restDays, $immersionUntil, $biometricId, $salary, $allowance, $password, $hireDate, $canSeePay) {
             $newUserId = DB::table('users')->insertGetId([
                 'full_name'            => PersonName::full($data['first_name'], $data['middle_name'] ?? '', $data['last_name']),
                 'first_name'           => PersonName::tidy($data['first_name']),
@@ -725,10 +761,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'hire_date'     => $hireDate,
                 'probation_date' => $data['probation_date'] ?: null,
                 'regular_date'  => $data['regular_date'] ?: null,
-                'salary'        => round((float) $salary * self::DAYS_A_MONTH, 2),
-                'allowance'     => $allowance,
-                'pay_basis'     => 'daily',
-                'daily_rate'    => $salary,
+                ...($canSeePay ? [
+                    ...$this->payColumns($salary, $allowance),
+                ] : ['salary' => 0, 'allowance' => 0, 'pay_basis' => 'daily']),
                 'status'        => $data['status'],
                 'employment_type' => $data['employment_type'],
                 'company'       => $data['company'],
@@ -736,13 +771,14 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'updated_at'    => now(),
             ]);
 
-            // The pay they start on is the first entry in the log.
-            SalaryHistory::record(
+            // The pay they start on is the first entry in the log - set by
+            // whoever handles pay, not by an HR officer.
+            if ($canSeePay) SalaryHistory::record(
                 employeeId: $employeeId,
-                salary: round((float) $salary * self::DAYS_A_MONTH, 2),
-                allowance: (float) $allowance,
-                payBasis: 'daily',
-                dailyRate: (float) $salary,
+                salary: $this->payColumns($salary, $allowance)['salary'],
+                allowance: $this->payColumns($salary, $allowance)['allowance'],
+                payBasis: $this->payColumns($salary, $allowance)['pay_basis'],
+                dailyRate: $this->payColumns($salary, $allowance)['daily_rate'],
                 effectiveFrom: $hireDate,
                 reason: 'Starting pay',
             );
@@ -974,6 +1010,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->company       = 'GKLASAM OPC';
         $this->payChangeReason = '';
         $this->payWas        = null;
+        $this->paid_monthly  = false;
         $this->allowance     = '';
         $this->status        = 'active';
         $this->role          = 'employee';
@@ -1502,25 +1539,32 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 <input id="regular_date" type="date" wire:model="regular_date" class="form-input">
                                 @error('regular_date') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
+                            @if (\App\Support\PeopleAccess::canSeePay())
                             {{-- Two figures, because they are treated differently:
                                  basic carries the tax and the contributions, an
                                  allowance is paid whole. --}}
                             <div>
-                                <label class="form-label" for="salary">Basic salary (per day)</label>
+                                <label class="form-label" for="salary">Basic salary ({{ $paid_monthly ? 'per month' : 'per day' }})</label>
                                 <input id="salary" type="number" step="0.01" min="0" wire:model.live="salary"
                                        class="form-input" placeholder="0.00">
                                 @error('salary') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
                             <div>
-                                <label class="form-label" for="allowance">Allowance (per day)</label>
+                                <label class="form-label" for="allowance">Allowance ({{ $paid_monthly ? 'per month' : 'per day' }})</label>
                                 <input id="allowance" type="number" step="0.01" min="0" wire:model.live="allowance"
                                        class="form-input" placeholder="0.00">
                                 @error('allowance') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                                 @if ((float) $salary > 0 || (float) $allowance > 0)
                                     <p class="mt-1 text-xs text-gray-600">
-                                        Total &#8369;{{ number_format((float) $salary + (float) $allowance, 2) }} a day
+                                        Total &#8369;{{ number_format((float) $salary + (float) $allowance, 2) }} {{ $paid_monthly ? 'a month' : 'a day' }}
                                     </p>
                                 @endif
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                                    <input type="checkbox" wire:model.live="paid_monthly" class="rounded border-gray-300">
+                                    <span><strong>Paid monthly</strong> - a fixed monthly salary, half each cutoff. A day's absence is the salary &divide; 26 in a 30-day month, &divide; 27 in a 31-day month. Unticked: paid by the day, for the hours worked.</span>
+                                </label>
                             </div>
 
                             {{-- A pay change is logged, so it is worth a line
@@ -1547,6 +1591,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                            class="form-input" maxlength="255"
                                            placeholder="Annual increase, promotion, correction...">
                                 </div>
+                            @endif
                             @endif
                             <div>
                                 {{-- What they are engaged as, which is a

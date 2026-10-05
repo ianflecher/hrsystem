@@ -75,7 +75,8 @@ class ScheduleUploadTest extends TestCase
 
         $this->assertCount(2, $plan['people'], 'the two real people, by number and by "Surname, First"');
         $this->assertSame(['Nobody Atall'], $plan['unmatched']);
-        $this->assertCount(1, $plan['unknown'], 'ABSENT is not guessed at');
+        // ABSENT is what happened, not a plan: it changes nothing and is not an error.
+        $this->assertCount(0, $plan['unknown']);
 
         (new ScheduleUpload)->apply($plan, null);
 

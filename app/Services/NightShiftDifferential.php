@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Support\ShiftSchedule;
 use App\Support\Statutory;
+use App\Support\WorkDay;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -11,9 +12,10 @@ class NightShiftDifferential
 {
     public function forAttendance(object $attendance, float $monthlySalary, ?object $employee = null): float
     {
-        if (! $attendance->time_in || ! $attendance->time_out) return 0.0;
+        $effectiveOut = WorkDay::effectiveOut($attendance);
+        if (! $attendance->time_in || ! $effectiveOut) return 0.0;
         $start = Carbon::parse($attendance->time_in);
-        $end = Carbon::parse($attendance->time_out);
+        $end = $effectiveOut;
         if ($end->lessThanOrEqualTo($start)) $end->addDay();
 
         return round($this->calculateSegmented($start, $end, $monthlySalary, $employee), 2);
@@ -24,12 +26,27 @@ class NightShiftDifferential
         $rows = DB::table('hr_attendance')
             ->where('employee_id', $employee->employee_id)
             ->whereBetween('date', [$periodStart, $periodEnd])
-            ->whereNotNull('time_in')->whereNotNull('time_out')->get();
+            ->whereNotNull('time_in')->get();
 
         $amount = 0.0; $hours = 0.0;
         foreach ($rows as $row) {
-            $start = Carbon::parse($row->time_in); $end = Carbon::parse($row->time_out);
+            $effectiveOut = WorkDay::effectiveOut($row);
+            if (! $effectiveOut) continue;
+
+            $start = Carbon::parse($row->time_in); $end = $effectiveOut;
             if ($end->lessThanOrEqualTo($start)) $end->addDay();
+            // Only the scheduled shift earns the differential: coming in at
+            // 5:55 for an 8:00 start is not night work, and time past the
+            // shift is overtime, paid on its own request.
+            $shift = ShiftSchedule::forEmployeeDate($employee, substr((string) $row->date, 0, 10));
+            if ($shift['start'] && $shift['end'] && ! $shift['rest']) {
+                $from = Carbon::parse(substr((string) $row->date, 0, 10).' '.$shift['start']);
+                $to = Carbon::parse(substr((string) $row->date, 0, 10).' '.$shift['end']);
+                if ($to->lessThanOrEqualTo($from)) $to->addDay();
+                $start = $start->max($from);
+                $end = $end->min($to);
+                if ($end->lessThanOrEqualTo($start)) continue;
+            }
             $hours += $this->nightHours($start, $end);
             $amount += $this->calculateSegmented($start, $end, (float) $employee->salary, $employee, $ruleDate);
         }
@@ -51,7 +68,11 @@ class NightShiftDifferential
             $hours = $overlapStart->diffInMinutes($overlapEnd) / 60;
             $premiumBase = $this->premiumMultiplier($employee, $date);
             $rate = Statutory::tableForDate('nsd', $ruleDate ?: $date)['rate'];
-            $total += $hours * ($monthlySalary / 22 / 8) * $premiumBase * $rate;
+            // An hour is the day rate / 8 for day-rated staff (PHP 600 -> 75).
+            $hourly = $employee && (float) ($employee->daily_rate ?? 0) > 0
+                ? (float) $employee->daily_rate / 8
+                : $monthlySalary / 22 / 8;
+            $total += $hours * $hourly * $premiumBase * $rate;
         }
         return $total;
     }

@@ -142,6 +142,30 @@ class SixPunchDayTest extends TestCase
         $this->assertSame(9.0, WorkDay::workedHours($row, 0));
     }
 
+    public function test_a_four_hour_half_day_is_paid(): void
+    {
+        // 8 to 1 with lunch taken is four hours - a half day, and paid.
+        $row = $this->day([
+            'time_in'  => '2026-06-01 08:00:00',
+            'time_out' => '2026-06-01 13:00:00',
+        ]);
+        $this->assertSame(4.0, WorkDay::workedHours($row, 60));
+
+        // 8 to 12, gone before lunch: no lunch hour off, still four hours.
+        $morning = $this->day([
+            'time_in'  => '2026-06-01 08:00:00',
+            'time_out' => '2026-06-01 12:00:00',
+        ]);
+        $this->assertSame(4.0, WorkDay::workedHours($morning, 60));
+
+        // Under four hours is not a paid day.
+        $short = $this->day([
+            'time_in'  => '2026-06-01 08:00:00',
+            'time_out' => '2026-06-01 11:00:00',
+        ]);
+        $this->assertSame(0.0, WorkDay::workedHours($short, 60));
+    }
+
     /**
      * Half a break is not a break. Somebody who went to lunch and never
      * punched back is a day to look at, not a length to guess at.

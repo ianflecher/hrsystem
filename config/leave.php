@@ -28,6 +28,9 @@ return [
      */
     'per_occasion' => [
         'bereavement' => 3,
+        // Per child, not per year. HR's figure on the leave page wins.
+        'maternity' => 105,
+        'paternity' => 7,
     ],
 
     /**

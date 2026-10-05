@@ -114,6 +114,42 @@ class ManagerFirstApprovalTest extends TestCase
             'a supervisor can see people from a department they do not run');
     }
 
+    public function test_an_admin_with_assigned_departments_sees_only_those_team_dashboard_departments(): void
+    {
+        $hr = $this->department('Human Resource');
+        $finance = $this->department('Finance');
+        $sewing = $this->department('Sewing');
+
+        [$admin] = $this->person('Emadeth Togonon Comanda', 'admin', $hr);
+        DB::table('employees')->where('user_id', $admin->user_id)
+            ->update(['pay_basis' => 'monthly', 'rest_days' => '6,7']);
+        DB::table('departments')->whereIn('department_id', [$hr, $finance])
+            ->update(['supervisor_id' => $admin->user_id]);
+
+        $this->person('HR Team Member', 'employee', $hr);
+        $this->person('Finance Team Member', 'employee', $finance);
+        $this->person('Sewing Team Member', 'employee', $sewing);
+
+        $html = $this->actingAs($admin)->get('/hr/operations/manager')->assertOk()->getContent();
+
+        $this->assertStringContainsString('Worked · from the scanner', $html);
+        $this->assertStringContainsString('HR Team Member', $html);
+        $this->assertStringContainsString('Finance Team Member', $html);
+        $this->assertStringNotContainsString('Sewing Team Member', $html,
+            'an assigned admin Team Dashboard should not list every department');
+    }
+
+    public function test_worked_from_scanner_is_only_on_emadeths_team_dashboard(): void
+    {
+        $dept = $this->department('Human Resource');
+        $supervisor = $this->supervisorOf($dept, 'Regular Supervisor');
+        $this->person('Regular Team Member', 'employee', $dept);
+
+        $html = $this->actingAs($supervisor)->get('/employee/team')->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('Worked · from the scanner', $html);
+    }
+
     public function test_a_supervisor_cannot_open_another_departments_employee(): void
     {
         $mine = $this->department('Sewing');
@@ -175,6 +211,27 @@ class ManagerFirstApprovalTest extends TestCase
         $this->assertNotNull($row->manager_reviewed_at);
     }
 
+    public function test_supervisor_sees_paid_leave_balance_before_approval(): void
+    {
+        $dept = $this->department('Sewing');
+        $supervisor = $this->supervisorOf($dept);
+        [, $memberId] = $this->person('Balance Check Sewer', 'employee', $dept);
+
+        DB::table('leaves')->insert([
+            'employee_id' => $memberId, 'leave_type' => 'sick',
+            'start_date' => '2026-09-01', 'end_date' => '2026-09-02', 'total_days' => 2,
+            'status' => 'approved', 'reason' => 'Already used',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->leaveFor($memberId);
+
+        $html = $this->actingAs($supervisor)->get('/employee/team')->assertOk()->getContent();
+
+        $this->assertStringContainsString('Paid leave', $html);
+        $this->assertStringContainsString('5', $html);
+        $this->assertStringContainsString('left', $html);
+    }
+
     /**
      * A supervisor turning it down ends it. Sending a refusal on to HR would
      * ask two people to say no to the same request.
@@ -194,7 +251,7 @@ class ManagerFirstApprovalTest extends TestCase
             DB::table('leaves')->where('leave_id', $leaveId)->value('status'));
     }
 
-    public function test_hr_finishes_what_the_supervisor_passed_on(): void
+    public function test_the_operations_supervisor_finishes_what_the_supervisor_passed_on(): void
     {
         $hr = User::where('username', 'hr')->first();
         $dept = $this->department('Sewing');
@@ -207,12 +264,16 @@ class ManagerFirstApprovalTest extends TestCase
         $this->assertSame('pending_hr',
             DB::table('leaves')->where('leave_id', $leaveId)->value('status'));
 
-        // HR finishes leave on its own screen rather than the generic people
-        // endpoint, which only knows pending_hr for overtime.
+        // HR only sees it; Ma'am An's approval is final.
         \Livewire\Volt\Volt::actingAs($hr)->test('hr.leave')->call('approveLeave', $leaveId);
+        $this->assertSame('pending_hr', DB::table('leaves')->where('leave_id', $leaveId)->value('status'));
+
+        [$ops] = $this->person('Operations Supervisor', 'supervisor', $this->department('Operations'));
+        config(['leave.supervisor_approver_user_id' => $ops->user_id]);
+        $this->actingAs($ops)->post('/employee/team/leave/'.$leaveId, ['action' => 'approve']);
 
         $this->assertSame('approved',
             DB::table('leaves')->where('leave_id', $leaveId)->value('status'),
-            'HR could not finish a request the supervisor had passed on');
+            'the operations supervisor could not finish a request the supervisor had passed on');
     }
 }

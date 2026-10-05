@@ -15,11 +15,14 @@ use ZipArchive;
 class SpreadsheetReader
 {
     /** @return list<list<string>> */
-    public static function rows(string $path, ?string $originalName = null): array
+    /**
+     * @param  (callable(list<string>): ?string)|null  $pickSheet  given the sheet names, the one to read (null: the first)
+     */
+    public static function rows(string $path, ?string $originalName = null, ?callable $pickSheet = null): array
     {
         $extension = strtolower(pathinfo($originalName ?? $path, PATHINFO_EXTENSION));
 
-        return $extension === 'xlsx' ? self::xlsx($path) : self::csv($path);
+        return $extension === 'xlsx' ? self::xlsx($path, $pickSheet) : self::csv($path);
     }
 
     /** @return list<list<string>> */
@@ -40,7 +43,7 @@ class SpreadsheetReader
     }
 
     /** @return list<list<string>> */
-    private static function xlsx(string $path): array
+    private static function xlsx(string $path, ?callable $pickSheet = null): array
     {
         $zip = new ZipArchive;
         if ($zip->open($path) !== true) {
@@ -56,7 +59,7 @@ class SpreadsheetReader
             }
         }
 
-        $sheetPath = self::firstSheet($zip);
+        $sheetPath = self::firstSheet($zip, $pickSheet);
         $xml = $zip->getFromName($sheetPath);
         $zip->close();
         if ($xml === false) {
@@ -87,15 +90,23 @@ class SpreadsheetReader
         return array_values($rows);
     }
 
-    /** The workbook's first sheet, by the order Excel shows them. */
-    private static function firstSheet(ZipArchive $zip): string
+    /** The workbook's first sheet, by the order Excel shows them - or the one $pickSheet names. */
+    private static function firstSheet(ZipArchive $zip, ?callable $pickSheet = null): string
     {
         $workbook = $zip->getFromName('xl/workbook.xml');
         $rels = $zip->getFromName('xl/_rels/workbook.xml.rels');
         if ($workbook && $rels) {
             $wb = simplexml_load_string($workbook);
             $wb->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
-            $first = $wb->xpath('//m:sheets/m:sheet')[0] ?? null;
+            $sheets = $wb->xpath('//m:sheets/m:sheet');
+            $first = $sheets[0] ?? null;
+            if ($pickSheet && ($name = $pickSheet(array_map(fn ($s) => (string) $s['name'], $sheets))) !== null) {
+                foreach ($sheets as $sheet) {
+                    if ((string) $sheet['name'] === $name) {
+                        $first = $sheet;
+                    }
+                }
+            }
             $rid = $first ? (string) $first->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships')['id'] : '';
             foreach (simplexml_load_string($rels)->Relationship as $rel) {
                 if ((string) $rel['Id'] === $rid) {

@@ -92,7 +92,7 @@ class PayslipAddsUpTest extends TestCase
 
         // And nothing is labelled "Other", which is what the payslip falls
         // back to when a component has no line of its own.
-        $this->assertStringNotContainsString('Other earnings', $this->printable());
+        $this->assertStringNotContainsString('Other Earnings', $this->printable());
     }
 
     /**
@@ -107,7 +107,7 @@ class PayslipAddsUpTest extends TestCase
 
         $html = $this->printable();
 
-        $this->assertStringContainsString('Other earnings', $html);
+        $this->assertStringContainsString('Other Earnings', $html);
         $this->assertStringContainsString('400.00', $html);
     }
 

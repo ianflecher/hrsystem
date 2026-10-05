@@ -51,7 +51,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
     protected function rules()
     {
         return [
-            'leave_type' => 'required',
+            'leave_type' => 'required|in:vacation,sick,emergency,maternity,paternity,bereavement,unpaid',
             'pay_status' => 'required|in:paid,unpaid',
             'start_date' => 'required|date',
             'end_date'   => 'required|date|after_or_equal:start_date',
@@ -117,8 +117,20 @@ new #[Layout('components.layouts.employeeland')] class extends Component
 
         // Leave paid per occasion (bereavement): the first days are paid and
         // anything past them is filed alongside as unpaid.
-        $paidDays = config('leave.per_occasion.'.$this->leave_type);
+        $paidDays = config('leave.per_occasion.'.$this->leave_type) !== null
+            ? (int) ((new \App\Services\LeaveBalances)->forEmployee($employeeId)[$this->leave_type]['entitled'] ?? config('leave.per_occasion.'.$this->leave_type))
+            : null;
         if ($paidDays && $this->pay_status === 'paid' && $this->total_days > $paidDays) {
+            $split = Carbon::parse($this->start_date)->addDays($paidDays);
+            DB::table('leaves')->insert([
+                $row('paid', $this->start_date, $split->copy()->subDay()->toDateString(), (float) $paidDays),
+                $row('unpaid', $split->toDateString(), $this->end_date, (float) $this->total_days - $paidDays),
+            ]);
+            $payStatus = 'split';
+        } elseif ($this->pay_status === 'paid' && $payStatus === 'unpaid'
+            && ($left = (new \App\Services\LeaveBalances)->paidDaysFor($employeeId, $this->leave_type, (float) $this->total_days, (int) substr($this->start_date, 0, 4))) > 0) {
+            // More days than the paid balance has left: the balance's worth paid, the rest unpaid.
+            $paidDays = (int) $left;
             $split = Carbon::parse($this->start_date)->addDays($paidDays);
             DB::table('leaves')->insert([
                 $row('paid', $this->start_date, $split->copy()->subDay()->toDateString(), (float) $paidDays),
@@ -130,7 +142,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
         }
 
         session()->flash('success', $payStatus === 'split'
-            ? 'Leave request submitted: the first '.$paidDays.' days are paid and the rest is unpaid.'
+            ? 'Leave request submitted: the first '.$paidDays.' day(s) are paid - all the paid leave left - and the rest is unpaid.'
             : ($payStatus === $this->pay_status
             ? 'Leave request submitted successfully.'
             : 'Leave request submitted as unpaid because no paid balance is available for that leave type.'));
@@ -231,9 +243,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                     <option value="maternity">Maternity</option>
                                     <option value="paternity">‍ Paternity</option>
                                     <option value="bereavement">Bereavement</option>
-                                    <option value="study">Study</option>
                                     <option value="unpaid">Unpaid</option>
-                                    <option value="others">Others</option>
                                 </select>
                             </label>
                             <label class="block">
@@ -414,7 +424,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                             @elseif($leave->status === 'pending')
                                                 <span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-semibold">Supervisor Review</span>
                                             @elseif($leave->status === 'pending_hr')
-                                                <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold">HR Review</span>
+                                                <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold">Waiting for Ma'am An</span>
                                             @else
                                                 <span class="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-semibold">{{ ucfirst(str_replace('_', ' ', $leave->status)) }}</span>
                                             @endif

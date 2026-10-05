@@ -19,6 +19,7 @@ class PayslipLinkTest extends TestCase
         if (! $hr || ! $row) { $this->markTestSkipped('need hr + a payslip'); }
 
         $html = Volt::actingAs($hr)->test('hr.payroll')
+            ->set('payPeriod', substr((string) $row->period_start, 0, 10))
             ->call('viewPayrollDetails', $row->employee_id)
             ->html();
 

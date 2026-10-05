@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Support\PeopleAccess;
 use App\Support\PayPeriod;
+use App\Support\ShiftSchedule;
 use App\Support\WorkWeek;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -19,6 +20,17 @@ class PeopleController extends Controller
         'announcements' => 'Announcements', 'checklists' => 'Onboarding & offboarding',
         'reviews' => 'Performance reviews', 'loans' => 'Government loans', 'reports' => 'Reports',
     ];
+
+    /** The months a loan's first deduction can fall in: this one through December. */
+    public static function loanStartMonths(): array
+    {
+        $months = [];
+        for ($m = now()->startOfMonth(); $m->year === now()->year; $m = $m->copy()->addMonthNoOverflow()) {
+            $months[] = $m->toDateString();
+        }
+
+        return $months;
+    }
 
     /** Employment statuses that mean the person is on their way out. */
     public const LEAVING = ['terminated', 'inactive'];
@@ -140,7 +152,7 @@ class PeopleController extends Controller
         $teamPortal = $this->isTeamPortal($module);
         $managedDepartmentIds = PeopleAccess::managedDepartmentIds();
         $employees = ($hr || $teamPortal) ? DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
-            ->when(! $hr, fn ($q) => $q->whereIn('e.department_id', $managedDepartmentIds))
+            ->when(! $hr, fn ($q) => PeopleAccess::scopeTeam($q))
             ->select('e.employee_id', 'u.full_name')->orderBy('u.full_name')->get() : collect();
         $departments = $hr ? DB::table('departments')->orderBy('department_name')->get() : collect();
         $query = null;
@@ -156,7 +168,10 @@ class PeopleController extends Controller
                 $query->where(function ($q) use ($module, $employeeId) {
                     $q->where('r.employee_id', $employeeId);
                     if ($module === 'overtime' && in_array(auth()->user()->role, ['supervisor', 'leader'], true)) {
-                        $q->orWhereIn('e.department_id', PeopleAccess::managedDepartmentIds());
+                        $q->orWhere(fn ($q) => PeopleAccess::scopeTeam($q));
+                    }
+                    if ($module === 'overtime' && \App\Services\OvertimeApproval::isFinalApprover()) {
+                        $q->orWhereIn('r.status', ['pending_hr', 'approved']);
                     }
                 });
             }
@@ -173,6 +188,9 @@ class PeopleController extends Controller
                 $query->where('r.status', $request->input('status'));
             }
         }
+        if ($module === 'overtime' && ! $hr && ! $teamPortal) {
+            $extra['scannerSuggestions'] = $this->scannerOvertimeSuggestions($employeeId);
+        }
         // A draft belongs to HR until it is graded: the employee gets the
         // evaluation, not the work in progress.
         if ($module === 'reviews' && ! $hr) {
@@ -186,23 +204,35 @@ class PeopleController extends Controller
             }
         }
         if ($module === 'shifts') {
-            $period = PayPeriod::recent(1)[0];
+            $periods = PayPeriod::recent(8);
+            if ($request->query('cutoff')) {
+                $period = PayPeriod::fromStart((string) $request->query('cutoff'));
+            } elseif ($request->query('month')) {
+                $period = PayPeriod::fromStart(Carbon::parse((string) $request->query('month'))->startOfMonth()->toDateString());
+            } else {
+                $period = $periods[0];
+            }
             $extra['period'] = $period;
+            $extra['periods'] = collect($periods)
+                ->push($period)
+                ->unique(fn ($p) => $p->start)
+                ->sortByDesc('start')
+                ->values();
             $extra['holidays'] = DB::table('holidays')
                 ->whereBetween('date', [$period->start, $period->end])
                 ->orderBy('date')->get()->keyBy('date');
             $extra['staff'] = DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
                 ->leftJoin('departments as dp', 'dp.department_id', '=', 'e.department_id')
                 ->when($hr, fn ($q) => $q->where('e.status', 'active'))
-                ->when(! $hr && $teamPortal, fn ($q) => $q->where('e.status', 'active')->whereIn('e.department_id', $managedDepartmentIds))
+                ->when(! $hr && $teamPortal, fn ($q) => PeopleAccess::scopeTeam($q->where('e.status', 'active')))
                 ->when(! $hr && ! $teamPortal, fn ($q) => $q->where('e.employee_id', $employeeId))
-                ->select('e.employee_id', 'e.department_id', 'dp.department_name', 'e.shift_start', 'e.shift_end', 'e.rest_days', 'u.full_name')
+                ->select('e.employee_id', 'e.department_id', 'dp.department_name', 'e.job_title', 'e.shift_start', 'e.shift_end', 'e.rest_days', 'u.full_name')
                 ->orderBy('u.full_name')->get();
             $extra['assignments'] = DB::table('shift_assignments as s')
                 ->join('employees as e', 'e.employee_id', '=', 's.employee_id')
                 ->join('users as u', 'u.user_id', '=', 'e.user_id')
                 ->whereBetween('s.work_date', [$period->start, $period->end])
-                ->when(! $hr && $teamPortal, fn ($q) => $q->whereIn('e.department_id', $managedDepartmentIds))
+                ->when(! $hr && $teamPortal, fn ($q) => PeopleAccess::scopeTeam($q))
                 ->when(! $hr && ! $teamPortal, fn ($q) => $q->where('s.employee_id', $employeeId))
                 ->select('s.*', 'u.full_name')
                 ->orderBy('s.work_date')->orderBy('u.full_name')->get()
@@ -328,6 +358,88 @@ class PeopleController extends Controller
         return view('people.index', compact('hr', 'employeeId', 'module', 'employees', 'departments', 'month', 'rows', 'extra'));
     }
 
+    private function scannerOvertimeSuggestions(int $employeeId): \Illuminate\Support\Collection
+    {
+        $employee = DB::table('employees')->where('employee_id', $employeeId)->first();
+        if (! $employee) return collect();
+
+        $current = PayPeriod::fromStart(now()->day <= 15 ? now()->copy()->startOfMonth()->toDateString() : now()->copy()->day(16)->toDateString());
+        $from = Carbon::parse($current->start)->subDays(16)->toDateString();
+        $to = $current->end;
+
+        return DB::table('hr_attendance')
+            ->where('employee_id', $employeeId)
+            ->whereBetween('date', [$from, $to])
+            ->whereNotNull('time_in')
+            ->whereNotNull('time_out')
+            ->orderByDesc('date')
+            ->get()
+            ->map(function ($row) use ($employee) {
+                $shift = ShiftSchedule::forEmployeeDate($employee, substr((string) $row->date, 0, 10));
+                if ($shift['rest'] || ! $shift['start'] || ! $shift['end']) return null;
+
+                $date = substr((string) $row->date, 0, 10);
+                $in = $this->attendanceDateTime($date, $row->time_in);
+                $out = $this->attendanceDateTime($date, $row->time_out);
+                $start = Carbon::parse($date.' '.$shift['start']);
+                $end = Carbon::parse($date.' '.$shift['end']);
+                if ($end->lessThanOrEqualTo($start)) $end->addDay();
+                if ($out->lessThan($in)) $out->addDay();
+
+                $capMinutes = ShiftSchedule::dailyCapMinutes($employee);
+                $spanMinutes = max(0, (int) floor($in->diffInMinutes($out)));
+                $breakMinutes = ShiftSchedule::isGuard($employee) ? 0 : 60;
+                $workedMinutes = max(0, $spanMinutes - $breakMinutes);
+                $extraMinutes = $workedMinutes - $capMinutes;
+                $wholeHours = intdiv($extraMinutes, 60);
+                if ($wholeHours < 1) return null;
+
+                $earlyHours = $in->lt($start) ? intdiv((int) floor($in->diffInMinutes($start)), 60) : 0;
+                if ($earlyHours > 0) {
+                    $hours = min($wholeHours, $earlyHours);
+                    $otStart = $start->copy()->subHours($hours);
+                    $otEnd = $start->copy();
+                } else {
+                    $lateOutHours = $out->gt($end) ? intdiv((int) floor($end->diffInMinutes($out)), 60) : 0;
+                    $hours = min($wholeHours, max(1, $lateOutHours));
+                    $otStart = $end->copy();
+                    $otEnd = $end->copy()->addHours($hours);
+                }
+                if ($otEnd->lessThanOrEqualTo($otStart)) return null;
+
+                $exists = DB::table('overtime_requests')
+                    ->where('employee_id', $employee->employee_id)
+                    ->whereIn('status', ['pending', 'pending_hr', 'approved'])
+                    ->where('starts_at', '<', $otEnd->toDateTimeString())
+                    ->where('ends_at', '>', $otStart->toDateTimeString())
+                    ->exists();
+                if ($exists) return null;
+
+                return (object) [
+                    'date' => $date,
+                    'time_in' => $in,
+                    'time_out' => $out,
+                    'shift_start' => $start,
+                    'shift_end' => $end,
+                    'hours' => $hours,
+                    'starts_at' => $otStart,
+                    'ends_at' => $otEnd,
+                    'reason' => 'Scanner shows '.$hours.' hour(s) over the scheduled '.$start->format('g:i A').'-'.$end->format('g:i A').' shift.',
+                ];
+            })
+            ->filter()
+            ->values();
+    }
+
+    private function attendanceDateTime(string $date, mixed $value): Carbon
+    {
+        $text = (string) $value;
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}/', $text)
+            ? Carbon::parse($text)
+            : Carbon::parse($date.' '.$text);
+    }
+
     public function store(Request $request, string $module)
     {
         [$hr, $employeeId] = $this->context($request);
@@ -382,58 +494,151 @@ class PeopleController extends Controller
 
                 // A cutoff's schedule from HR's spreadsheet: read and shown
                 // first, written only once confirmed.
-                if (in_array($request->input('kind'), ['schedule-upload', 'schedule-confirm', 'schedule-cancel'], true)) {
-                    // The team's supervisor or leader uploads it, for their own team only.
+                // The team schedule grid: only the changed cells arrive.
+                if ($request->input('kind') === 'schedule-grid') {
                     abort_unless($teamPortal, 403);
+                    $period = PayPeriod::fromStart((string) $request->input('cutoff'));
+                    $people = [];
+                    $bad = [];
+                    foreach ((array) $request->input('cells', []) as $employeeId => $days) {
+                        abort_unless(PeopleAccess::managesEmployee((int) $employeeId), 403);
+                        $name = DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')->where('e.employee_id', $employeeId)->value('u.full_name');
+                        $person = ['employee_id' => (int) $employeeId, 'name' => $name, 'sheet_name' => $name, 'days' => []];
+                        foreach ((array) $days as $date => $text) {
+                            if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $date) || $date < $period->start || $date > $period->end) continue;
+                            $day = \App\Services\ScheduleUpload::understand((string) $text);
+                            if ($day['type'] === 'blank') continue;
+                            // Supervisors and leaders set suspensions too (S); leave stays HR's.
+                            if (! in_array($day['type'], ['shift', 'rest', 'school', 'suspension'], true)) {
+                                $bad[] = $name.', '.Carbon::parse($date)->format('M j').': "'.$text.'"';
+                                continue;
+                            }
+                            $person['days'][$date] = $day;
+                        }
+                        if ($person['days']) $people[] = $person;
+                    }
+                    // The good cells are saved; the rest are named, not allowed to sink the lot.
+                    if ($bad && ! $people) {
+                        throw ValidationException::withMessages(['cells' => 'Not a shift or rest day - nothing saved: '.implode('; ', $bad).'. Use a time like 8-5 or 10AM-7PM, RD, or SCHOOL. Suspensions and leave are recorded by HR.']);
+                    }
+                    // A suspension taken back (S changed to a shift or RD): the unpaid absence goes.
+                    foreach ($people as $person) {
+                        foreach ($person['days'] as $date => $day) {
+                            if ($day['type'] !== 'suspension') {
+                                DB::table('hr_attendance')->where('employee_id', $person['employee_id'])->whereDate('date', $date)
+                                    ->where('notes', 'Suspension')->whereNull('time_in')->delete();
+                            }
+                        }
+                    }
+                    $done = (new \App\Services\ScheduleUpload)->apply(['people' => $people, 'period' => ['label' => $period->label()]], auth()->id());
+                    // Payslips still only calculated follow the new schedule.
+                    foreach ($people as $person) {
+                        app(\App\Services\PayrollRun::class)->recalculateOpen($person['employee_id']);
+                    }
+
+                    $message = "Schedule saved: {$done['shifts']} shift day(s), {$done['rest']} rest day(s)"
+                        .($done['suspensions'] ? ", {$done['suspensions']} suspension day(s)" : '').'.'
+                        .($bad ? ' Not saved - leave is recorded by HR, or not a shift: '.implode('; ', $bad).'.' : '');
+                    // The grid saves itself as people type: it asks for an answer, not a page.
+                    if ($request->expectsJson()) {
+                        return response()->json(['ok' => true, 'message' => $message, 'skipped' => $bad]);
+                    }
+
+                    return back()->with('success', $message);
+                }
+                if (in_array($request->input('kind'), ['schedule-upload', 'schedule-confirm', 'schedule-cancel'], true)) {
+                    // Schedules are set on the grid now; the spreadsheet upload is switched off.
+                    abort(404);
                     if ($request->input('kind') === 'schedule-cancel') {
                         session()->forget('schedule_upload');
 
                         return back();
                     }
                     if ($request->input('kind') === 'schedule-confirm') {
-                        $plan = session('schedule_upload');
-                        abort_unless(is_array($plan), 422, 'Upload the schedule again - the preview has expired.');
-                        $done = (new \App\Services\ScheduleUpload)->apply($plan, auth()->id());
+                        $plans = session('schedule_upload')['plans'] ?? null;
+                        abort_unless(is_array($plans), 422, 'Upload the schedule again - the preview has expired.');
+                        $saved = [];
+                        foreach ($plans as $plan) {
+                            $done = (new \App\Services\ScheduleUpload)->apply($plan, auth()->id());
+                            $saved[] = "{$plan['period']['label']}: {$done['shifts']} shift day(s), {$done['rest']} rest day(s)"
+                                .($done['leave'] || $done['suspensions'] || $done['ob'] ? ", {$done['leave']} leave, {$done['suspensions']} suspension, {$done['ob']} OB" : '');
+                            foreach ($plan['people'] as $person) {
+                                app(\App\Services\PayrollRun::class)->recalculateOpen((int) $person['employee_id']);
+                            }
+                        }
                         session()->forget('schedule_upload');
 
-                        return back()->with('success', "Schedule for {$plan['period']['label']} saved: {$done['shifts']} shift day(s), {$done['rest']} rest day(s), "
-                            ."{$done['suspensions']} suspension day(s), {$done['leave']} leave request(s), {$done['ob']} official business day(s).");
+                        return back()->with('success', 'Schedule saved - '.implode('; ', $saved).'.');
                     }
                     $request->validate([
                         'schedule_file' => 'required|file|max:10240|mimes:xlsx,csv,txt',
-                        'cutoff' => 'required|date_format:Y-m-d',
                     ], ['schedule_file.mimes' => 'Upload the schedule as .xlsx or .csv.']);
                     $file = $request->file('schedule_file');
-                    try {
-                        $rows = \App\Support\SpreadsheetReader::rows($file->getRealPath(), $file->getClientOriginalName());
-                        $plan = (new \App\Services\ScheduleUpload)->read($rows, PayPeriod::fromStart($request->input('cutoff')));
-                    } catch (\RuntimeException $e) {
-                        throw ValidationException::withMessages(['schedule_file' => $e->getMessage()]);
-                    }
 
-                    // A supervisor schedules their own team: hours and rest days.
-                    // Leave, suspensions and official business change pay, and
-                    // stay HR's to record.
-                    if (! $hr) {
-                        $plan['hr_only'] = [];
+                    // Every cutoff the sheet covers, from last cutoff to two ahead, in one go:
+                    // nobody has to pick the right half of the month.
+                    $current = PayPeriod::fromStart(now()->toDateString());
+                    $candidates = [PayPeriod::fromStart(Carbon::parse($current->start)->subDay()->toDateString()), $current];
+                    for ($i = 0; $i < 2; $i++) {
+                        $candidates[] = PayPeriod::fromStart(Carbon::parse(end($candidates)->end)->addDay()->toDateString());
+                    }
+                    $plans = [];
+                    $lastError = null;
+                    // A supervisor's or leader's sheet is matched within their own team ("Honey" is their Honey).
+                    $teamIds = $hr ? null : PeopleAccess::scopeTeam(DB::table('employees as e'))->pluck('e.employee_id')->map(fn ($id) => (int) $id)->all();
+                    foreach ($candidates as $uploadPeriod) {
+                        try {
+                            // A workbook of many months: the sheet named for the cutoff's month,
+                            // and none at all when no sheet is named for it.
+                            $noSheet = false;
+                            $rows = \App\Support\SpreadsheetReader::rows($file->getRealPath(), $file->getClientOriginalName(),
+                                function (array $names) use ($uploadPeriod, &$noSheet) {
+                                    $name = \App\Services\ScheduleUpload::pickSheet($names, $uploadPeriod);
+                                    $noSheet = $name === null && count($names) > 1;
+
+                                    return $name;
+                                });
+                            if ($noSheet) continue;
+                            // Day numbers alone fit every month: the sheet has to be for this one.
+                            $month = substr($uploadPeriod->start, 0, 7);
+                            $says = \App\Services\ScheduleUpload::sheetMonths($rows, (int) substr($month, 0, 4));
+                            if ($says ? ! in_array($month, $says, true) : $month !== substr($candidates[2]->start, 0, 7)) continue;
+                            $plan = (new \App\Services\ScheduleUpload)->read($rows, $uploadPeriod, $teamIds);
+                        } catch (\RuntimeException $e) {
+                            $lastError = $e->getMessage();
+                            continue;
+                        }
+
+                        // Cells that change nothing (ABSENT, clock times) are dropped here.
+                        // A supervisor schedules their own team: hours and rest days.
+                        // Leave, suspensions and official business change pay, and
+                        // stay HR's to record.
+                        $plan['hr_only'] = $hr ? [] : ($plan['hr_only'] ?? []);
                         $team = [];
                         foreach ($plan['people'] as $person) {
-                            if (! PeopleAccess::managesEmployee((int) $person['employee_id'])) {
+                            if (! $hr && ! PeopleAccess::managesEmployee((int) $person['employee_id'])) {
                                 $plan['unmatched'][] = $person['name'].' (not on your team)';
                                 continue;
                             }
                             foreach ($person['days'] as $date => $day) {
-                                if (! in_array($day['type'], ['shift', 'rest', 'school'], true)) {
+                                if ($day['type'] === 'blank') {
+                                    unset($person['days'][$date]);
+                                } elseif (! $hr && ! in_array($day['type'], ['shift', 'rest', 'school', 'suspension'], true)) {
                                     $plan['hr_only'][] = $person['name'].', '.Carbon::parse($date)->format('M j').': '
-                                        .['leave_paid' => 'leave with pay', 'leave_unpaid' => 'leave', 'suspension' => 'suspension', 'ob' => 'official business'][$day['type']];
+                                        .(['leave_paid' => 'leave with pay', 'leave_unpaid' => 'leave', 'suspension' => 'suspension', 'ob' => 'official business'][$day['type']] ?? $day['type']);
                                     unset($person['days'][$date]);
                                 }
                             }
-                            $team[] = $person;
+                            if ($person['days']) $team[] = $person;
                         }
                         $plan['people'] = $team;
+                        if ($team) $plans[] = $plan;
                     }
-                    session(['schedule_upload' => $plan]);
+                    if (! $plans) {
+                        throw ValidationException::withMessages(['schedule_file' => $lastError
+                            ?? 'Nothing in the sheet for your team from '.$candidates[0]->label().' to '.end($candidates)->label().'.']);
+                    }
+                    session(['schedule_upload' => ['plans' => $plans]]);
 
                     return back();
                 }
@@ -535,9 +740,12 @@ class PeopleController extends Controller
                 $data = $request->validate([
                     'type' => ['required', Rule::in(['sss', 'pagibig', 'government'])],
                     'monthly' => 'required|numeric|min:1|max:1000000',
-                    'starts_on' => 'required|date_format:Y-m-d',
+                    // The 1-15 cutoff of a month from this one to December.
+                    'starts_on' => ['required', Rule::in(self::loanStartMonths())],
+                    'paid_before' => 'nullable|numeric|min:0|max:10000000',
                     'reason' => 'required|string|min:5|max:3000',
-                ], [], ['monthly' => 'monthly amortization']);
+                ], [], ['monthly' => 'monthly amortization', 'paid_before' => 'amount already deducted']);
+                $data['paid_before'] = round((float) ($data['paid_before'] ?? 0), 2);
                 $data['installment'] = round((float) $data['monthly'], 2);
                 $data['amount'] = 0;
                 unset($data['monthly']);
@@ -546,6 +754,8 @@ class PeopleController extends Controller
                     'reviewed_by' => auth()->id(),
                     'disbursed_at' => now(),
                 ]);
+                // A payslip already worked out picks the loan up straight away.
+                app(\App\Services\PayrollRun::class)->recalculateOpen((int) $employeeId);
                 break;
             case 'announcements':
                 $data = $request->validate([
@@ -647,14 +857,50 @@ class PeopleController extends Controller
                 }
                 // A monthly amortization runs until HR ends it - when the agency
                 // says the loan is paid, or the employee leaves.
+                // Correcting a loan: agency, amortization, first deduction,
+                // what was paid before, the reference. Open payslips follow.
+                if ($module === 'loans' && $action === 'edit') {
+                    $starts = self::loanStartMonths();
+                    $starts[] = substr((string) $row->starts_on, 0, 10);
+                    $data = $request->validate([
+                        'type' => ['required', Rule::in(['sss', 'pagibig', 'government'])],
+                        'monthly' => 'required|numeric|min:1|max:1000000',
+                        'starts_on' => ['required', Rule::in($starts)],
+                        'paid_before' => 'nullable|numeric|min:0|max:10000000',
+                        'reason' => 'required|string|min:5|max:3000',
+                    ], [], ['monthly' => 'monthly amortization', 'paid_before' => 'amount already deducted']);
+                    $values = ['type' => $data['type'], 'installment' => round((float) $data['monthly'], 2), 'starts_on' => $data['starts_on'],
+                        'paid_before' => round((float) ($data['paid_before'] ?? 0), 2), 'reason' => $data['reason']];
+                    DB::table('employee_loans')->where('id', $id)->update($values + ['updated_at' => now()]);
+                    \App\Services\Auditor::record('update', 'employee_loans', $id,
+                        array_intersect_key((array) $row, $values), $values);
+                    app(\App\Services\PayrollRun::class)->recalculateOpen((int) $row->employee_id);
+                    return;
+                }
+                // Months deducted before the HRIS took the loan over.
+                if ($module === 'loans' && $action === 'paid_before') {
+                    $amount = round((float) $request->validate(['paid_before' => 'required|numeric|min:0|max:10000000'])['paid_before'], 2);
+                    DB::table('employee_loans')->where('id', $id)->update(['paid_before' => $amount, 'updated_at' => now()]);
+                    app(\App\Services\PayrollRun::class)->recalculateOpen((int) $row->employee_id);
+                    \App\Services\Auditor::record('update', 'employee_loans', $id, ['paid_before' => $row->paid_before], ['paid_before' => $amount]);
+                    return;
+                }
                 if ($module === 'loans' && $action === 'stop') {
                     abort_unless($row->status === 'active', 422);
                     DB::table('employee_loans')->where('id', $id)->update(['status' => 'stopped', 'decision_note' => 'Deductions stopped by '.auth()->user()->full_name.' on '.now()->format('M j, Y'), 'updated_at' => now()]);
+                    app(\App\Services\PayrollRun::class)->recalculateOpen((int) $row->employee_id);
                     return;
                 }
                 if ($module === 'loans' && $action === 'disburse') {
                     abort_unless($row->status === 'approved', 422);
                     DB::table('employee_loans')->where('id', $id)->update(['status' => 'active', 'disbursed_at' => now(), 'updated_at' => now()]);
+                    return;
+                }
+                // Overtime: supervisor, then Ma'am An; HR only sees it.
+                if ($module === 'overtime') {
+                    $data = $request->validate(['decision_note' => ($action === 'reject' ? 'required' : 'nullable').'|string|max:2000',
+                        'approved_amount' => 'nullable|numeric|min:0.01|max:1000000']);
+                    \App\Services\OvertimeApproval::decide($row, (string) $action, $data['decision_note'] ?? null, $data['approved_amount'] ?? null);
                     return;
                 }
                 $firstReview = $module === 'overtime' && ! PeopleAccess::isHr();

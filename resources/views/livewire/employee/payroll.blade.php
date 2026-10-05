@@ -58,8 +58,10 @@ new #[Layout('components.layouts.employeeland')] class extends Component
     
     public function loadPayrollRecords()
     {
+        // Only payslips HR has approved: a calculated one may still change.
         $this->payrollRecords = DB::table('hr_payroll')
             ->where('employee_id', $this->employee->employee_id)
+            ->whereIn('status', ['approved', 'paid'])
             ->when($this->year, function ($query) {
                 return $query->whereYear('period_end', $this->year);
             })
@@ -101,6 +103,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
         $this->currentPayroll = DB::table('hr_payroll')
             ->where('payroll_id', $payrollId)
             ->where('employee_id', $this->employee->employee_id)
+            ->whereIn('status', ['approved', 'paid'])
             ->first();
         
         $this->loadPayrollBreakdown();
@@ -380,7 +383,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                                                         class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3">
                                                     View
                                                 </button>
-                                                @if($record->status == 'paid')
+                                                @if(in_array($record->status, ['approved', 'paid'], true))
                                                 <a href="{{ route('payslip.show', $record->payroll_id) }}" target="_blank" 
                                                         class="text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300">
                                                     Payslip
@@ -416,6 +419,9 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                             {{ \Carbon\Carbon::parse($currentPayroll->period_start)->format('M d, Y') }} - 
                             {{ \Carbon\Carbon::parse($currentPayroll->period_end)->format('M d, Y') }}
                         </p>
+                        @if(isset($currentPayroll->paid_hours) && $currentPayroll->paid_hours !== null)
+                            <p class="mt-1 text-sm font-medium text-gray-700 dark:text-gray-300">Hours rendered: {{ rtrim(rtrim(number_format((float) $currentPayroll->paid_hours, 2), '0'), '.') }} hrs · {{ (int) $currentPayroll->paid_days }} day(s)</p>
+                        @endif
                     </div>
                     <div class="p-6">
                         <!-- Summary -->
@@ -479,7 +485,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         <!-- Actions -->
                         <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                             <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
-                                @if($currentPayroll->status === 'paid')
+                                @if(in_array($currentPayroll->status, ['approved', 'paid'], true))
                                 <a href="{{ route('payslip.show', $currentPayroll->payroll_id) }}" target="_blank" 
                                         class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center justify-center">
                                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

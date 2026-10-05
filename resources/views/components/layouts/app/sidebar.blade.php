@@ -779,5 +779,6 @@ document.addEventListener('click', function(event) {
 });
 </script>
 
+    <script src="{{ asset('js/date-dmy.js') }}" defer></script>
 </body>
 </html>

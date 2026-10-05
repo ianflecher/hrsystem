@@ -82,7 +82,7 @@
 
     @if($hr)
         <div class="grid gap-4 md:grid-cols-4">
-            @foreach([['Salary','PHP '.number_format($employee->salary,2)],['Region',$employee->work_region ?: 'Not set'],['SSS',$employee->sss_number ?: '-'],['TIN',$employee->tin ?: '-']] as $c)
+            @foreach(array_merge(\App\Support\PeopleAccess::canSeePay() ? [['Salary','PHP '.number_format($employee->salary,2)]] : [], [['Region',$employee->work_region ?: 'Not set'],['SSS',$employee->sss_number ?: '-'],['PhilHealth',$employee->philhealth_number ?: '-'],['Pag-IBIG',$employee->pagibig_number ?: '-'],['TIN',$employee->tin ?: '-']]) as $c)
                 <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $c[0] }}</div>
                     <div class="mt-2 text-sm font-semibold text-slate-950">{{ $c[1] }}</div>

@@ -29,7 +29,8 @@ class TeamScheduleTest extends TestCase
         }
         $cutoff = PayPeriod::recent(1)[0];
 
-        $this->actingAs($boss)->get(route('employee.team'))->assertOk()->assertSee('Shift &amp; rest days', false);
+        $this->actingAs($boss)->get(route('employee.team'))->assertOk()->assertDontSee('Shift &amp; rest days', false);
+        $this->actingAs($boss)->get(route('people.employee', ['module' => 'shifts']))->assertOk()->assertSee('Edit schedule');
 
         $this->actingAs($boss)->post(route('employee.team.schedule', $ids[1]), [
             'shift_start' => '09:00', 'shift_end' => '18:00', 'rest_days' => [7],

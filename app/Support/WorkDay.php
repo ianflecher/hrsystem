@@ -19,6 +19,9 @@ use Carbon\Carbon;
  */
 class WorkDay
 {
+    /** Less than four hours is not paid as a worked day; four (a half day) is. */
+    public const MINIMUM_PAID_MINUTES = 240;
+
     /** In the order they happen, which is the order they are shown. */
     public const PUNCHES = [
         'time_in'   => 'First in',
@@ -95,6 +98,27 @@ class WorkDay
     }
 
     /**
+     * Final out for payroll/display. If the final-out key was missed, use the
+     * latest later punch from lunch/CB as the best available out time.
+     */
+    public static function effectiveOut(?object $row): ?Carbon
+    {
+        $punches = self::punches($row);
+        $in = $punches['time_in'];
+        $out = $punches['time_out'];
+
+        foreach (['lunch_in', 'lunch_out', 'cb_in', 'cb_out'] as $slot) {
+            $punch = $punches[$slot];
+
+            if ($punch && $in && $punch->greaterThan($in) && (! $out || $punch->greaterThan($out))) {
+                $out = $punch;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Minutes worked: the span from first in to final out, less a fixed break,
      * capped at eight hours.
      *
@@ -107,7 +131,7 @@ class WorkDay
     {
         $punches = self::punches($row);
         $in = $punches['time_in'];
-        $out = $punches['time_out'];
+        $out = self::effectiveOut($row);
 
         if (! $in || ! $out || ! $out->greaterThan($in)) {
             return 0;
@@ -115,9 +139,26 @@ class WorkDay
 
         $span = (int) round($in->diffInMinutes($out));
         $guard = ShiftSchedule::isGuard($employee);
-        $break = $guard ? 0 : max(0, $assumedBreakMinutes);
+        $break = $guard || self::leftBeforeLunch($row, $span) ? 0 : max(0, $assumedBreakMinutes);
 
-        return min(ShiftSchedule::dailyCapMinutes($employee), (int) max(0, $span - $break));
+        $worked = (int) max(0, $span - $break);
+
+        if ($worked < self::MINIMUM_PAID_MINUTES) {
+            return 0;
+        }
+
+        return min(ShiftSchedule::dailyCapMinutes($employee), $worked);
+    }
+
+    /**
+     * Gone before lunch: no lunch punched and in for about four hours or less (out by a quarter past)
+     * (a morning half day, 8 to 12). No lunch hour comes off a day without one.
+     */
+    public static function leftBeforeLunch(?object $row, int $spanMinutes): bool
+    {
+        $p = self::punches($row);
+
+        return ! $p['lunch_in'] && ! $p['lunch_out'] && $spanMinutes <= 255;
     }
 
     public static function workedHours(?object $row, int $assumedBreakMinutes = 60, ?object $employee = null): float
@@ -173,7 +214,7 @@ class WorkDay
             $previous = $moment;
         }
 
-        if ($punches['time_in'] && ! $punches['time_out']) {
+        if ($punches['time_in'] && ! self::effectiveOut($row)) {
             $problems[] = 'No final out';
         }
 

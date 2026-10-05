@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Support\PayPeriod;
 use App\Support\PayrollCalculator;
+use App\Support\ShiftSchedule;
 use App\Support\Statutory;
+use App\Support\WorkWeek;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -21,13 +23,28 @@ class PayrollRun
             $payBasis = $employee->pay_basis ?? 'monthly';
             $monthlyBase = (float) $employee->salary;
             $time = ['total'=>0.0,'late'=>0.0,'lateDays'=>0,'undertime'=>0.0,'undertimeDays'=>0,'absence'=>0.0,'absentDays'=>0,'unpaidLeave'=>0.0,'unpaidLeaveDays'=>0,'leaveDays'=>0];
+            // Days and hours actually worked, printed on the payslip whatever the pay basis.
+            $lateMinutes = 0;
+            foreach (DB::table('hr_attendance')->where('employee_id', $employeeId)->whereBetween('date', [$period->start, $period->end])->whereNotNull('time_in')->get(['date', 'time_in']) as $day) {
+                $shift = ShiftSchedule::forEmployeeDate($employee, substr((string) $day->date, 0, 10));
+                if (! $shift['rest'] && $shift['start']) {
+                    $lateMinutes += (int) (\App\Support\Tardiness::minutesLate(Carbon::parse($day->time_in), $shift['start']) ?? 0);
+                }
+            }
+            $rendered = app(WorkTimePayroll::class)->forPeriod($employee, $period->start, $period->end);
             if ($payBasis === 'monthly') {
                 $time = (new TimeDeductions)->forPeriod($employee, $period->start, $period->end);
             } else {
                 $work = app(WorkTimePayroll::class)->forPeriod($employee, $period->start, $period->end);
                 $daily = (float) ($employee->daily_rate ?? 0);
                 if ($daily <= 0 && $monthlyBase > 0) $daily = round($monthlyBase / 26, 2);
-                $basic = $payBasis === 'hourly' ? round($work['hours'] * ($daily / 8), 2) : round(($work['worked_days'] + $work['paid_leave_days']) * $daily, 2);
+                // Paid by the hour rendered, as the cafe's payslips are: 88 hours
+                // at PHP 508 a day is 88 x 508 / 8. A late or short day pays
+                // the hours worked. Paid leave is a whole day. A guard's rate is
+                // for the whole duty, so guards stay paid by the day.
+                $basic = ! ShiftSchedule::isGuard($employee)
+                    ? round($work['hours'] * ($daily / 8) + $work['paid_leave_days'] * $daily, 2)
+                    : round(($work['worked_days'] + $work['paid_leave_days']) * $daily, 2);
                 $monthlyBase = $monthlyBase > 0 ? $monthlyBase : round($daily * 26, 2);
                 $time['basic_override'] = $basic;
                 $time['work_days'] = $work['worked_days'];
@@ -53,6 +70,13 @@ class PayrollRun
             $plusTaxable = (float) $adjustments->where('type', 'addition')->where('taxable', true)->sum('amount');
             $plusExempt = (float) $adjustments->where('type', 'addition')->where('taxable', false)->sum('amount');
             $minus = (float) $adjustments->where('type', 'deduction')->sum('amount');
+            // A basic pay adjustment (a correction to an earlier cutoff's basic) is basic pay.
+            $basicAdjustment = (float) $adjustments->where('type', 'basic')->sum('amount');
+            if ($payBasis !== 'monthly') {
+                $time['basic_override'] = round((float) ($time['basic_override'] ?? 0) + $basicAdjustment, 2);
+            } else {
+                $plusTaxable += $basicAdjustment;
+            }
 
             $compliance = app(PhilippinePayrollCompliance::class)->assertReady($period->start);
             $ruleSnapshot = Statutory::snapshot($period->start);
@@ -89,10 +113,9 @@ class PayrollRun
             $loans = DB::table('employee_loans')->where('employee_id', $employeeId)->where('status', 'active')->where('starts_on', '<=', $period->start)->orderBy('id')->lockForUpdate()->get();
             $installments = [];
             foreach ($loans as $loan) {
-                // A monthly amortization (recorded without a balance) comes off
+                // A monthly amortization recorded without a balance comes off
                 // the 1-15 cutoff in full, and nothing on the second; it runs
-                // until HR stops it. A loan with a balance is paid down per
-                // cutoff as before, and ends when the balance is reached.
+                // until HR stops it.
                 if ((float) $loan->amount <= 0) {
                     if ($period->isSecondCutoff) continue;
                     $cents = min((int) round($loan->installment * 100), $remainingCents);
@@ -124,13 +147,26 @@ class PayrollRun
             if ($c['nsd'] > 0) $notes .= ' | NSD: '.number_format($c['nsd'], 2). ' ('.number_format($nsd['hours'], 2).' hours)';
             if ($deduction > 0) $notes .= ' | Loan repayment: PHP '.number_format($deduction, 2);
             foreach ($adjustments as $a) {
-                $notes .= ' | '.($a->type === 'addition' ? '+' : '-').' PHP '.number_format((float) $a->amount, 2).' '.$a->reason;
+                $notes .= ' | '.($a->type === 'deduction' ? '-' : '+').' PHP '.number_format((float) $a->amount, 2).' '.$a->reason;
             }
             $id = DB::table('hr_payroll')->insertGetId([
                 'employee_id' => $employeeId, 'period_start' => $period->start, 'period_end' => $period->end,
                 'gross_pay' => $c['gross'], 'basic_pay' => $c['basic'], 'allowance' => $c['allowance'] ?? 0, 'deductions' => round($c['deductions'] + $deduction, 2), 'net_pay' => round($c['net'] - $deduction, 2),
                 'overtime_pay' => $c['overtime'], 'holiday_pay' => $c['holiday'], 'nsd_pay' => $c['nsd'], 'time_deduction' => $time['total'],
                 'sss' => $c['sss'], 'employer_sss' => $c['employer_sss'], 'employer_ec' => $c['employer_ec'], 'philhealth' => $c['philhealth'], 'employer_philhealth' => $c['employer_philhealth'], 'pagibig' => $c['pagibig'], 'employer_pagibig' => $c['employer_pagibig'], 'tax' => $c['tax'], 'taxable_compensation' => $c['taxable'], 'other_taxable_compensation' => $c['other_taxable'], 'mwe_exempt_compensation' => $c['mwe_exempt_compensation'], 'statutory_rule_version' => $ruleSnapshot['version'], 'statutory_snapshot' => json_encode($ruleSnapshot, JSON_THROW_ON_ERROR), 'rules_verified_at' => $compliance['verified_at'], 'employer_total_cost' => round($c['gross'] + $c['employer_sss'] + $c['employer_ec'] + $c['employer_philhealth'] + $c['employer_pagibig'], 2),
+                'paid_days' => $payBasis === 'monthly'
+                    ? $this->monthlyPaidDays($employee, $period)
+                    : $rendered['worked_days'] + $rendered['paid_leave_days'],
+                'paid_hours' => $payBasis === 'monthly'
+                    ? $this->monthlyPaidDays($employee, $period) * (ShiftSchedule::dailyCapMinutes($employee) / 60)
+                    : $rendered['hours'] + ($rendered['paid_leave_days'] * (ShiftSchedule::dailyCapMinutes($employee) / 60)),
+                'basic_adjustment' => $basicAdjustment,
+                'legal_holiday_pay' => $holiday['legal'] ?? 0, 'special_holiday_pay' => $holiday['special'] ?? 0,
+                'overtime_hours' => round($overtime->sum('minutes') / 60, 2),
+                'late_minutes' => $lateMinutes,
+                // Day-rated staff: the late penalty already taken out of basic, for the payslip to show.
+                'late_deduction' => $payBasis === 'monthly' || ShiftSchedule::isGuard($employee) ? 0
+                    : round(($rendered['late_penalty_hours'] ?? 0) * ((float) ($employee->daily_rate ?? 0) / 8), 2),
                 'loan_deduction' => $deduction, 'adjustments' => round($plusTaxable + $plusExempt - $minus, 2), 'status' => 'calculated', 'notes' => $notes,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -140,6 +176,28 @@ class PayrollRun
             ]);
             return $id;
         });
+    }
+
+    private function monthlyPaidDays(object $employee, PayPeriod $period): int
+    {
+        $start = Carbon::parse($period->start);
+        $end = Carbon::parse($period->end);
+
+        // Weekend-off monthly staff follow the actual calendar. The other
+        // monthly supervisor policy is two rest days per cutoff: 13 days for a
+        // 15-day cutoff, and 14 days for the 16-31 cutoff.
+        if (WorkWeek::days($employee->rest_days ?? null) === [6, 7]) {
+            $days = 0;
+            for ($day = $start->copy(); $day->lte($end); $day->addDay()) {
+                if (! WorkWeek::restsOn($employee->rest_days, $day)) {
+                    $days++;
+                }
+            }
+
+            return $days;
+        }
+
+        return max(0, $start->diffInDays($end) + 1 - 2);
     }
 
     public function markPaid(string $periodStart, ?string $company = null): int
@@ -164,6 +222,23 @@ class PayrollRun
      * Throws away a payslip that is only calculated and works it out again,
      * so a change made after generating (a plus or minus row) is included.
      */
+    /**
+     * Works out again every payslip of one person that is still only
+     * calculated - after a loan is added, stopped or changed, so the
+     * deduction appears without anybody having to remember to regenerate.
+     */
+    public function recalculateOpen(int $employeeId): int
+    {
+        $n = 0;
+        foreach (DB::table('hr_payroll')->where('employee_id', $employeeId)->where('kind', 'regular')
+                     ->where('status', 'calculated')->pluck('period_start') as $start) {
+            $this->recalculate($employeeId, PayPeriod::fromStart(substr((string) $start, 0, 10)));
+            $n++;
+        }
+
+        return $n;
+    }
+
     public function recalculate(int $employeeId, PayPeriod $period): ?int
     {
         return DB::transaction(function () use ($employeeId, $period) {

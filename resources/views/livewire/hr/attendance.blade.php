@@ -56,6 +56,58 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     }
 
     /** The last few cutoffs, newest first, for the picker. */
+    /**
+     * The cutoff's attendance as an Excel workbook: one row per person per day,
+     * each company on its own sheet - the schedule beside the six punches, and
+     * the lateness, undertime and hours the same way payroll reads them.
+     */
+    public function exportAttendance()
+    {
+        $period = \App\Support\PayPeriod::fromStart($this->summaryCutoff ?: date('Y-m-d'));
+        $clock = fn ($t) => $t ? \Carbon\Carbon::parse($t)->format('H:i') : '';
+        $staff = DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
+            ->leftJoin('departments as d', 'd.department_id', '=', 'e.department_id')
+            ->where('e.status', 'active')
+            ->where(fn ($q) => \App\Support\NotInSummaries::scope($q))
+            ->when($this->filters['company'] ?? null, fn ($q, $c) => $q->where('e.company', $c))
+            ->when($this->filters['department'] ?? null, fn ($q, $d) => $q->where('e.department_id', $d))
+            ->orderByRaw("COALESCE(NULLIF(u.last_name, ''), u.full_name)")
+            ->get(['e.*', 'u.full_name', 'd.department_name']);
+        $rows = DB::table('hr_attendance')->whereIn('employee_id', $staff->pluck('employee_id'))
+            ->whereBetween('date', [$period->start, $period->end])->get()
+            ->keyBy(fn ($a) => $a->employee_id.'|'.substr((string) $a->date, 0, 10));
+
+        $sheets = [];
+        foreach ($staff->groupBy(fn ($e) => $e->company ?: 'GKLASAM OPC') as $company => $people) {
+            $lines = [];
+            foreach ($people as $e) {
+                for ($day = \Carbon\Carbon::parse($period->start); $day->lte(\Carbon\Carbon::parse($period->end)); $day->addDay()) {
+                    $date = $day->toDateString();
+                    $plan = \App\Support\ShiftSchedule::forEmployeeDate($e, $date);
+                    $a = $rows[$e->employee_id.'|'.$date] ?? null;
+                    $late = $a && $a->time_in && ! $plan['rest'] && $plan['start']
+                        ? (int) (\App\Support\Tardiness::minutesLate(\Carbon\Carbon::parse($a->time_in), $plan['start']) ?? 0) : 0;
+                    $short = $a && $a->time_out && ! $plan['rest'] && $plan['end']
+                        ? (int) (\App\Support\Undertime::minutesShort(\Carbon\Carbon::parse($a->time_out), $plan['end']) ?? 0) : 0;
+                    $status = $a ? ($a->notes === 'Suspension' && ! $a->time_in ? 'suspended' : str_replace('_', ' ', (string) $a->status))
+                        : ($plan['rest'] ? 'rest day' : ($day->lt(\Carbon\Carbon::today()) ? 'no scan' : ''));
+                    $lines[] = [
+                        $date, $day->format('D'), (string) $e->employee_no, $e->full_name, (string) $e->department_name,
+                        $plan['rest'] ? 'RD' : ($plan['start'] ? substr($plan['start'], 0, 5).'-'.substr((string) $plan['end'], 0, 5) : ''),
+                        $clock($a->time_in ?? null), $clock($a->lunch_in ?? null), $clock($a->lunch_out ?? null),
+                        $clock($a->cb_in ?? null), $clock($a->cb_out ?? null), $clock($a->time_out ?? null),
+                        $status, $late > 5 ? $late : 0, $short > 5 ? $short : 0,
+                        $a && $a->time_in && $a->time_out ? round(\App\Support\WorkDay::workedMinutes($a, 60, $e) / 60, 2) : 0,
+                    ];
+                }
+            }
+            $sheets[] = [$company, ['Date', 'Day', 'ID', 'Name', 'Department', 'Schedule', 'First in', 'Lunch in', 'Lunch out',
+                'CB in', 'CB out', 'Final out', 'Status', 'Late (min)', 'Undertime (min)', 'Hours'], $lines];
+        }
+
+        return \App\Support\SpreadsheetWriter::downloadSheets('attendance-'.$period->start.'-to-'.$period->end.'.xlsx', $sheets);
+    }
+
     public function cutoffOptions(): array
     {
         return \App\Support\PayPeriod::recent(6);
@@ -74,6 +126,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->join('users as u', 'u.user_id', '=', 'e.user_id')
             ->leftJoin('departments as d', 'd.department_id', '=', 'e.department_id')
             ->where('e.status', 'active')
+            ->where(fn ($q) => \App\Support\NotInSummaries::scope($q))
             ->when($this->filters['company'] ?? null, fn ($q, $c) => $q->where('e.company', $c))
             ->when($this->filters['staff'] ?? null, fn ($q, $k) => $q->{$k === 'guards' ? 'where' : 'whereNot'}(fn ($g) => $g->where('e.job_title', 'like', '%security guard%')))
             ->when($this->filters['department'] ?? null, fn ($q, $d) => $q->where('e.department_id', $d))
@@ -112,6 +165,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 'e.job_title',
                 'e.shift_start',
                 'e.shift_end',
+                'e.rest_days',
                 'u.full_name',
                 'u.username',
                 'u.email',
@@ -237,7 +291,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     /** Recent changes to attendance and pay, newest first. */
     public function getTrailProperty()
     {
-        return \App\Services\Auditor::recent(['hr_attendance', 'hr_payroll', 'payroll_corrections', 'leaves'], 30);
+        return \App\Services\Auditor::recent(\App\Support\PeopleAccess::canSeePay() ? ['hr_attendance', 'hr_payroll', 'payroll_corrections', 'leaves'] : ['hr_attendance', 'leaves'], 30);
     }
 
 
@@ -471,6 +525,30 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                 <p class="text-sm text-gray-600 mt-1">
                     Scans become attendance days: first in, lunch in, lunch out, CB in, CB out, and the last scan of the day as final out.
                 </p>
+                {{-- How long the sync takes: the last run, and the one going now. --}}
+                @php
+                    $lastSync = \Illuminate\Support\Facades\Cache::get('attendance.sync.last');
+                    $running = \Illuminate\Support\Facades\Cache::get('attendance.sync.running');
+                @endphp
+                @if ($running && \App\Console\Commands\SyncAttendance::isRunning())
+                    <p class="text-sm text-blue-700 mt-2" wire:poll.5s>
+                        <i class="fas fa-rotate fa-spin"></i>
+                        Syncing now - started {{ \Carbon\Carbon::parse($running['at'])->format('g:i:s A') }},
+                        running for {{ \App\Console\Commands\SyncAttendance::took(\Carbon\Carbon::parse($running['at'])->diffInSeconds(now())) }}.
+                    </p>
+                @endif
+                @if ($lastSync && isset($lastSync['seconds']))
+                    <p class="text-sm text-gray-500 mt-1">
+                        <i class="fas fa-stopwatch"></i>
+                        Last sync {{ \Carbon\Carbon::parse($lastSync['at'])->format('M j, g:i A') }}
+                        - took <strong>{{ \App\Console\Commands\SyncAttendance::took($lastSync['seconds']) }}</strong>
+                        @if ($lastSync['ok'])
+                            · {{ number_format($lastSync['punches'] ?? 0) }} scan(s), {{ number_format($lastSync['days'] ?? 0) }} day(s) written{{ ($lastSync['full'] ?? false) ? ' (full import)' : '' }}
+                        @else
+                            · <span class="text-red-600">failed</span>
+                        @endif
+                    </p>
+                @endif
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
@@ -771,6 +849,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                         <option value="{{ $option->start }}">{{ $option->label() }}</option>
                     @endforeach
                 </select>
+                <button wire:click="exportAttendance" wire:loading.attr="disabled" class="btn-secondary whitespace-nowrap" title="Every person, every day of this cutoff - one sheet per company">
+                    <i class="fas fa-file-excel text-green-600"></i>
+                    <span wire:loading.remove wire:target="exportAttendance">Download Excel</span>
+                    <span wire:loading wire:target="exportAttendance">Preparing…</span>
+                </button>
             </div>
         </div>
 
@@ -855,16 +938,19 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                     @if(count($attendanceRecords) > 0)
                         @foreach($attendanceRecords as $record)
                             @php
+                                $effectiveOut = \App\Support\WorkDay::effectiveOut($record);
+                                $usedFallbackOut = ! $record->time_out && $effectiveOut;
                                 $timeIn = $record->time_in ? date('H:i', strtotime($record->time_in)) : '—';
-                                $timeOut = $record->time_out ? date('H:i', strtotime($record->time_out)) : '—';
+                                $timeOut = $effectiveOut ? $effectiveOut->format('H:i') : '—';
                                 
                                 // Hours actually worked: the breaks that were
                                 // punched come off. This used to be the raw
                                 // span from first in to final out, so an hour
                                 // at lunch was shown as an hour at the machine.
                                 $hours = '--';
-                                if ($record->time_in && $record->time_out) {
-                                    $hours = \App\Support\WorkDay::workedHours($record) . 'h';
+                                if ($record->time_in && $effectiveOut) {
+                                    // A guard's duty is 12 hours, not capped at 8.
+                                    $hours = \App\Support\WorkDay::workedHours($record, 60, $record) . 'h';
                                 }
 
                                 $breakMinutes = \App\Support\WorkDay::breakMinutes($record);
@@ -875,18 +961,35 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 // Measured against their own shift. Either can be
                                 // unknowable - no shift set, or no scan - and then
                                 // nothing is claimed about the day.
-                                $minutesLate = \App\Support\Tardiness::minutesLate(
+                                // That day's schedule (the cutoff's shift, or one matched to the punches), not only the default.
+                                $daySchedule = \App\Support\ShiftSchedule::forEmployeeDate((object) ['employee_id' => $record->employee_id,
+                                    'shift_start' => $record->shift_start ?? null, 'shift_end' => $record->shift_end ?? null, 'rest_days' => $record->rest_days ?? null],
+                                    substr((string) $record->date, 0, 10));
+                                $minutesLate = $daySchedule['rest'] ? null : \App\Support\Tardiness::minutesLate(
                                     $record->time_in ? \Carbon\Carbon::parse($record->time_in) : null,
-                                    $record->shift_start ?? null);
-                                $minutesShort = \App\Support\Undertime::minutesShort(
-                                    $record->time_out ? \Carbon\Carbon::parse($record->time_out) : null,
-                                    $record->shift_end ?? null);
+                                    $daySchedule['start']);
+                                $missingFinalOut = ! $daySchedule['rest'] && $daySchedule['end'] && $record->time_in && ! $effectiveOut;
+                                $minutesShort = $missingFinalOut ? 15 : ($daySchedule['rest'] ? null : \App\Support\Undertime::minutesShort(
+                                    $effectiveOut,
+                                    $daySchedule['end']));
+                                $bioMistake = \Illuminate\Support\Str::contains(\Illuminate\Support\Str::lower((string) ($record->notes ?? '')), [
+                                    'wrong order', 'wrong bio', 'biometric mistake', 'punched in the wrong', 'swapped by hr',
+                                ]);
+
+                                $displayStatus = $record->status;
+                                if ($minutesShort !== null && $minutesShort > \App\Support\Tardiness::GRACE_MINUTES) {
+                                    $displayStatus = 'undertime';
+                                }
+                                if (! $bioMistake && $record->status === 'late' && ! $minutesLate && ! $minutesShort) {
+                                    $displayStatus = 'present';
+                                }
 
                                 // Status colors
                                 $statusColors = [
                                     'present' => 'bg-green-100 text-green-800',
                                     'absent' => 'bg-red-100 text-red-800',
                                     'late' => 'bg-yellow-100 text-yellow-800',
+                                    'undertime' => 'bg-orange-100 text-orange-800',
                                     'half_day' => 'bg-blue-100 text-blue-800',
                                     'on_leave' => 'bg-purple-100 text-purple-800',
                                     'official_business' => 'bg-cyan-100 text-cyan-800',
@@ -931,16 +1034,19 @@ new #[Layout('components.layouts.humanresource')] class extends Component
                                 </td>
                                 <td class="font-mono">
                                     {{ $timeOut }}
+                                    @if($usedFallbackOut)
+                                        <span class="block text-xs font-sans text-gray-500">last punch</span>
+                                    @endif
                                     @if($dayProblems)
                                         <span class="block text-xs font-sans text-amber-700" title="{{ implode('; ', $dayProblems) }}">{{ $dayProblems[0] }}</span>
                                     @endif
                                     @if($minutesShort !== null && $minutesShort > \App\Support\Tardiness::GRACE_MINUTES)
-                                        <span class="block text-xs font-sans text-amber-700">{{ $minutesShort }} min undertime</span>
+                                        <span class="block text-xs font-sans text-amber-700">{{ $missingFinalOut ? 'No final out - undertime' : $minutesShort.' min undertime' }}</span>
                                     @endif
                                 </td>
                                 <td>
-                                    <span class="px-3 py-1 rounded-full text-xs font-medium {{ $statusColors[$record->status] ?? 'bg-gray-100 text-gray-800' }}">
-                                        {{ ucfirst(str_replace('_', ' ', $record->status)) }}
+                                    <span class="px-3 py-1 rounded-full text-xs font-medium {{ $statusColors[$displayStatus] ?? 'bg-gray-100 text-gray-800' }}">
+                                        {{ ucfirst(str_replace('_', ' ', $displayStatus)) }}
                                     </span>
                                 </td>
                                 <td class="font-medium">{{ $hours }}</td>

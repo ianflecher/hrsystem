@@ -177,5 +177,6 @@
 
 
 
+    <script src="{{ asset('js/date-dmy.js') }}" defer></script>
 </body>
 </html>

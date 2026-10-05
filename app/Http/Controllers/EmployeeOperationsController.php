@@ -13,7 +13,12 @@ class EmployeeOperationsController extends Controller
     {
         $id = PeopleAccess::employeeId();
         $employee = DB::table('employees as e')->join('users as u','e.user_id','=','u.user_id')->leftJoin('departments as d','e.department_id','=','d.department_id')->where('e.employee_id',$id)->select('e.*','u.full_name','u.email','d.department_name')->first();
-        $payslips = DB::table('hr_payroll')->where('employee_id',$id)->orderByDesc('period_end')->limit(12)->get();
+        $payslips = DB::table('hr_payroll')
+            ->where('employee_id', $id)
+            ->whereIn('status', ['approved', 'paid'])
+            ->orderByDesc('period_end')
+            ->limit(12)
+            ->get();
         $leaves = DB::table('leaves')->where('employee_id',$id)->orderByDesc('created_at')->limit(10)->get();
         $notifications = Schema::hasTable('employee_notifications') ? DB::table('employee_notifications')->where('employee_id',$id)->orderByDesc('created_at')->limit(10)->get() : collect();
         $corrections = Schema::hasTable('attendance_corrections') ? DB::table('attendance_corrections')->where('employee_id',$id)->orderByDesc('created_at')->limit(10)->get() : collect();
