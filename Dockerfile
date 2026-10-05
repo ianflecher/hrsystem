@@ -3,14 +3,6 @@
 # The database is chosen with environment variables - SQLite on a disk, MySQL
 # or Postgres - so this file does not change with it.
 
-# --- Frontend (Vite + Tailwind) ---------------------------------------------
-FROM node:20-bookworm-slim AS assets
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --no-audit --no-fund
-COPY . .
-RUN npm run build
-
 # --- PHP dependencies --------------------------------------------------------
 FROM composer:2 AS vendor
 WORKDIR /app
@@ -18,6 +10,16 @@ COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-interaction --no-scripts --prefer-dist --ignore-platform-reqs
 COPY . .
 RUN composer dump-autoload --no-dev --optimize --classmap-authoritative --no-scripts
+
+# --- Frontend (Vite + Tailwind) ---------------------------------------------
+# After the PHP packages: app.css imports Flux UI styles from vendor/.
+FROM node:20-bookworm-slim AS assets
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --no-audit --no-fund
+COPY . .
+COPY --from=vendor /app/vendor ./vendor
+RUN npm run build
 
 # --- The app -----------------------------------------------------------------
 FROM php:8.2-apache-bookworm
