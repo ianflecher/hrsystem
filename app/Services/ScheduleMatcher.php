@@ -3,18 +3,19 @@
 namespace App\Services;
 
 use App\Support\ShiftSchedule;
+use App\Support\WorkDay;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * A day worked as a whole different shift than the one scheduled - in at
- * 5:58 and out at 15:01 on an 8-5 day - is that shift (6-3), not two hours
- * of undertime. Runs after every scanner sync, so future days fix themselves.
+ * A day worked as a whole different shift than the one scheduled is matched to
+ * the scanner start, then measured against the correct duty length. Ordinary
+ * employees get a nine-hour schedule span (eight paid hours plus lunch);
+ * security guards get a twelve-hour post. Time beyond that is overtime, time
+ * short of it is undertime.
  *
- * Only clear cases: in within 10 minutes before (or 5 after) an hour that is
- * not the scheduled start, and out at that shift's end, give or take an hour.
- * A long day (6 AM to 8 PM) keeps its schedule and its overtime.
- * Guards, rest days and days HR corrected by hand are left alone.
+ * Only clear cases: the first punch rounds to an hour within thirty minutes.
+ * Rest days and days HR corrected by hand are left alone.
  */
 class ScheduleMatcher
 {
@@ -28,29 +29,38 @@ class ScheduleMatcher
             ->get(['e.*', 'u.full_name']);
 
         foreach ($staff as $e) {
-            if (ShiftSchedule::isGuard($e)) continue;
             $days = DB::table('hr_attendance')->where('employee_id', $e->employee_id)->whereBetween('date', [$from, $to])
-                ->whereNotNull('time_in')->whereNotNull('time_out')->where('notes', 'From the biometric scanner')->get();
+                ->whereNotNull('time_in')->where('notes', 'From the biometric scanner')->get();
             foreach ($days as $a) {
                 $date = substr((string) $a->date, 0, 10);
                 $s = ShiftSchedule::forEmployeeDate($e, $date);
                 if ($s['rest'] || ! $s['start'] || ! $s['end']) continue;
 
                 $in = Carbon::parse($a->time_in);
-                $out = Carbon::parse($a->time_out);
-                // The hour they started at: 5:50-6:05 is 6:00; 7:43 is no hour.
-                $hour = $in->copy()->addMinutes(10)->startOfHour();
-                if ($in->gt($hour->copy()->addMinutes(5))) continue;
-                $start = $hour->format('H:i');
-                if ($start === substr((string) $s['start'], 0, 5)) continue;
+                $out = WorkDay::effectiveOut($a);
+                if (! $out || ! $out->greaterThan($in)) continue;
 
-                // The scheduled shift's length, so a 12-hour day stays 12 hours.
-                $length = Carbon::parse('2000-01-01 '.substr((string) $s['start'], 0, 5))
-                    ->diffInMinutes(Carbon::parse('2000-01-01 '.substr((string) $s['end'], 0, 5)), false);
-                if ($length <= 0) $length += 24 * 60;
+                $scheduledStart = Carbon::parse($date.' '.$s['start']);
+                $scheduledEnd = Carbon::parse($date.' '.$s['end']);
+                if ($scheduledEnd->lessThanOrEqualTo($scheduledStart)) $scheduledEnd->addDay();
+                $actualOut = $out->lessThan($in) ? $out->copy()->addDay() : $out;
+
+                // Coming in before the scheduled duty must not move the
+                // schedule earlier. At one full hour or more it is overtime;
+                // below one hour it is simply early, with no OT.
+                if ($in->lt($scheduledStart)) continue;
+                // One full hour after the scheduled duty is overtime territory,
+                // not a reason to move the schedule and hide it.
+                if ($actualOut->gt($scheduledEnd) && $scheduledEnd->diffInMinutes($actualOut) >= 60) continue;
+
+                $hour = $in->copy()->second(0);
+                if ($hour->minute >= 30) $hour->addHour();
+                $hour->minute(0);
+                if (abs($in->diffInMinutes($hour, false)) > 30) continue;
+                $start = $hour->format('H:i');
+                $length = ShiftSchedule::isGuard($e) ? 720 : 540;
                 $end = $hour->copy()->addMinutes($length);
-                // A full shift from that hour, and out at its end (give or take an hour).
-                if ($out->lt($end->copy()->subMinutes(5)) || $out->gt($end->copy()->addHour())) continue;
+                if ($start === substr((string) $s['start'], 0, 5) && $end->format('H:i') === substr((string) $s['end'], 0, 5)) continue;
 
                 $changed[] = ['employee_id' => (int) $e->employee_id, 'name' => $e->full_name, 'date' => $date,
                     'was' => substr((string) $s['start'], 0, 5).'-'.substr((string) $s['end'], 0, 5),

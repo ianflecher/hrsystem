@@ -66,6 +66,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/payslips/print', [\App\Http\Controllers\PayslipController::class, 'batch'])->name('payslips.batch');
     Route::get('/payslip/{id}', \App\Http\Controllers\PayslipController::class)->whereNumber('id')->name('payslip.show');
     Route::get('/hr/reports/download', \App\Http\Controllers\HrReportController::class)->name('people.reports.download');
+    Route::get('/hr/loans/billing', \App\Http\Controllers\LoanBillingController::class)->name('people.loans.billing');
     Route::post('/people/notices/{id}', [\App\Http\Controllers\PeopleController::class, 'notice'])->whereNumber('id')->name('people.notices.act');
     Route::get('/people/documents/{id}/download', [\App\Http\Controllers\PeopleController::class, 'download'])->whereNumber('id')->name('people.documents.download');
     foreach (['hr', 'employee'] as $portal) {
@@ -111,6 +112,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/hr/operations/employee/{id}/lifecycle', [\App\Http\Controllers\HrOperationsController::class, 'lifecycleEvent'])->whereNumber('id')->name('hr.operations.employee.lifecycle');
     Route::post('/hr/operations/anomalies/{id}/resolve', [\App\Http\Controllers\HrOperationsController::class, 'resolveAnomaly'])->whereNumber('id')->name('hr.operations.anomaly.resolve');
     Route::get('/hr/operations/manager', [\App\Http\Controllers\HrOperationsController::class, 'manager'])->name('hr.operations.manager');
+    Route::post('/hr/operations/manager/leave', [\App\Http\Controllers\HrOperationsController::class, 'teamLeaveRequest'])->name('hr.operations.manager.leave.create');
+    Route::post('/hr/operations/manager/overtime', [\App\Http\Controllers\HrOperationsController::class, 'teamOvertimeRequest'])->name('hr.operations.manager.overtime.create');
     Route::post('/hr/operations/manager/leave/{id}', [\App\Http\Controllers\HrOperationsController::class, 'managerLeaveDecision'])->whereNumber('id')->name('hr.operations.manager.leave');
     Route::post('/hr/operations/manager/overtime/{id}', [\App\Http\Controllers\HrOperationsController::class, 'managerOvertimeDecision'])->whereNumber('id')->name('hr.operations.manager.overtime');
     Route::post('/hr/operations/manager/manual-attendance', [\App\Http\Controllers\HrOperationsController::class, 'manualAttendance'])->name('hr.operations.manager.attendance');
@@ -140,6 +143,8 @@ Route::middleware('auth')->group(function () {
     Volt::route('/employee/leave', 'employee.leave')->name('employee.leave');
     Route::get('/employee/team', [\App\Http\Controllers\HrOperationsController::class, 'manager'])->name('employee.team');
     Route::get('/employee/team/{id}', [\App\Http\Controllers\HrOperationsController::class, 'employee'])->whereNumber('id')->name('employee.team.employee');
+    Route::post('/employee/team/leave', [\App\Http\Controllers\HrOperationsController::class, 'teamLeaveRequest'])->name('employee.team.leave.create');
+    Route::post('/employee/team/overtime', [\App\Http\Controllers\HrOperationsController::class, 'teamOvertimeRequest'])->name('employee.team.overtime.create');
     Route::post('/employee/team/leave/{id}', [\App\Http\Controllers\HrOperationsController::class, 'managerLeaveDecision'])->whereNumber('id')->name('employee.team.leave');
     Route::post('/employee/team/overtime/{id}', [\App\Http\Controllers\HrOperationsController::class, 'managerOvertimeDecision'])->whereNumber('id')->name('employee.team.overtime');
     Route::post('/employee/team/manual-attendance', [\App\Http\Controllers\HrOperationsController::class, 'manualAttendance'])->name('employee.team.attendance');

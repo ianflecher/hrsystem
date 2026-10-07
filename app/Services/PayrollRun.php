@@ -50,6 +50,7 @@ class PayrollRun
                 $time['work_days'] = $work['worked_days'];
                 $time['paid_leave_days'] = $work['paid_leave_days'];
                 $time['hours'] = $work['hours'];
+                $time['late_penalty_hours'] = $work['late_penalty_hours'] ?? 0;
             }
             // Includes previously approved, unpaid overtime missed by an older cutoff.
             $overtime = DB::table('overtime_requests')->where('employee_id', $employeeId)->where('status', 'approved')->whereNull('payroll_id')
@@ -80,7 +81,11 @@ class PayrollRun
 
             $compliance = app(PhilippinePayrollCompliance::class)->assertReady($period->start);
             $ruleSnapshot = Statutory::snapshot($period->start);
-            $overtimeAmount=(float) $overtime->sum('approved_amount');
+            // Only the part of each overtime outside the day's shift is paid - a
+            // schedule changed after approval can put it inside, already paid as basic.
+            $otPayable = $overtime->map(fn ($o) => \App\Support\OvertimePayable::for($employee, $o));
+            $overtimeAmount = round((float) $otPayable->sum('amount'), 2);
+            $otTrimmed = (int) $otPayable->sum('trimmed');
             $statutoryBase = $monthlyBase > 0 ? $monthlyBase : (float) $employee->salary;
 
             // Split across the two cutoffs like basic pay, so a monthly
@@ -92,7 +97,13 @@ class PayrollRun
                 $allowance = round($monthlyAllowance / 2, 2);
             } else {
                 $perDay = $onImmersion ? 0.0 : (float) ($employee->allowance ?? 0);
-                $allowance = round($perDay * (($time['work_days'] ?? 0) + ($time['paid_leave_days'] ?? 0)), 2);
+                // A half day earns half the allowance: days counted from the hours
+                // worked, in half days (44 h is 5.5). A late penalty comes off basic
+                // only, so its hours count here. A guard's allowance is per duty.
+                $allowanceDays = ShiftSchedule::isGuard($employee)
+                    ? (float) ($time['work_days'] ?? 0)
+                    : min((float) ($time['work_days'] ?? 0), floor((($time['hours'] ?? 0) + ($time['late_penalty_hours'] ?? 0)) / 8 * 2 + 0.0001) / 2);
+                $allowance = round($perDay * ($allowanceDays + ($time['paid_leave_days'] ?? 0)), 2);
                 $monthlyAllowance = round($perDay * 26, 2);
             }
 
@@ -110,7 +121,9 @@ class PayrollRun
                 $c['net'] = round($c['net'] + $plusExempt - $minus, 2);
             }
             $remainingCents = max(0, (int) round($c['net'] * 100));
-            $loans = DB::table('employee_loans')->where('employee_id', $employeeId)->where('status', 'active')->where('starts_on', '<=', $period->start)->orderBy('id')->lockForUpdate()->get();
+            $loans = DB::table('employee_loans')->where('employee_id', $employeeId)->where('status', 'active')->where('starts_on', '<=', $period->start)
+                // Nothing more after the last month of the loan's term.
+                ->where(fn ($q) => $q->whereNull('term_to')->orWhere('term_to', '>=', $period->start))->orderBy('id')->lockForUpdate()->get();
             $installments = [];
             foreach ($loans as $loan) {
                 // A monthly amortization recorded without a balance comes off
@@ -144,6 +157,7 @@ class PayrollRun
             }
             if (($c['allowance'] ?? 0) > 0) $notes .= ' | Allowance: PHP '.number_format($c['allowance'], 2).' (taxable; SSS and PhilHealth are on the basic salary)';
             if ($c['overtime'] > 0) $notes .= ' | Overtime: PHP '.number_format($c['overtime'], 2);
+            if ($otTrimmed > 0) $notes .= ' | Overtime inside the shift not paid: '.round($otTrimmed / 60, 2).' h';
             if ($c['nsd'] > 0) $notes .= ' | NSD: '.number_format($c['nsd'], 2). ' ('.number_format($nsd['hours'], 2).' hours)';
             if ($deduction > 0) $notes .= ' | Loan repayment: PHP '.number_format($deduction, 2);
             foreach ($adjustments as $a) {
@@ -162,7 +176,7 @@ class PayrollRun
                     : $rendered['hours'] + ($rendered['paid_leave_days'] * (ShiftSchedule::dailyCapMinutes($employee) / 60)),
                 'basic_adjustment' => $basicAdjustment,
                 'legal_holiday_pay' => $holiday['legal'] ?? 0, 'special_holiday_pay' => $holiday['special'] ?? 0,
-                'overtime_hours' => round($overtime->sum('minutes') / 60, 2),
+                'overtime_hours' => round($otPayable->sum('minutes') / 60, 2),
                 'late_minutes' => $lateMinutes,
                 // Day-rated staff: the late penalty already taken out of basic, for the payslip to show.
                 'late_deduction' => $payBasis === 'monthly' || ShiftSchedule::isGuard($employee) ? 0

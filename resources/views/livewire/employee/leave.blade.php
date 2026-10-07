@@ -82,6 +82,8 @@ new #[Layout('components.layouts.employeeland')] class extends Component
 
     public function submit()
     {
+        abort(403, 'Leave is filed by the supervisor or team leader.');
+
         $this->validate();
 
         $employeeId = $this->employeeId();
@@ -163,7 +165,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                 <h1 class="text-2xl font-bold text-gray-900">
                     Leave Management
                 </h1>
-                <p class="text-gray-600 mt-2">Submit and track your leave requests</p>
+                <p class="text-gray-600 mt-2">Track leave requests filed by your supervisor or team leader</p>
             </div>
 
         </div>
@@ -206,12 +208,12 @@ new #[Layout('components.layouts.employeeland')] class extends Component
         <!-- MAIN GRID -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            <!-- LEAVE REQUEST FORM -->
+            <!-- LEAVE REQUEST INFO -->
             <div class="lg:col-span-2">
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="px-8 py-6 border-b border-gray-200">
-                        <h2 class="text-xl font-bold text-gray-900">New Leave Request</h2>
-                        <p class="text-sm text-gray-600 mt-1">Fill out the form below to submit your leave application</p>
+                        <h2 class="text-xl font-bold text-gray-900">Leave requests</h2>
+                        <p class="text-sm text-gray-600 mt-1">Your supervisor or team leader files leave for you. You can monitor the status on this page.</p>
                     </div>
 
                     @if (session()->has('success'))
@@ -225,105 +227,11 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                         </div>
                     @endif
 
-                    <form wire:submit.prevent="submit" class="p-8 space-y-8">
-                        <!-- Leave Type -->
-                        <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <label class="block">
-                                <div class="flex items-center mb-2">
-                                    <div class="w-1.5 h-5 bg-red-600 rounded-full mr-3"></div>
-                                    <span class="text-lg font-bold text-gray-800">Leave Type</span>
-                                </div>
-                                <select wire:model="leave_type"
-                                    class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white
-                                           focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition duration-200 cursor-pointer">
-                                    <option value="vacation">Vacation</option>
-                                    <option value="sick">Sick Leave</option>
-                                    <option value="emergency">Emergency</option>
-                                    <option value="maternity">Maternity</option>
-                                    <option value="paternity">‍ Paternity</option>
-                                    <option value="bereavement">Bereavement</option>
-                                    <option value="unpaid">Unpaid</option>
-                                </select>
-                            </label>
-                            <label class="block">
-                                <div class="flex items-center mb-2">
-                                    <div class="w-1.5 h-5 bg-slate-500 rounded-full mr-3"></div>
-                                    <span class="text-lg font-bold text-gray-800">Pay</span>
-                                </div>
-                                <select wire:model="pay_status"
-                                    class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white
-                                           focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition duration-200 cursor-pointer">
-                                    <option value="paid">Paid</option>
-                                    <option value="unpaid">Unpaid</option>
-                                </select>
-                                <p class="mt-2 text-xs text-gray-500">If paid leave balance is used up, this becomes unpaid automatically.</p>
-                            </label>
-                            </div>
+                    <div class="p-8">
+                        <div class="rounded-xl border border-blue-100 bg-blue-50 p-5 text-sm text-blue-900">
+                            Talk to your supervisor or team leader when you need leave. Once they file it, it appears in the history below with the current approval status.
                         </div>
-
-                        <!-- Dates -->
-                        <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                            <div class="flex items-center mb-4">
-                                <div class="w-1.5 h-5 bg-red-600 rounded-full mr-3"></div>
-                                <span class="text-lg font-bold text-gray-800">Leave Period</span>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-2">Start Date</label>
-                                    <input type="date" wire:model="start_date" onclick="this.showPicker()"
-                                        class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                               focus:border-blue-500 focus:ring-2 focus:ring-blue-200 cursor-pointer bg-white">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-2">End Date</label>
-                                    <input type="date" wire:model="end_date" onclick="this.showPicker()"
-                                        class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                               focus:border-blue-500 focus:ring-2 focus:ring-blue-200 cursor-pointer bg-white">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-2">Total Days</label>
-                                    <div class="flex items-center justify-between px-4 py-3 rounded-xl bg-gray-50 border-2 border-gray-200">
-                                        <span class="text-2xl font-bold text-red-700">{{ $total_days }}</span>
-                                        <span class="text-sm text-red-600 font-medium">days</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Reason -->
-                        <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                            <label class="block">
-                                <div class="flex items-center mb-4">
-                                    <div class="w-1.5 h-5 bg-red-600 rounded-full mr-3"></div>
-                                    <span class="text-lg font-bold text-gray-800">Reason for Leave</span>
-                                </div>
-                                <textarea wire:model="reason" rows="4" placeholder="Please provide details about your leave..."
-                                    class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white
-                                           focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition duration-200 resize-none"></textarea>
-                                <div class="flex justify-between mt-2 text-sm text-gray-500">
-                                    <span>Minimum 5 characters required</span>
-                                    <span>{{ strlen($reason) }}/255</span>
-                                </div>
-                            </label>
-                        </div>
-
-                        <!-- Submit Button -->
-                        <div class="pt-6 border-t border-gray-200">
-                            <button type="submit"
-    class="w-full py-4 px-6 rounded-xl bg-red-600
-           text-white font-bold text-lg shadow-md hover:shadow-sm
-           hover:bg-red-700
-           flex items-center justify-center gap-2
-           transition-all duration-200">
-    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-    </svg>
-    <span>Submit Leave Request</span>
-</button>
-
-                        </div>
-                    </form>
+                    </div>
                 </div>
             </div>
 
@@ -374,7 +282,7 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                     <ul class="space-y-3">
                         <li class="flex items-start">
                             <div class="w-1.5 h-1.5 bg-slate-400 rounded-full mt-2 mr-3"></div>
-                            <span class="text-sm text-gray-700">Submit requests at least 3 days in advance</span>
+                            <span class="text-sm text-gray-700">Inform your supervisor at least 3 days in advance when possible</span>
                         </li>
                         <li class="flex items-start">
                             <div class="w-1.5 h-1.5 bg-slate-400 rounded-full mt-2 mr-3"></div>

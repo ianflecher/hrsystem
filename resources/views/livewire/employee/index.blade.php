@@ -85,6 +85,22 @@ new #[Layout('components.layouts.employeeland')] class extends Component
                 ->whereMonth('date', $today->month)
                 ->count()
         ];
+
+        // A missed day has no record - nobody punched - so absences come from the
+        // same count payroll and the Attendance page use, up to yesterday.
+        if ($this->attendanceStats['month_stats']) {
+            $yesterday = $today->copy()->subDay();
+            $absent = 0;
+            // Not for the CEO and the secretary: they are not on the scanner.
+            if ($yesterday->gte($startOfMonth) && ! \App\Support\NotInSummaries::covers($this->employee)) {
+                try {
+                    $deductions = (new \App\Services\TimeDeductions)->forPeriod($this->employee, $startOfMonth->toDateString(), $yesterday->toDateString());
+                    $absent = count($deductions['dates']['absent'] ?? []);
+                } catch (\Throwable) {
+                }
+            }
+            $this->attendanceStats['month_stats']->absent_days = $absent;
+        }
     }
     
     private function loadPendingLeave()

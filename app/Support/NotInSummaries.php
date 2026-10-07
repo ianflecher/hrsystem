@@ -12,6 +12,12 @@ class NotInSummaries
     /** Employee numbers. */
     public const NUMBERS = ['IC-00001', 'IC-00002'];
 
+    /** Whether this employee is one of them. */
+    public static function covers(?object $employee): bool
+    {
+        return $employee && in_array((string) ($employee->employee_no ?? ''), self::NUMBERS, true);
+    }
+
     /** Leaves them out of an employees query aliased $alias. */
     public static function scope($query, string $alias = 'e')
     {

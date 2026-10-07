@@ -43,7 +43,10 @@ class HrOperationsController extends Controller
         abort_unless($employee, 404);
         $teamDepartmentIds = \App\Support\PeopleAccess::teamDashboardDepartmentIds();
         // HR opens anybody; a supervisor or leader only their own team.
-        if (! \App\Support\PeopleAccess::isHr() && request()->routeIs('hr.operations.employee', 'employee.team.employee') && $teamDepartmentIds !== []) {
+        if (! \App\Support\PeopleAccess::isHr()
+            && ! \App\Support\PeopleAccess::isOperationsSupervisor()
+            && request()->routeIs('hr.operations.employee', 'employee.team.employee')
+            && $teamDepartmentIds !== []) {
             abort_unless(in_array((int) $employee->department_id, $teamDepartmentIds, true), 403);
         }
         \App\Support\PeopleAccess::managerForEmployee($id);
@@ -132,6 +135,25 @@ class HrOperationsController extends Controller
                         ->when(auth()->user()->role === 'leader', fn($q) => $q->where('u.role', '!=', 'supervisor')))
                     ->when(\App\Services\OvertimeApproval::isFinalApprover(), fn($q) => $q->orWhere('o.status', 'pending_hr'))))
             ->select('o.*','u.full_name')->orderBy('o.starts_at')->get();
+        $otSuggestions = $this->teamOvertimeSuggestions($employees, $cutoff);
+        $decidedLeave = collect();
+        $decidedOt = collect();
+        if (\App\Support\PeopleAccess::isOperationsSupervisor()) {
+            $decidedLeave = DB::table('leaves as l')->join('employees as e','l.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')
+                ->whereIn('l.status', ['approved', 'rejected'])
+                ->where(fn ($q) => $q->where('l.approved_by', auth()->id())->orWhere('l.manager_reviewed_by', auth()->id()))
+                ->select('l.*', 'u.full_name')
+                ->orderByDesc(DB::raw('COALESCE(l.approved_at, l.manager_reviewed_at, l.updated_at)'))
+                ->limit(30)
+                ->get();
+            $decidedOt = DB::table('overtime_requests as o')->join('employees as e','o.employee_id','=','e.employee_id')->join('users as u','e.user_id','=','u.user_id')
+                ->whereIn('o.status', ['approved', 'rejected'])
+                ->where('o.reviewed_by', auth()->id())
+                ->select('o.*', 'u.full_name')
+                ->orderByDesc(DB::raw('COALESCE(o.reviewed_at, o.updated_at)'))
+                ->limit(30)
+                ->get();
+        }
         // Team members the scanner cannot see yet: their days are entered here.
         $noScanner = DB::table('employees as e')->join('users as u', 'e.user_id', '=', 'u.user_id')
             ->where('e.status', 'active')->where(fn ($q) => $q->whereNull('e.biometric_id')->orWhere('e.biometric_id', ''))
@@ -148,7 +170,91 @@ class HrOperationsController extends Controller
             ->when(! \App\Support\PeopleAccess::isHr(), fn ($q) => \App\Support\PeopleAccess::scopeTeam($q)->where('e.user_id', '!=', auth()->id()))
             ->orderBy('t.date')->get(['t.*', 'u.full_name']);
 
-        return view('hr.operations.manager', compact('cutoff','employees','teamWorked','teamLeaves','pendingLeave','pendingOt','noScanner','recentManual','pendingTimeLogs'));
+        return view('hr.operations.manager', compact('cutoff','employees','teamWorked','teamLeaves','pendingLeave','pendingOt','otSuggestions','decidedLeave','decidedOt','noScanner','recentManual','pendingTimeLogs'));
+    }
+
+    private function teamOvertimeSuggestions($employees, \App\Support\PayPeriod $cutoff): \Illuminate\Support\Collection
+    {
+        if ($employees->isEmpty()) {
+            return collect();
+        }
+
+        $people = $employees->keyBy('employee_id');
+
+        return DB::table('hr_attendance')
+            ->whereIn('employee_id', $people->keys())
+            ->whereBetween('date', [$cutoff->start, $cutoff->end])
+            ->whereNotNull('time_in')
+            ->orderByDesc('date')
+            ->get()
+            ->map(function ($row) use ($people) {
+                $employee = $people->get($row->employee_id);
+                if (! $employee) return null;
+
+                $date = substr((string) $row->date, 0, 10);
+                $shift = \App\Support\ShiftSchedule::forEmployeeDate($employee, $date);
+                if ($shift['rest'] || ! $shift['start'] || ! $shift['end']) return null;
+
+                $in = $this->attendanceDateTime($date, $row->time_in);
+                $effectiveOut = \App\Support\WorkDay::effectiveOut($row);
+                if (! $effectiveOut) return null;
+                $out = $this->attendanceDateTime($date, $effectiveOut);
+                $start = \Carbon\Carbon::parse($date.' '.$shift['start']);
+                $end = \Carbon\Carbon::parse($date.' '.$shift['end']);
+                if ($end->lessThanOrEqualTo($start)) $end->addDay();
+                if ($out->lessThan($in)) $out->addDay();
+
+                $capMinutes = \App\Support\ShiftSchedule::dailyCapMinutes($employee);
+                $spanMinutes = max(0, (int) floor($in->diffInMinutes($out)));
+                $breakMinutes = \App\Support\ShiftSchedule::isGuard($employee) ? 0 : 60;
+                $workedMinutes = max(0, $spanMinutes - $breakMinutes);
+                $extraMinutes = $workedMinutes - $capMinutes;
+                $wholeHours = intdiv($extraMinutes, 60);
+                if ($wholeHours < 1) return null;
+
+                $earlyHours = $in->lt($start) ? intdiv((int) floor($in->diffInMinutes($start)), 60) : 0;
+                if ($earlyHours > 0) {
+                    $hours = min($wholeHours, $earlyHours);
+                    $otStart = $start->copy()->subHours($hours);
+                    $otEnd = $start->copy();
+                } else {
+                    $lateOutHours = $out->gt($end) ? intdiv((int) floor($end->diffInMinutes($out)), 60) : 0;
+                    $hours = min($wholeHours, max(1, $lateOutHours));
+                    $otStart = $end->copy();
+                    $otEnd = $end->copy()->addHours($hours);
+                }
+                if ($otEnd->lessThanOrEqualTo($otStart)) return null;
+
+                $exists = DB::table('overtime_requests')
+                    ->where('employee_id', $employee->employee_id)
+                    ->where('starts_at', '<', $otEnd->toDateTimeString())
+                    ->where('ends_at', '>', $otStart->toDateTimeString())
+                    ->exists();
+                if ($exists) return null;
+
+                return (object) [
+                    'employee_id' => $employee->employee_id,
+                    'full_name' => $employee->full_name,
+                    'date' => $date,
+                    'time_in' => $in,
+                    'time_out' => $out,
+                    'hours' => $hours,
+                    'starts_at' => $otStart,
+                    'ends_at' => $otEnd,
+                    'reason' => 'Scanner shows '.$hours.' hour(s) over the scheduled '.$start->format('g:i A').'-'.$end->format('g:i A').' shift.',
+                ];
+            })
+            ->filter()
+            ->values();
+    }
+
+    private function attendanceDateTime(string $date, mixed $value): \Carbon\Carbon
+    {
+        $text = (string) $value;
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}/', $text)
+            ? \Carbon\Carbon::parse($text)
+            : \Carbon\Carbon::parse($date.' '.$text);
     }
 
     /**
@@ -246,6 +352,133 @@ class HrOperationsController extends Controller
         return back()->with('success', 'Saved for '.\Carbon\Carbon::parse($data['date'])->format('M j').'.');
     }
 
+    public function teamLeaveRequest(Request $request)
+    {
+        \App\Support\PeopleAccess::manager();
+        $data = $request->validate([
+            'employee_id' => ['required', 'integer', 'exists:employees,employee_id'],
+            'leave_type' => ['required', 'in:vacation,sick,emergency,maternity,paternity,bereavement,unpaid'],
+            'pay_status' => ['required', 'in:paid,unpaid'],
+            'start_date' => ['required', 'date_format:Y-m-d'],
+            'end_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:start_date'],
+            'reason' => ['required', 'string', 'min:5', 'max:3000'],
+        ]);
+        $this->ensureTeamRequestEmployee((int) $data['employee_id']);
+
+        $from = \Carbon\Carbon::parse($data['start_date']);
+        $to = \Carbon\Carbon::parse($data['end_date']);
+        if ($from->diffInDays($to) > 31) {
+            return back()->withErrors(['end_date' => 'At most a month at a time.'])->withInput();
+        }
+
+        $days = (float) ($from->diffInDays($to) + 1);
+        $status = \App\Support\PeopleAccess::isOperationsSupervisor() ? 'approved' : 'pending_hr';
+        $payStatus = (new \App\Services\LeaveBalances)->payStatusForRequest(
+            (int) $data['employee_id'],
+            $data['leave_type'],
+            $days,
+            $data['leave_type'] === 'unpaid' ? 'unpaid' : $data['pay_status'],
+            (int) $from->format('Y')
+        );
+
+        $row = [
+            'employee_id' => (int) $data['employee_id'],
+            'leave_type' => $data['leave_type'],
+            'pay_status' => $data['leave_type'] === 'unpaid' ? 'unpaid' : $payStatus,
+            'start_date' => $from->toDateString(),
+            'end_date' => $to->toDateString(),
+            'total_days' => $days,
+            'reason' => trim($data['reason']),
+            'status' => $status,
+            'manager_reviewed_by' => auth()->id(),
+            'manager_reviewed_at' => now(),
+            'manager_decision_note' => 'Filed by '.auth()->user()->full_name.'.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        if ($status === 'approved') {
+            $verdict = (new \App\Services\LeaveBalances)->canApprove((object) $row);
+            if (! $verdict['ok']) {
+                return back()->with('error', 'Not approved. '.$verdict['reason'])->withInput();
+            }
+            $row['approved_by'] = auth()->id();
+            $row['approved_at'] = now();
+        }
+
+        DB::table('leaves')->insert($row);
+        if ($status === 'approved') {
+            app(\App\Services\PayrollRun::class)->recalculateOpen((int) $data['employee_id']);
+        }
+
+        return back()->with('success', $status === 'approved' ? 'Leave filed and approved.' : "Leave filed and sent to Ma'am An.");
+    }
+
+    public function teamOvertimeRequest(Request $request)
+    {
+        \App\Support\PeopleAccess::manager();
+        $data = $request->validate([
+            'employee_id' => ['required', 'integer', 'exists:employees,employee_id'],
+            'starts_at' => ['required', 'date'],
+            'ends_at' => ['required', 'date', 'after:starts_at'],
+            'reason' => ['required', 'string', 'min:5', 'max:3000'],
+        ]);
+        $this->ensureTeamRequestEmployee((int) $data['employee_id']);
+
+        $start = \Carbon\Carbon::parse($data['starts_at']);
+        $end = \Carbon\Carbon::parse($data['ends_at']);
+        $minutes = $start->diffInMinutes($end);
+        if ($minutes < 60 || $minutes > 960) {
+            return back()->withErrors(['ends_at' => 'Overtime must be at least 1 hour and at most 16 hours.'])->withInput();
+        }
+        $minutes = intdiv($minutes, 60) * 60;
+        $status = \App\Services\OvertimeApproval::isFinalApprover() ? 'approved' : 'pending_hr';
+        $row = [
+            'employee_id' => (int) $data['employee_id'],
+            'starts_at' => $start->toDateTimeString(),
+            'ends_at' => $start->copy()->addMinutes($minutes)->toDateTimeString(),
+            'minutes' => $minutes,
+            'reason' => trim($data['reason']),
+            'status' => $status,
+            'manager_reviewed_by' => auth()->id(),
+            'manager_reviewed_at' => now(),
+            'manager_decision_note' => 'Filed by '.auth()->user()->full_name.'.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        if ($status === 'approved') {
+            $employee = DB::table('employees')->where('employee_id', $data['employee_id'])->first();
+            $suggestion = app(\App\Services\PhilippineOvertime::class)->suggest($employee, $row['starts_at'], $row['ends_at']);
+            $row['approved_amount'] = $suggestion['suggested_amount'];
+            $row['reviewed_by'] = auth()->id();
+            $row['reviewed_at'] = now();
+            $row['decision_note'] = 'Filed and approved at '.$suggestion['multiplier'].'x.';
+        }
+
+        DB::table('overtime_requests')->insert($row);
+        if ($status === 'approved') {
+            app(\App\Services\PayrollRun::class)->recalculateOpen((int) $data['employee_id']);
+        }
+
+        return back()->with('success', $status === 'approved' ? 'Overtime filed and approved.' : "Overtime filed and sent to Ma'am An.");
+    }
+
+    private function ensureTeamRequestEmployee(int $employeeId): void
+    {
+        $employee = DB::table('employees')->where('employee_id', $employeeId)->first();
+        abort_unless($employee, 404);
+        abort_if((int) $employee->user_id === (int) auth()->id(), 403, 'You cannot file your own request here.');
+
+        $teamDepartmentIds = \App\Support\PeopleAccess::teamDashboardDepartmentIds();
+        if (\App\Support\PeopleAccess::isHr() && $teamDepartmentIds !== []) {
+            abort_unless(in_array((int) $employee->department_id, $teamDepartmentIds, true), 403);
+            return;
+        }
+
+        \App\Support\PeopleAccess::managerForEmployee($employeeId);
+    }
+
     public function managerLeaveDecision(Request $request, int $id)
     {
         \App\Support\PeopleAccess::manager();
@@ -254,12 +487,12 @@ class HrOperationsController extends Controller
         // Leave: the team's supervisor or leader first, then Ma'am An, whose
         // approval is final. Supervisors' and leaders' leave is hers alone. HR only sees it.
         $ops = \App\Support\PeopleAccess::isOperationsSupervisor();
-        $final = $ops && ($leave->status === 'pending_hr' || \App\Support\PeopleAccess::decidesLeaveOf((int) $leave->employee_id));
+        $final = $ops && (in_array($leave->status, ['pending_hr', 'approved', 'rejected'], true) || \App\Support\PeopleAccess::decidesLeaveOf((int) $leave->employee_id));
         abort_unless($final || ($leave->status === 'pending' && \App\Support\PeopleAccess::decidesLeaveOf((int) $leave->employee_id)), 403);
         abort_if($ops && (int) DB::table('employees')->where('employee_id', $leave->employee_id)->value('user_id') === (int) auth()->id(), 403);
 
         $action = $request->input('action');
-        abort_unless(in_array($action, ['approve', 'reject'], true) && in_array($leave->status, $final ? ['pending', 'pending_hr'] : ['pending'], true), 422);
+        abort_unless(in_array($action, ['approve', 'reject'], true) && in_array($leave->status, $final ? ['pending', 'pending_hr', 'approved', 'rejected'] : ['pending'], true), 422);
         $data = $request->validate(['note' => ($action === 'reject' ? 'required' : 'nullable').'|string|max:2000']);
 
         if ($final && $action === 'approve') {
@@ -272,11 +505,28 @@ class HrOperationsController extends Controller
                 'manager_reviewed_by' => $leave->manager_reviewed_by ?? auth()->id(),
                 'manager_reviewed_at' => $leave->manager_reviewed_at ?? now(),
                 'manager_decision_note' => $data['note'] ?? $leave->manager_decision_note,
+                'rejection_reason' => null,
                 'updated_at' => now(),
             ]);
             app(\App\Services\PayrollRun::class)->recalculateOpen((int) $leave->employee_id);
 
             return back()->with('success', 'Leave approved.');
+        }
+
+        if ($final && $action === 'reject') {
+            DB::table('leaves')->where('leave_id', $id)->update([
+                'status' => 'rejected',
+                'approved_by' => null,
+                'approved_at' => null,
+                'manager_reviewed_by' => auth()->id(),
+                'manager_reviewed_at' => now(),
+                'manager_decision_note' => $data['note'] ?? null,
+                'rejection_reason' => $data['note'] ?? null,
+                'updated_at' => now(),
+            ]);
+            app(\App\Services\PayrollRun::class)->recalculateOpen((int) $leave->employee_id);
+
+            return back()->with('success', 'Leave rejected.');
         }
 
         DB::table('leaves')->where('leave_id', $id)->update([
@@ -298,6 +548,39 @@ class HrOperationsController extends Controller
         abort_unless($row, 404);
         $action = (string) $request->input('action');
         $data = $request->validate(['note' => ($action === 'reject' ? 'required' : 'nullable').'|string|max:2000']);
+
+        if (\App\Services\OvertimeApproval::isFinalApprover() && in_array($row->status, ['approved', 'rejected'], true)) {
+            abort_if((int) DB::table('employees')->where('employee_id', $row->employee_id)->value('user_id') === (int) auth()->id(), 403);
+            abort_unless(in_array($action, ['approve', 'reject'], true), 422);
+
+            if ($action === 'approve') {
+                $employee = DB::table('employees')->where('employee_id', $row->employee_id)->first();
+                $suggestion = app(\App\Services\PhilippineOvertime::class)->suggest($employee, $row->starts_at, $row->ends_at);
+                DB::table('overtime_requests')->where('id', $id)->update([
+                    'status' => 'approved',
+                    'approved_amount' => $suggestion['suggested_amount'],
+                    'reviewed_by' => auth()->id(),
+                    'reviewed_at' => now(),
+                    'decision_note' => trim(($data['note'] ?? '').' Approved at '.$suggestion['multiplier'].'x.'),
+                    'updated_at' => now(),
+                ]);
+                app(\App\Services\PayrollRun::class)->recalculateOpen((int) $row->employee_id);
+
+                return back()->with('success', 'Overtime approved.');
+            }
+
+            DB::table('overtime_requests')->where('id', $id)->update([
+                'status' => 'rejected',
+                'approved_amount' => null,
+                'reviewed_by' => auth()->id(),
+                'reviewed_at' => now(),
+                'decision_note' => $data['note'] ?? null,
+                'updated_at' => now(),
+            ]);
+            app(\App\Services\PayrollRun::class)->recalculateOpen((int) $row->employee_id);
+
+            return back()->with('success', 'Overtime rejected.');
+        }
 
         return back()->with('success', \App\Services\OvertimeApproval::decide($row, $action, $data['note'] ?? null));
     }

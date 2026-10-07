@@ -3,7 +3,9 @@
     $layout = $isHr ? 'layouts.humanresource' : 'layouts.app.employeeland';
     $teamEmployeeRoute = $isHr ? 'hr.operations.employee' : 'employee.team.employee';
     $teamLeaveRoute = $isHr ? 'hr.operations.manager.leave' : 'employee.team.leave';
+    $teamLeaveCreateRoute = $isHr ? 'hr.operations.manager.leave.create' : 'employee.team.leave.create';
     $teamOvertimeRoute = $isHr ? 'hr.operations.manager.overtime' : 'employee.team.overtime';
+    $teamOvertimeCreateRoute = $isHr ? 'hr.operations.manager.overtime.create' : 'employee.team.overtime.create';
     $teamAttendanceRoute = $isHr ? 'hr.operations.manager.attendance' : 'employee.team.attendance';
     $teamScheduleRoute = $isHr ? 'hr.operations.manager.schedule' : 'employee.team.schedule';
     $teamObRoute = $isHr ? 'hr.operations.manager.ob' : 'employee.team.ob';
@@ -27,6 +29,9 @@
 
     @if(session('success'))
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
+    @endif
+    @if(session('error'))
+        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ session('error') }}</div>
     @endif
     @if($errors->any())
         <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ $errors->first() }}</div>
@@ -132,6 +137,120 @@
     </div>
 
     @if($employees->isNotEmpty())
+    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" data-team-request-panel>
+        <div class="border-b border-slate-100 px-5 py-4">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                    <h2 class="font-semibold text-slate-950">File team request</h2>
+                    <p class="mt-1 text-sm text-slate-500">Choose one request type, fill it for a team member, then send it to Ma'am An.</p>
+                </div>
+                <div class="inline-flex w-full rounded-xl bg-slate-100 p-1 lg:w-auto" role="tablist" aria-label="Team request type">
+                    <button type="button" class="flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-slate-700 transition data-[active=true]:bg-white data-[active=true]:text-slate-950 data-[active=true]:shadow-sm lg:flex-none" data-request-tab="leave" data-active="true">
+                        <i class="fas fa-umbrella-beach text-xs text-amber-600"></i>
+                        Leave
+                    </button>
+                    <button type="button" class="flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-slate-700 transition data-[active=true]:bg-white data-[active=true]:text-slate-950 data-[active=true]:shadow-sm lg:flex-none" data-request-tab="overtime" data-active="false">
+                        <i class="fas fa-stopwatch text-xs text-blue-600"></i>
+                        Overtime
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="px-5 py-5">
+            <form method="POST" action="{{ route($teamLeaveCreateRoute) }}" class="grid max-w-4xl gap-4 sm:grid-cols-2" data-request-form="leave">@csrf
+                <div class="sm:col-span-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+                    <h3 class="text-sm font-semibold text-amber-950">Leave request</h3>
+                    <p class="mt-1 text-xs text-amber-800">Paid leave will follow the employee's remaining paid balance. If none is left, it becomes unpaid.</p>
+                </div>
+                <label class="sm:col-span-2 text-sm"><span class="mb-1 block font-medium text-slate-700">Employee</span>
+                    <select name="employee_id" class="form-input" required>
+                        <option value="">Choose employee...</option>
+                        @foreach($employees as $person)
+                            <option value="{{ $person->employee_id }}" @selected(old('employee_id') == $person->employee_id)>{{ $person->full_name }}</option>
+                        @endforeach
+                    </select></label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Leave type</span>
+                    <select name="leave_type" class="form-input" required>
+                        @foreach(['vacation' => 'Vacation', 'sick' => 'Sick', 'emergency' => 'Emergency', 'maternity' => 'Maternity', 'paternity' => 'Paternity', 'bereavement' => 'Bereavement', 'unpaid' => 'Unpaid'] as $value => $label)
+                            <option value="{{ $value }}" @selected(old('leave_type', 'vacation') === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select></label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Pay</span>
+                    <select name="pay_status" class="form-input" required>
+                        <option value="paid" @selected(old('pay_status', 'paid') === 'paid')>Paid</option>
+                        <option value="unpaid" @selected(old('pay_status') === 'unpaid')>Unpaid</option>
+                    </select></label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">From</span>
+                    <input type="date" name="start_date" value="{{ old('start_date') }}" class="form-input" required></label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">To</span>
+                    <input type="date" name="end_date" value="{{ old('end_date') }}" class="form-input" required></label>
+                <label class="sm:col-span-2 text-sm"><span class="mb-1 block font-medium text-slate-700">Reason</span>
+                    <textarea name="reason" rows="3" maxlength="3000" class="form-input" required>{{ old('reason') }}</textarea></label>
+                <div class="sm:col-span-2 flex items-center gap-3">
+                    <button class="btn-primary inline-flex items-center gap-2"><i class="fas fa-paper-plane text-xs"></i> File leave</button>
+                    <span class="text-xs text-slate-500">The employee will see it in their leave history.</span>
+                </div>
+            </form>
+
+            <form method="POST" action="{{ route($teamOvertimeCreateRoute) }}" class="hidden max-w-4xl gap-4 sm:grid-cols-2" data-request-form="overtime">@csrf
+                <div class="sm:col-span-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h3 class="text-sm font-semibold text-blue-950">Overtime request</h3>
+                            <p class="mt-1 text-xs text-blue-800">Use whole-hour blocks. Approved overtime is included in the next eligible payroll.</p>
+                        </div>
+                        @if($otSuggestions->isNotEmpty())
+                            <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">{{ $otSuggestions->count() }} scanner suggestion(s) · {{ $cutoff->label() }}</span>
+                        @endif
+                    </div>
+                </div>
+                @if($otSuggestions->isNotEmpty())
+                    <div class="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">From scanner</div>
+                        <div class="grid gap-2 lg:grid-cols-2">
+                            @foreach($otSuggestions->take(8) as $suggestion)
+                                <div class="rounded-lg border border-slate-200 bg-white p-3 text-sm">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div class="font-semibold text-slate-950">{{ $suggestion->full_name }}</div>
+                                            <div class="mt-1 text-xs text-slate-500">
+                                                {{ \Carbon\Carbon::parse($suggestion->date)->format('M j') }} · scanner {{ $suggestion->time_in->format('g:i A') }} to {{ $suggestion->time_out->format('g:i A') }}
+                                            </div>
+                                            <div class="mt-1 text-xs font-semibold text-blue-700">{{ $suggestion->hours }} hour(s) · {{ $suggestion->starts_at->format('g:i A') }} to {{ $suggestion->ends_at->format('g:i A') }}</div>
+                                        </div>
+                                        <button type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                            data-ot-employee="{{ $suggestion->employee_id }}"
+                                            data-ot-start="{{ $suggestion->starts_at->format('Y-m-d\TH:i') }}"
+                                            data-ot-end="{{ $suggestion->ends_at->format('Y-m-d\TH:i') }}"
+                                            data-ot-reason="{{ $suggestion->reason }}"
+                                            data-ot-use>Use</button>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+                <label class="sm:col-span-2 text-sm"><span class="mb-1 block font-medium text-slate-700">Employee</span>
+                    <select name="employee_id" class="form-input" required>
+                        <option value="">Choose employee...</option>
+                        @foreach($employees as $person)
+                            <option value="{{ $person->employee_id }}" @selected(old('employee_id') == $person->employee_id)>{{ $person->full_name }}</option>
+                        @endforeach
+                    </select></label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Starts at</span>
+                    <input type="datetime-local" name="starts_at" value="{{ old('starts_at') }}" step="3600" class="form-input" required></label>
+                <label class="text-sm"><span class="mb-1 block font-medium text-slate-700">Ends at</span>
+                    <input type="datetime-local" name="ends_at" value="{{ old('ends_at') }}" step="3600" class="form-input" required></label>
+                <label class="sm:col-span-2 text-sm"><span class="mb-1 block font-medium text-slate-700">Work performed</span>
+                    <textarea name="reason" rows="3" maxlength="3000" class="form-input" required>{{ old('reason') }}</textarea></label>
+                <div class="sm:col-span-2 flex items-center gap-3">
+                    <button class="btn-primary inline-flex items-center gap-2"><i class="fas fa-paper-plane text-xs"></i> File overtime</button>
+                    <span class="text-xs text-slate-500">The employee will see it in their overtime history.</span>
+                </div>
+            </form>
+        </div>
+    </section>
+
     <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div class="border-b border-slate-100 px-5 py-4">
             <h2 class="font-semibold text-slate-950">Official business</h2>
@@ -379,9 +498,117 @@
             </div>
         </section>
     </div>
+
+    @if(\App\Support\PeopleAccess::isOperationsSupervisor())
+    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="border-b border-slate-100 px-5 py-4">
+            <h2 class="font-semibold text-slate-950">Approved and rejected</h2>
+            <p class="text-sm text-slate-500">Recent leave and overtime decisions made by Ma'am Ann.</p>
+        </div>
+        <div class="grid gap-0 xl:grid-cols-2 xl:divide-x xl:divide-slate-100">
+            <div>
+                <div class="border-b border-slate-100 px-5 py-3 text-sm font-semibold text-slate-900">Leave</div>
+                <div class="divide-y divide-slate-100">
+                    @forelse($decidedLeave as $r)
+                        @php($decidedAt = $r->approved_at ?: ($r->manager_reviewed_at ?: $r->updated_at))
+                        <div class="px-5 py-4">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <div class="font-semibold text-slate-950">{{ $r->full_name }}</div>
+                                    <div class="mt-1 text-sm text-slate-500">{{ ucfirst(str_replace('_', ' ', $r->leave_type)) }} · {{ $r->start_date }} to {{ $r->end_date }} · {{ $r->total_days }} day(s)</div>
+                                </div>
+                                <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $r->status === 'approved' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-red-50 text-red-700 ring-1 ring-red-200' }}">{{ ucfirst($r->status) }}</span>
+                            </div>
+                            @if($r->reason)
+                                <p class="mt-2 text-sm text-slate-600">{{ $r->reason }}</p>
+                            @endif
+                            <p class="mt-2 text-xs text-slate-400">{{ $decidedAt ? \Carbon\Carbon::parse($decidedAt)->format('M j, Y g:i A') : '' }}</p>
+                            <form method="POST" action="{{ route($teamLeaveRoute, $r->leave_id) }}" class="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">@csrf
+                                <input name="note" class="rounded-lg border-gray-300 text-sm" placeholder="Reason for changing decision">
+                                @if($r->status === 'rejected')
+                                    <button name="action" value="approve" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Change to approve</button>
+                                @else
+                                    <button name="action" value="reject" class="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white">Change to reject</button>
+                                @endif
+                            </form>
+                        </div>
+                    @empty
+                        <div class="px-5 py-10 text-center text-sm text-slate-500">No approved or rejected leave yet.</div>
+                    @endforelse
+                </div>
+            </div>
+            <div>
+                <div class="border-b border-slate-100 px-5 py-3 text-sm font-semibold text-slate-900">Overtime</div>
+                <div class="divide-y divide-slate-100">
+                    @forelse($decidedOt as $r)
+                        <div class="px-5 py-4">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <div class="font-semibold text-slate-950">{{ $r->full_name }}</div>
+                                    <div class="mt-1 text-sm text-slate-500">{{ \Carbon\Carbon::parse($r->starts_at)->format('M j, g:i A') }} to {{ \Carbon\Carbon::parse($r->ends_at)->format('g:i A') }} · {{ intdiv((int) $r->minutes, 60) }} hour(s)</div>
+                                </div>
+                                <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $r->status === 'approved' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-red-50 text-red-700 ring-1 ring-red-200' }}">{{ ucfirst($r->status) }}</span>
+                            </div>
+                            @if($r->approved_amount !== null)
+                                <p class="mt-2 text-sm font-semibold text-slate-900">Approved pay: ₱{{ number_format($r->approved_amount, 2) }}</p>
+                            @endif
+                            @if($r->reason)
+                                <p class="mt-2 text-sm text-slate-600">{{ $r->reason }}</p>
+                            @endif
+                            <p class="mt-2 text-xs text-slate-400">{{ $r->reviewed_at ? \Carbon\Carbon::parse($r->reviewed_at)->format('M j, Y g:i A') : '' }}</p>
+                            <form method="POST" action="{{ route($teamOvertimeRoute, $r->id) }}" class="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">@csrf
+                                <input name="note" class="rounded-lg border-gray-300 text-sm" placeholder="Reason for changing decision">
+                                @if($r->status === 'rejected')
+                                    <button name="action" value="approve" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Change to approve</button>
+                                @else
+                                    <button name="action" value="reject" class="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white">Change to reject</button>
+                                @endif
+                            </form>
+                        </div>
+                    @empty
+                        <div class="px-5 py-10 text-center text-sm text-slate-500">No approved or rejected overtime yet.</div>
+                    @endforelse
+                </div>
+            </div>
+        </div>
+    </section>
+    @endif
 </div>
 <script>
     (() => {
+        const requestPanel = document.querySelector('[data-team-request-panel]');
+        if (requestPanel) {
+            const tabs = Array.from(requestPanel.querySelectorAll('[data-request-tab]'));
+            const forms = Array.from(requestPanel.querySelectorAll('[data-request-form]'));
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const target = tab.dataset.requestTab;
+                    tabs.forEach(item => item.dataset.active = item === tab ? 'true' : 'false');
+                    forms.forEach(form => {
+                        const active = form.dataset.requestForm === target;
+                        form.classList.toggle('hidden', !active);
+                        form.classList.toggle('grid', active);
+                    });
+                });
+            });
+
+            requestPanel.querySelectorAll('[data-ot-use]').forEach(button => {
+                button.addEventListener('click', () => {
+                    const overtimeForm = requestPanel.querySelector('[data-request-form="overtime"]');
+                    const overtimeTab = requestPanel.querySelector('[data-request-tab="overtime"]');
+                    overtimeTab?.click();
+                    if (!overtimeForm) return;
+
+                    overtimeForm.querySelector('[name="employee_id"]').value = button.dataset.otEmployee || '';
+                    overtimeForm.querySelector('[name="starts_at"]').value = button.dataset.otStart || '';
+                    overtimeForm.querySelector('[name="ends_at"]').value = button.dataset.otEnd || '';
+                    overtimeForm.querySelector('[name="reason"]').value = button.dataset.otReason || '';
+                    overtimeForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+            });
+        }
+
         const input = document.querySelector('[data-team-search]');
         const rows = Array.from(document.querySelectorAll('[data-team-member]'));
         const empty = document.querySelector('[data-team-empty]');

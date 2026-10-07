@@ -51,6 +51,8 @@ class PhilippineOvertime
             'holiday_classification' => $classification,
             'rest_day' => (bool) $shift['rest'],
             'suggested_amount' => $amount,
+            // Unrounded, so a cutoff's overtime is rounded once, at the total.
+            'exact_amount' => $hours * $base * $multiplier,
             'rule_version' => Statutory::snapshot($date)['version'],
         ];
     }

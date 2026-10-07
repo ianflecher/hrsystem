@@ -53,7 +53,8 @@ class WorkTimePayroll
                             ? 0.0
                             : min($capHours, $span);
                         $penaltyHours += min($day, $penalty);
-                        $hours += max(0, $day - $penalty);
+                        // Whole hours, as the payslips count them: 6 h 01 m less lunch is 5.
+                        $hours += max(0, floor($day + 0.0001) - $penalty);
                     } else {
                         // Deduct the fixed lunch hour, not the scanned lunch
                         // duration - and none for a guard, who stays on post.

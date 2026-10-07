@@ -141,7 +141,8 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
         // Absent days have no record - nobody punched - so they are added from the
         // same count payroll uses (up to yesterday), and listed like any other day.
         $last = min($cutoff->end, now()->subDay()->toDateString());
-        $deductions = $last >= $cutoff->start
+        // Not for the CEO and the secretary: they are not on the scanner.
+        $deductions = $last >= $cutoff->start && ! \App\Support\NotInSummaries::covers($this->employee)
             ? (new \App\Services\TimeDeductions)->forPeriod($this->employee, $cutoff->start, $last) : ['dates' => []];
         $absentDates = $deductions['dates']['absent'] ?? [];
         foreach ($absentDates as $date) {

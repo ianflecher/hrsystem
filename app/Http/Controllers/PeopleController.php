@@ -21,6 +21,14 @@ class PeopleController extends Controller
         'reviews' => 'Performance reviews', 'loans' => 'Government loans', 'reports' => 'Reports',
     ];
 
+    /** "(12 Months)" from 2026-12-15 -> 2027-11-15; null when the type gives no months. */
+    public static function loanTermEnd(string $from, ?string $type): ?string
+    {
+        if (! preg_match('/(\d+)\s*month/i', (string) $type, $m) || (int) $m[1] < 1) return null;
+
+        return \Carbon\Carbon::parse($from)->addMonthsNoOverflow((int) $m[1] - 1)->toDateString();
+    }
+
     /** The months a loan's first deduction can fall in: this one through December. */
     public static function loanStartMonths(): array
     {
@@ -446,9 +454,11 @@ class PeopleController extends Controller
         abort_unless(isset(self::MODULES[$module]), 404);
         // Documents, overtime and loans come from the person they are about.
         if (! in_array($module, ['overtime', 'loans', 'documents'], true) && ! ($module === 'shifts' && $this->isTeamPortal($module))) PeopleAccess::hr();
-        // Overtime is requested by the employee. Government loans are recorded
-        // by HR from SSS/Pag-IBIG notices and only displayed to employees.
-        abort_if($hr && $module === 'overtime', 403, 'This is requested by the employee.');
+        // Overtime is now filed from the team dashboard by the supervisor or
+        // team leader. Employees only see the status of what was filed for them.
+        abort_if($module === 'overtime', 403, 'Overtime is filed by the supervisor or team leader.');
+        // Government loans are recorded by HR from SSS/Pag-IBIG notices and
+        // only displayed to employees.
         abort_if(! $hr && $module === 'loans', 403, 'Government loans are recorded by HR.');
         if (in_array($module, ['documents', 'checklists', 'reviews', 'loans'], true) && $hr) {
             $request->validate(['employee_id' => 'required|integer|exists:employees,employee_id']);
@@ -739,12 +749,22 @@ class PeopleController extends Controller
                 // each, until HR stops it. A stored amount of 0 marks that.
                 $data = $request->validate([
                     'type' => ['required', Rule::in(['sss', 'pagibig', 'government'])],
+                    'agency' => 'nullable|required_if:type,government|string|max:60',
                     'monthly' => 'required|numeric|min:1|max:1000000',
-                    // The 1-15 cutoff of a month from this one to December.
-                    'starts_on' => ['required', Rule::in(self::loanStartMonths())],
                     'paid_before' => 'nullable|numeric|min:0|max:10000000',
                     'reason' => 'required|string|min:5|max:3000',
+                    'application_no' => 'nullable|string|max:40',
+                    'loan_type' => 'nullable|string|max:40',
+                    'check_no' => 'nullable|string|max:40',
+                    'check_date' => 'nullable|date_format:Y-m-d',
+                    'loan_value' => 'nullable|numeric|min:0|max:10000000',
+                    'term_from' => 'required|date_format:Y-m-d',
+                    'term_to' => 'nullable|date_format:Y-m-d|after_or_equal:term_from',
                 ], [], ['monthly' => 'monthly amortization', 'paid_before' => 'amount already deducted']);
+                $data['term_to'] = ($data['term_to'] ?? null) ?: self::loanTermEnd($data['term_from'], $data['loan_type'] ?? null);
+                if (! $data['term_to']) throw ValidationException::withMessages(['term_to' => 'Enter the last amortization, or a loan type like (12 Months).']);
+                // Deducted from the 1-15 cutoff of the term's first month.
+                $data['starts_on'] = substr($data['term_from'], 0, 8).'01';
                 $data['paid_before'] = round((float) ($data['paid_before'] ?? 0), 2);
                 $data['installment'] = round((float) $data['monthly'], 2);
                 $data['amount'] = 0;
@@ -860,17 +880,27 @@ class PeopleController extends Controller
                 // Correcting a loan: agency, amortization, first deduction,
                 // what was paid before, the reference. Open payslips follow.
                 if ($module === 'loans' && $action === 'edit') {
-                    $starts = self::loanStartMonths();
-                    $starts[] = substr((string) $row->starts_on, 0, 10);
                     $data = $request->validate([
                         'type' => ['required', Rule::in(['sss', 'pagibig', 'government'])],
+                    'agency' => 'nullable|required_if:type,government|string|max:60',
                         'monthly' => 'required|numeric|min:1|max:1000000',
-                        'starts_on' => ['required', Rule::in($starts)],
                         'paid_before' => 'nullable|numeric|min:0|max:10000000',
                         'reason' => 'required|string|min:5|max:3000',
+                        'application_no' => 'nullable|string|max:40',
+                    'loan_type' => 'nullable|string|max:40',
+                        'check_no' => 'nullable|string|max:40',
+                        'check_date' => 'nullable|date_format:Y-m-d',
+                        'loan_value' => 'nullable|numeric|min:0|max:10000000',
+                        'term_from' => 'nullable|date_format:Y-m-d',
+                        'term_to' => 'nullable|date_format:Y-m-d|after_or_equal:term_from',
                     ], [], ['monthly' => 'monthly amortization', 'paid_before' => 'amount already deducted']);
-                    $values = ['type' => $data['type'], 'installment' => round((float) $data['monthly'], 2), 'starts_on' => $data['starts_on'],
-                        'paid_before' => round((float) ($data['paid_before'] ?? 0), 2), 'reason' => $data['reason']];
+                    if (! empty($data['term_from']) && empty($data['term_to'])) $data['term_to'] = self::loanTermEnd($data['term_from'], $data['loan_type'] ?? null);
+                    $values = ['type' => $data['type'], 'agency' => $data['type'] === 'government' ? ($data['agency'] ?? null) : null, 'installment' => round((float) $data['monthly'], 2),
+                        // The term sets the first deduction; an old loan without one keeps its own.
+                        'starts_on' => ! empty($data['term_from']) ? substr($data['term_from'], 0, 8).'01' : $row->starts_on,
+                        'paid_before' => round((float) ($data['paid_before'] ?? 0), 2), 'reason' => $data['reason']]
+                        + array_intersect_key($data, array_flip(['application_no', 'loan_type', 'check_no', 'check_date', 'loan_value', 'term_from', 'term_to']))
+                        + array_fill_keys(['application_no', 'loan_type', 'check_no', 'check_date', 'loan_value', 'term_from', 'term_to'], null);
                     DB::table('employee_loans')->where('id', $id)->update($values + ['updated_at' => now()]);
                     \App\Services\Auditor::record('update', 'employee_loans', $id,
                         array_intersect_key((array) $row, $values), $values);
