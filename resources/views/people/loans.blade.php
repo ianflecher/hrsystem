@@ -72,8 +72,9 @@
                 <legend>Borrower</legend>
                 <label class="people-field"><span>Employee</span><select name="employee_id" required>
                     <option value="">Select employee</option>
-                    @foreach($employees as $person)
-                        <option value="{{ $person->employee_id }}" @selected(old('employee_id') == $person->employee_id)>{{ $person->full_name }}</option>
+                    {{-- Last name first, sorted by it: "Pintang, Fatima Jantoc" - typing the surname jumps to it. --}}
+                    @foreach($employees->map(function ($p) { $w = explode(' ', trim(preg_replace('/\s+/', ' ', $p->full_name))); $last = count($w) > 1 ? array_pop($w) : ''; $p->listed = $last !== '' ? $last.', '.implode(' ', $w) : $p->full_name; return $p; })->sortBy('listed', SORT_NATURAL | SORT_FLAG_CASE) as $person)
+                        <option value="{{ $person->employee_id }}" @selected(old('employee_id') == $person->employee_id)>{{ $person->listed }}</option>
                     @endforeach
                 </select></label>
                 @php $isOther = old('type', 'pagibig') === 'government'; @endphp
@@ -120,13 +121,17 @@
         </form>
         <form method="GET" action="{{ route('people.loans.billing') }}" class="billing">
             <label class="people-field"><span>Billing statement</span><select name="type">
-                <option value="pagibig">Pag-IBIG (STL)</option>
-                <option value="sss">SSS</option>
+                    <option value="pagibig">Pag-IBIG loan (STL)</option>
+                    <option value="sss">SSS loan</option>
+                    <option value="government">Other government loans</option>
             </select></label>
             <label class="people-field"><span>Month</span><input type="month" name="month" value="{{ now()->format('Y-m') }}" required></label>
             <button>Download Excel</button>
         </form>
     </div>
+
+    @include('people.partials.loan-month')
+    @include('people.partials.contribution-month')
 @endif
 
 @forelse($rows as $row)

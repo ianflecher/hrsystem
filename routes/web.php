@@ -67,6 +67,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/payslip/{id}', \App\Http\Controllers\PayslipController::class)->whereNumber('id')->name('payslip.show');
     Route::get('/hr/reports/download', \App\Http\Controllers\HrReportController::class)->name('people.reports.download');
     Route::get('/hr/loans/billing', \App\Http\Controllers\LoanBillingController::class)->name('people.loans.billing');
+    Route::get('/hr/contributions/download', \App\Http\Controllers\ContributionExportController::class)->name('people.contributions.download');
     Route::post('/people/notices/{id}', [\App\Http\Controllers\PeopleController::class, 'notice'])->whereNumber('id')->name('people.notices.act');
     Route::get('/people/documents/{id}/download', [\App\Http\Controllers\PeopleController::class, 'download'])->whereNumber('id')->name('people.documents.download');
     foreach (['hr', 'employee'] as $portal) {

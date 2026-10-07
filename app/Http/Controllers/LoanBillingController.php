@@ -16,15 +16,14 @@ class LoanBillingController extends Controller
     public function __invoke(Request $request)
     {
         PeopleAccess::hr();
-        PeopleAccess::pay();
         $data = $request->validate([
-            'type' => 'required|in:pagibig,sss',
+            'type' => 'required|in:pagibig,sss,government',
             'month' => 'required|date_format:Y-m',
         ]);
 
         $month = Carbon::parse($data['month'].'-01');
         $end = $month->copy()->endOfMonth();
-        $agency = $data['type'] === 'pagibig' ? 'Pag-IBIG' : 'SSS';
+        $agency = match ($data['type']) { 'pagibig' => 'Pag-IBIG', 'sss' => 'SSS', default => 'Other government' };
         $sheets = [];
 
         foreach (config('employers') as $company => $employer) {
@@ -37,7 +36,7 @@ class LoanBillingController extends Controller
                 // A stopped loan is billed only up to the month it was stopped.
                 ->where(fn ($q) => $q->where('l.status', 'active')->orWhere('l.updated_at', '>=', $month->toDateString()))
                 ->orderBy('u.full_name')
-                ->get(['l.*', 'u.full_name', 'e.pagibig_number', 'e.sss_number']);
+                ->get(['l.*', 'u.full_name', 'e.pagibig_number', 'e.sss_number', 'e.philhealth_number']);
 
             $rows = [];
             $total = 0;
@@ -46,7 +45,7 @@ class LoanBillingController extends Controller
                 $amount = round((float) $l->installment, 2);
                 $total += $amount;
                 $rows[] = [
-                    (string) ($data['type'] === 'pagibig' ? $l->pagibig_number : $l->sss_number),
+                    (string) match ($data['type']) { 'pagibig' => $l->pagibig_number, 'sss' => $l->sss_number, default => $l->agency === 'PhilHealth' ? $l->philhealth_number : '' },
                     (string) $l->application_no,
                     $last, $first, $middle,
                     $this->loanType($l),
@@ -62,11 +61,11 @@ class LoanBillingController extends Controller
             $rows[] = [];
             $rows[] = ['Total', '', '', '', '', '', '', '', '', '', '', number_format($total, 2, '.', '')];
 
-            $title = $data['type'] === 'pagibig' ? 'SHORT-TERM LOAN (STL) BILLING STATEMENT' : 'SSS LOAN BILLING STATEMENT';
+            $title = match ($data['type']) { 'pagibig' => 'SHORT-TERM LOAN (STL) BILLING STATEMENT', 'sss' => 'SSS LOAN BILLING STATEMENT', default => 'OTHER GOVERNMENT LOANS' };
             $headers = [
                 'rows' => [
                     [$title, '', '', '', '', '', '', '', '', '', '', $data['type'] === 'pagibig' ? 'HQP-SLF-049' : ''],
-                    ['Employer', $employer['name'], '', '', '', '', '', $agency.' Employer ID No.', '', $employer[$data['type'] === 'pagibig' ? 'pagibig_id' : 'sss_id']],
+                    ['Employer', $employer['name'], '', '', '', '', '', $agency.' Employer ID No.', '', ($employer[$data['type'].'_id'] ?? '')],
                     ['Address', $employer['address'], '', '', '', '', '', 'Statement Date', '', $end->format('F j, Y')],
                     ['MID No.', 'Application No.', 'Last Name', 'First Name', 'Middle Name', 'Loan Type', 'DV/Check No.', 'DV Date', 'Loan Value', 'Loan Term From', 'Loan Term To', 'Amortization Amount'],
                 ],
@@ -104,13 +103,14 @@ class LoanBillingController extends Controller
     /** "(12 Months)" from the term, as the agency prints it. */
     private function loanType(object $l): string
     {
-        if ($l->loan_type) return $l->loan_type;
+        $prefix = $l->type === 'government' && $l->agency ? $l->agency.' ' : '';
+        if ($l->loan_type) return $prefix.$l->loan_type;
         if ($l->term_from && $l->term_to) {
             $months = Carbon::parse($l->term_from)->diffInMonths(Carbon::parse($l->term_to)) + 1;
 
-            return '('.(int) round($months).' Months)';
+            return $prefix.'('.(int) round($months).' Months)';
         }
 
-        return $l->type === 'pagibig' ? 'STL' : 'Salary Loan';
+        return match ($l->type) { 'pagibig' => 'STL', 'sss' => 'Salary Loan', default => trim($prefix) ?: 'Loan' };
     }
 }
