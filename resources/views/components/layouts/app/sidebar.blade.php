@@ -608,6 +608,7 @@
                 $roleModules = [
                     'admin' => [
                         ['name' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => '📊'],
+                        ['name' => 'Control Center', 'route' => 'admin.control-center', 'icon' => '🔗'],
                         ['name' => 'Human Resources', 'route' => 'hr.home', 'icon' => '👥'],
                         ['name' => 'Openings', 'route' => 'hr.positions', 'icon' => '📢'],
                         ['name' => 'Applications', 'route' => 'hr.applications', 'icon' => '📄'],

@@ -11,6 +11,16 @@ class PeopleAccess
         return auth()->check() && in_array(auth()->user()->role, ['admin', 'hr'], true);
     }
 
+    public static function isAdmin(): bool
+    {
+        return auth()->check() && auth()->user()->role === 'admin';
+    }
+
+    public static function admin(): void
+    {
+        abort_unless(self::isAdmin(), 403, 'Administrator access required.');
+    }
+
     public static function hr(): void
     {
         abort_unless(self::isHr(), 403);
@@ -22,7 +32,7 @@ class PeopleAccess
      */
     public static function canSeePay(): bool
     {
-        return auth()->check() && auth()->user()->role === 'admin';
+        return self::isAdmin();
     }
 
     public static function pay(): void

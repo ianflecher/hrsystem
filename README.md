@@ -39,6 +39,22 @@ It prints the LAN address too, so other machines in the office can reach it.
 Keep the two minimised windows ("Imprint MySQL", "Imprint HRIS") open; closing
 them stops the system.
 
+## Docker Desktop Kubernetes
+
+For a local three-application test stack, use the setup in
+[`deploy/kubernetes/README.md`](deploy/kubernetes/README.md). Clone the HRIS,
+Production, and Marketing repositories beside one another, enable Kubernetes
+in Docker Desktop, then run:
+
+```powershell
+.\deploy\kubernetes\start-local.ps1
+```
+
+It builds the three local images, creates missing test secrets, applies the
+Kubernetes resources, and starts the local port-forwards. The HRIS control
+center is at `http://127.0.0.1:30080/admin/control-center`. The scanner and
+public Cloudflare access are not part of this local test setup.
+
 ## Setup by hand
 
 ```bash

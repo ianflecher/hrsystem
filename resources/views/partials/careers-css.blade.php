@@ -188,11 +188,9 @@
 
         .cnav__burger { display: none; }
 
-        /* The staff link is what a visitor needs least, so it is what goes when
-           the room runs out - the section names never truncate. The wordmark
-           used to go next; at "IC Careers" it is small enough to keep, and the
-           phone menu takes over before the bar is tight anyway. */
-        @media (max-width: 1180px) { .cnav__staff { display: none; } .cnav__inner { gap: 20px; } }
+        /* The menu takes over before the bar becomes crowded, so staff sign-in
+           remains available instead of disappearing at tablet widths. */
+        @media (max-width: 1180px) { .cnav__inner { gap: 20px; } }
         @media (max-width: 1040px) { .cnav__inner { gap: 16px; } }
 
         /* ------------------------------------------------- the phone menu */
@@ -203,7 +201,7 @@
         .cnav__menu-head,
         .cnav__scrim { display: none; }
 
-        @media (max-width: 860px) {
+        @media (max-width: 1180px) {
             .cnav__inner { height: 68px; gap: 12px; justify-content: space-between; }
 
             .cnav.is-open {

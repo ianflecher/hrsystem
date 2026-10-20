@@ -5,6 +5,26 @@
 </div>
 @endunless
 
+@if(isset($extra['cutoff'], $extra['cutoffs']))
+<form method="GET" action="{{ $base }}" class="card row between" style="align-items:end;gap:16px">
+    <label class="people-field" style="margin:0;min-width:240px">
+        <span>Cutoff</span>
+        <select name="cutoff" onchange="this.form.submit()">
+            @foreach($extra['cutoffs'] as $period)
+                <option value="{{ $period->start }}" @selected($period->start === $extra['cutoff']->start)>{{ $period->label() }}</option>
+            @endforeach
+        </select>
+    </label>
+    @if(request('status'))
+        <input type="hidden" name="status" value="{{ request('status') }}">
+    @endif
+    @if(request('search'))
+        <input type="hidden" name="search" value="{{ request('search') }}">
+    @endif
+    <span class="muted">Showing overtime for {{ $extra['cutoff']->label() }}.</span>
+</form>
+@endif
+
 <p class="muted">Approved amounts are included in the next generated eligible payslip. Existing payslips are not changed.</p>
 @forelse($rows as $row)
 <article class="card"><div class="row between"><h2>{{ $row->full_name }}</h2><span class="badge">{{ ['pending' => 'Waiting for supervisor', 'pending_hr' => "Waiting for Ma'am An"][$row->status] ?? $row->status }}</span></div>

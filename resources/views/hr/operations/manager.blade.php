@@ -24,6 +24,16 @@
                     Review your team attendance, send leave and overtime to HR, and prepare shift assignments for final approval.
                 </p>
             </div>
+            <form method="GET" class="w-full lg:w-72">
+                <label class="text-sm">
+                    <span class="mb-1 block font-medium text-slate-700">Cutoff</span>
+                    <select name="cutoff" class="form-input" onchange="this.form.submit()">
+                        @foreach($cutoffs as $period)
+                            <option value="{{ $period->start }}" @selected($period->start === $cutoff->start)>{{ $period->label() }}</option>
+                        @endforeach
+                    </select>
+                </label>
+            </form>
         </div>
     </section>
 
@@ -326,8 +336,8 @@
         @endphp
         <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div class="border-b border-slate-100 px-5 py-4">
-                <h2 class="font-semibold text-slate-950">Worked · from the scanner · {{ $cutoff->label() }}</h2>
-                <p class="text-sm text-slate-500">Each day's first in and final out for this team only. Red means late, undertime, missing out, or absent.</p>
+                <h2 class="font-semibold text-slate-950">Worked · scanner and manual input · {{ $cutoff->label() }}</h2>
+                <p class="text-sm text-slate-500">Each day's first in and final out for this team only. Red means late, undertime, missing out, or absent. No-scanner days are marked separately.</p>
             </div>
             <div class="overflow-x-auto px-5 py-4">
                 <table class="min-w-full border-separate border-spacing-0 text-xs">
@@ -351,8 +361,12 @@
                                 </tr>
                             @endif
                             @foreach($people as $person)
+                                @php($noScanner = trim((string) ($person->biometric_id ?? '')) === '')
                                 <tr>
-                                    <td class="sticky left-0 z-10 border-x border-b border-slate-200 bg-white px-3 py-2 font-semibold text-slate-950">{{ $person->full_name }}</td>
+                                    <td class="sticky left-0 z-10 border-x border-b border-slate-200 bg-white px-3 py-2 font-semibold text-slate-950">
+                                        {{ $person->full_name }}
+                                        @if($noScanner)<span class="mt-1 block text-[10px] font-bold text-blue-600">No scanner</span>@endif
+                                    </td>
                                     @for($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay())
                                         @php($date = $day->toDateString())
                                         @php($a = $teamWorked[$person->employee_id.'|'.$date] ?? null)
@@ -383,10 +397,12 @@
                                             <td class="border-b border-r border-slate-200 bg-cyan-100 px-2 py-2 text-center font-bold text-cyan-700">OB</td>
                                         @elseif($a && $a->notes === 'Suspension')
                                             <td class="border-b border-r border-slate-200 bg-slate-600 px-2 py-2 text-center font-bold text-white">S</td>
-                                        @elseif($day->lt(\Carbon\Carbon::today()) && ! $plan['rest'] && ! $leave)
-                                            <td class="border-b border-r border-slate-200 bg-red-600 px-2 py-2 text-center font-bold text-white" title="Absent">ABS</td>
                                         @elseif($plan['rest'])
                                             <td class="border-b border-r border-slate-200 bg-red-600 px-2 py-2 text-center font-bold tracking-wide text-white">RD</td>
+                                        @elseif($noScanner)
+                                            <td class="border-b border-r border-slate-200 bg-blue-50 px-2 py-2 text-center text-[9px] font-bold leading-3 text-blue-700" title="No biometric scanner ID is assigned">NO<br>SCANNER</td>
+                                        @elseif($day->lt(\Carbon\Carbon::today()) && ! $plan['rest'] && ! $leave)
+                                            <td class="border-b border-r border-slate-200 bg-red-600 px-2 py-2 text-center font-bold text-white" title="Absent">ABS</td>
                                         @else
                                             <td class="border-b border-r border-slate-200 px-2 py-2 text-center text-slate-300">{{ $day->lt(\Carbon\Carbon::today()) ? '—' : '' }}</td>
                                         @endif

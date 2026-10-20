@@ -145,7 +145,13 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
         $deductions = $last >= $cutoff->start && ! \App\Support\NotInSummaries::covers($this->employee)
             ? (new \App\Services\TimeDeductions)->forPeriod($this->employee, $cutoff->start, $last) : ['dates' => []];
         $absentDates = $deductions['dates']['absent'] ?? [];
+        $recordedDates = collect($this->attendanceHistory)
+            ->map(fn ($row) => substr((string) $row->date, 0, 10))
+            ->flip();
         foreach ($absentDates as $date) {
+            if ($recordedDates->has($date)) {
+                continue;
+            }
             $this->attendanceHistory[] = (object) ['date' => $date, 'status' => 'absent', 'time_in' => null, 'lunch_in' => null,
                 'lunch_out' => null, 'cb_in' => null, 'cb_out' => null, 'time_out' => null, 'notes' => 'No scan, leave or official business'];
         }
@@ -535,11 +541,13 @@ new #[Layout('components.layouts.employeeland')] #[Title('My Attendance')] class
                             @php
                                 $problems = \App\Support\WorkDay::problems($record);
                                 $hasNoOut = $record->time_in && ! $record->time_out;
-                                $status = $hasNoOut ? 'undertime' : (($record->notes ?? '') === 'Suspension' && ! $record->time_in ? 'suspended' : $record->status);
+                                $hasLaterPunch = ! $record->time_in && ($record->lunch_in || $record->lunch_out || $record->cb_in || $record->cb_out || $record->time_out);
+                                $status = $hasLaterPunch ? 'no_first_in' : ($hasNoOut ? 'undertime' : (($record->notes ?? '') === 'Suspension' && ! $record->time_in ? 'suspended' : $record->status));
                                 $statusClasses = [
                                     'present' => 'bg-emerald-100 text-emerald-800',
                                     'late' => 'bg-amber-100 text-amber-800',
                                     'undertime' => 'bg-orange-100 text-orange-800',
+                                    'no_first_in' => 'bg-amber-100 text-amber-800',
                                     'on_leave' => 'bg-blue-100 text-blue-800',
                                     'half_day' => 'bg-yellow-100 text-yellow-800',
                                     'absent' => 'bg-red-100 text-red-800',

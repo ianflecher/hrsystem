@@ -142,7 +142,9 @@
 </style>
 <style>
 .people .shift-grid-wrap { overflow-x: auto; margin-top: 12px; border: 1px solid #cbd5e1; border-radius: 10px; }
-.people .shift-grid { border-collapse: collapse; width: 100%; min-width: 900px; font-size: 13px; }
+.people .shift-grid { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 900px; font-size: 13px; }
+.people .shift-grid .sg-col-name { width: 250px; }
+.people .shift-grid .sg-col-summary { width: 80px; }
 .people .shift-grid th, .people .shift-grid td { border: 1px solid #e2e8f0; padding: 7px 4px; text-align: center; white-space: nowrap; }
 .people .shift-grid thead th { background: #f8fafc; font-weight: 700; color: #0f172a; }
 .people .shift-grid thead th span { display: block; font-size: 10px; color: #64748b; letter-spacing: .04em; }
@@ -184,6 +186,8 @@
 .people .shift-grid .sg-dept span { position: sticky; left: 0; display: inline-block; padding: 6px 10px; }
 @media (max-width: 767px) {
     .people .shift-grid { min-width: 0; width: max-content; font-size: 12px; }
+    .people .shift-grid .sg-col-name { width: 112px; }
+    .people .shift-grid .sg-col-summary { width: 70px; }
     .people .shift-grid .sg-name { min-width: 0; width: 112px; max-width: 112px; white-space: normal; line-height: 1.25; font-size: 12px; padding: 6px 8px; box-shadow: 1px 0 0 #e2e8f0; }
     .people .shift-grid th, .people .shift-grid td { padding: 6px 3px; }
     .people .shift-grid td:not(.sg-name) { min-width: 34px; }

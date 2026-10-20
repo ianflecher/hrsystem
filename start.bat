@@ -17,6 +17,12 @@ set "LOGS=%APP%\logs"
 set "PORT=8003"
 set "DBNAME=tgif_hris"
 
+rem Detect the real office-network address early so Laravel-generated links
+rem point back to the address other computers can reach, even after DHCP changes.
+set "LANIP="
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%APP%\get-lan-ip.ps1" 2^>nul`) do set "LANIP=%%i"
+if "%LANIP%"=="ERROR" set "LANIP="
+
 rem ---- Find PHP and MySQL.
 rem      C:\xampp is tried first. An older C:\xampp1 can still be sitting on
 rem      disk after a reinstall, and existing is not the same as working:
@@ -158,6 +164,11 @@ if "%USERCOUNT%"=="0" (
 ) else (
     echo       %USERCOUNT% account^(s^) already set up - left alone.
 )
+
+if not "%LANIP%"=="" (
+    powershell -NoProfile -Command "$p='%APP%\.env'; if (Test-Path $p) { $t=Get-Content $p -Raw; $t=$t -replace '(?m)^APP_URL=.*', 'APP_URL=http://%LANIP%:%PORT%'; Set-Content $p $t -NoNewline }"
+    "%PHP%" "%APP%\artisan" config:clear >nul 2>&1
+)
 if not exist "%APP%\public\storage" (
     "%PHP%" "%APP%\artisan" storage:link >nul 2>&1
 )
@@ -171,16 +182,17 @@ if errorlevel 1 (
     start "Imprint HRIS" /MIN cmd /c ""%PHP%" "%APP%\artisan" serve --host=0.0.0.0 --port=%PORT% > "%LOGS%\serve.log" 2>&1"
 )
 
+rem Laravel's hourly rules need a long-running scheduler worker. Start one
+rem here so the HRIS works after launching this file, without creating a
+rem duplicate worker when the startup script is run again.
+powershell -NoProfile -Command "$running=Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'php.exe' -and $_.CommandLine -like '*%APP%\artisan*schedule:work*' }; if (-not $running) { Start-Process -FilePath '%PHP%' -ArgumentList @('"%APP%\artisan"','schedule:work','--no-interaction') -WorkingDirectory '%APP%' -WindowStyle Hidden -RedirectStandardOutput '%LOGS%\scheduler.log' -RedirectStandardError '%LOGS%\scheduler-error.log' }"
+
 powershell -NoProfile -Command "foreach($i in 1..30){ try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:%PORT%/up' -UseBasicParsing -TimeoutSec 2; if ($r.StatusCode -eq 200) { exit 0 } } catch {}; Start-Sleep -Seconds 1 }; exit 1"
 if errorlevel 1 (
     echo ERROR: The system did not start. See %LOGS%\serve.log
     pause
     exit /b 1
 )
-
-set "LANIP="
-for /f "usebackq delims=" %%i in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%APP%\get-lan-ip.ps1" 2^>nul`) do set "LANIP=%%i"
-if "%LANIP%"=="ERROR" set "LANIP="
 
 echo.
 echo ==========================================================

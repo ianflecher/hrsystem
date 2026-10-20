@@ -68,6 +68,15 @@ class NavBadges
                 })
                 ->count(),
 
+            // Regularization dates that have passed still need HR action.
+            // Keep separated employees and already-regular staff out.
+            'hr.employees' => (int) DB::table('employees')
+                ->whereNotIn('status', ['resigned', 'terminated', 'awol', 'inactive'])
+                ->where('employment_type', '!=', 'Regular')
+                ->whereNotNull('regular_date')
+                ->where('regular_date', '<', now()->startOfDay()->toDateString())
+                ->count(),
+
             // Leave already checked by the team lead and waiting for HR.
             // HR no longer approves leave; only Ma'am An's own waits for the HR supervisor.
             'hr.leave' => (int) DB::table('leaves as l')->join('employees as e', 'e.employee_id', '=', 'l.employee_id')

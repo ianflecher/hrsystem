@@ -153,6 +153,11 @@
 })
 <div class="shift-grid-wrap">
 <table class="shift-grid">
+    <colgroup>
+        <col class="sg-col-name">
+        @for($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay())<col class="sg-col-day">@endfor
+        <col class="sg-col-summary">
+    </colgroup>
     <thead>
         <tr>
             <th class="sg-name">Name</th>
@@ -230,6 +235,11 @@
     <p class="muted">Each day's first in and final out. <span style="color:#dc2626;font-weight:600">Red</span>: late or left early against that day's shift.</p>
     <div class="shift-grid-wrap">
     <table class="shift-grid worked-grid">
+        <colgroup>
+            <col class="sg-col-name">
+            @for($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay())<col class="sg-col-day">@endfor
+            <col class="sg-col-summary">
+        </colgroup>
         <thead>
             <tr>
                 <th class="sg-name">Name</th>
@@ -245,8 +255,12 @@
                     <tr class="sg-dept"><td colspan="{{ $periodStart->diffInDays($periodEnd) + 3 }}"><span>{{ $department }}</span></td></tr>
                 @endif
                 @foreach($people as $person)
+                    @php($noScanner = trim((string) ($person->biometric_id ?? '')) === '')
                     <tr>
-                        <td class="sg-name">{{ $person->full_name }}</td>
+                        <td class="sg-name">
+                            {{ $person->full_name }}
+                            @if($noScanner)<span class="wk-no-scanner-note">No scanner</span>@endif
+                        </td>
                         @for($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay())
                             @php($date = $day->toDateString())
                             @php($a = $worked[$person->employee_id.'|'.$date] ?? null)
@@ -276,6 +290,8 @@
                                 <td class="sg-susp">S</td>
                             @elseif($plan['rest'])
                                 <td class="wk-rest" title="Rest day">RD</td>
+                            @elseif($noScanner)
+                                <td class="wk-no-scanner" title="No biometric scanner ID is assigned">NO<br>SCANNER</td>
                             @elseif($day->lt(\Carbon\Carbon::today()) && ! $plan['rest'] && ! $leave)
                                 <td class="wk-absent" title="Absent">ABS</td>
                             @else
@@ -295,6 +311,8 @@
     .people .worked-grid .wk-ok { background:#ecfdf5; border-left-color:#22c55e; color:#14532d; }
     .people .worked-grid .wk-alert { background:#fff7ed; border-left-color:#f97316; color:#7c2d12; }
     .people .worked-grid .wk-missing { background:#fef2f2; border-left-color:#ef4444; color:#7f1d1d; }
+    .people .worked-grid .wk-no-scanner { background:#eff6ff; border-left-color:#60a5fa; color:#1d4ed8; font-weight:800; font-size:9px; letter-spacing:.02em; line-height:1.1; }
+    .people .worked-grid .wk-no-scanner-note { display:block; margin-top:3px; color:#2563eb; font-size:9px; font-weight:700; }
     .people .worked-grid .wk-absent { background:#dc2626; color:#fff; font-weight:800; font-size:10px; letter-spacing:.04em; }
     .people .worked-grid .wk-rest { background:#dc2626; color:#fff; font-weight:800; font-size:10px; letter-spacing:.04em; }
     .people .worked-grid .wk-off { color:#dc2626; font-weight:700; }
@@ -302,6 +320,7 @@
     .people .worked-grid tbody tr:hover .wk-ok { background:#dcfce7; }
     .people .worked-grid tbody tr:hover .wk-alert { background:#ffedd5; }
     .people .worked-grid tbody tr:hover .wk-missing { background:#fee2e2; }
+    .people .worked-grid tbody tr:hover .wk-no-scanner { background:#dbeafe; }
     .people .worked-grid tbody tr:hover .wk-absent { background:#b91c1c; }
     .people .worked-grid tbody tr:hover .wk-rest { background:#b91c1c; }
 </style>

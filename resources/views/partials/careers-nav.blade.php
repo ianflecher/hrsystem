@@ -35,7 +35,7 @@
             <span>IC <b>Careers</b></span>
         </a>
 
-        {{-- Below 860px the links move into a drawer behind this button. They
+        {{-- Below 1180px the links move into a drawer behind this button. They
              used to stay in the bar as a sideways-scrolling strip, which put
              "Ins..." and a fade where the sections should be: a menu you have
              to discover by swiping is a menu most people never see. --}}
@@ -113,6 +113,6 @@
     });
 
     addEventListener('keydown', function (e) { if (e.key === 'Escape') set(false); });
-    addEventListener('resize', function () { if (innerWidth > 860) set(false); });
+    addEventListener('resize', function () { if (innerWidth > 1180) set(false); });
 })();
 </script>

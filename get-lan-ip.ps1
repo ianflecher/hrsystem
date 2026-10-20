@@ -14,4 +14,14 @@ if (-not $ip) {
         Select-Object -First 1).IPAddress
 }
 
+if (-not $ip) {
+    # Some Windows policies block the NetTCPIP cmdlets. ipconfig is still
+    # available in that case and gives us the address needed by LAN clients.
+    $ip = (ipconfig 2>$null |
+        Select-String -Pattern 'IPv4 Address[^:]*:\s*(\d{1,3}(?:\.\d{1,3}){3})' |
+        ForEach-Object { $_.Matches[0].Groups[1].Value } |
+        Where-Object { $_ -notmatch '^(127\.|169\.254\.)' } |
+        Select-Object -First 1)
+}
+
 if (-not $ip) { Write-Output 'ERROR' } else { Write-Output $ip }

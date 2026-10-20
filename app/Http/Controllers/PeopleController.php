@@ -153,10 +153,14 @@ class PeopleController extends Controller
         };
         $request->validate([
             'month' => 'nullable|date_format:Y-m',
+            'cutoff' => 'nullable|date',
             'search' => 'nullable|string|max:100',
             'status' => $requestStatuses ? ['nullable', 'string', Rule::in($requestStatuses)] : 'nullable|string|max:30',
         ]);
         $month = Carbon::parse(($request->input('month') ?: now()->format('Y-m')).'-01');
+        $cutoff = $module === 'overtime'
+            ? PayPeriod::fromStart($request->input('cutoff') ?: PayPeriod::recent(1)[0]->start)
+            : null;
         $teamPortal = $this->isTeamPortal($module);
         $managedDepartmentIds = PeopleAccess::managedDepartmentIds();
         $employees = ($hr || $teamPortal) ? DB::table('employees as e')->join('users as u', 'u.user_id', '=', 'e.user_id')
@@ -194,6 +198,12 @@ class PeopleController extends Controller
             }
             if ($requestStatuses && $request->filled('status')) {
                 $query->where('r.status', $request->input('status'));
+            }
+            if ($module === 'overtime' && $cutoff) {
+                $query->whereDate('r.starts_at', '>=', $cutoff->start)
+                    ->whereDate('r.starts_at', '<=', $cutoff->end);
+                $extra['cutoff'] = $cutoff;
+                $extra['cutoffs'] = PayPeriod::recent(12);
             }
         }
         if ($module === 'overtime' && ! $hr && ! $teamPortal) {
@@ -234,7 +244,7 @@ class PeopleController extends Controller
                 ->when($hr, fn ($q) => $q->where('e.status', 'active'))
                 ->when(! $hr && $teamPortal, fn ($q) => PeopleAccess::scopeTeam($q->where('e.status', 'active')))
                 ->when(! $hr && ! $teamPortal, fn ($q) => $q->where('e.employee_id', $employeeId))
-                ->select('e.employee_id', 'e.department_id', 'dp.department_name', 'e.job_title', 'e.shift_start', 'e.shift_end', 'e.rest_days', 'u.full_name')
+                ->select('e.employee_id', 'e.department_id', 'e.biometric_id', 'dp.department_name', 'e.job_title', 'e.shift_start', 'e.shift_end', 'e.rest_days', 'u.full_name')
                 ->orderBy('u.full_name')->get();
             $extra['assignments'] = DB::table('shift_assignments as s')
                 ->join('employees as e', 'e.employee_id', '=', 's.employee_id')

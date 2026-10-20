@@ -61,9 +61,10 @@ class HrOperationsController extends Controller
         return view('hr.operations.employee-360', compact('employee', 'payroll', 'attendance', 'leave', 'loans', 'documents', 'salaryHistory'));
     }
 
-    public function manager()
+    public function manager(Request $request)
     {
         \App\Support\PeopleAccess::manager();
+        $request->validate(['cutoff' => ['nullable', 'date']]);
         $departmentIds = \App\Support\PeopleAccess::teamDashboardDepartmentIds();
         $employees = DB::table('employees as e')
             ->join('users as u', 'e.user_id', '=', 'u.user_id')
@@ -73,11 +74,12 @@ class HrOperationsController extends Controller
             ->when(! \App\Support\PeopleAccess::isHr(), fn($q) => \App\Support\PeopleAccess::scopeTeam($q)->where('e.user_id', '!=', auth()->id())
                 // Nobody opens their own profile here, and a leader does not open their supervisor's.
                 ->when(auth()->user()->role === 'leader', fn($q) => $q->where('u.role', '!=', 'supervisor')))
-            ->select('e.employee_id','e.employee_no','e.job_title','e.department_id','e.pay_basis','u.full_name','d.department_name','e.shift_start','e.shift_end','e.rest_days')
+            ->select('e.employee_id','e.employee_no','e.biometric_id','e.job_title','e.department_id','e.pay_basis','u.full_name','d.department_name','e.shift_start','e.shift_end','e.rest_days')
             ->orderBy('u.full_name')
             ->get();
         // This cutoff's rest days per person: a calendar mark wins over the weekly default.
-        $cutoff = \App\Support\PayPeriod::recent(1)[0];
+        $cutoffs = \App\Support\PayPeriod::recent(12);
+        $cutoff = \App\Support\PayPeriod::fromStart($request->query('cutoff') ?: $cutoffs[0]->start);
         $marks = DB::table('shift_assignments')->whereIn('employee_id', $employees->pluck('employee_id'))
             ->whereBetween('work_date', [$cutoff->start, $cutoff->end])->get()
             ->groupBy('employee_id');
@@ -170,7 +172,7 @@ class HrOperationsController extends Controller
             ->when(! \App\Support\PeopleAccess::isHr(), fn ($q) => \App\Support\PeopleAccess::scopeTeam($q)->where('e.user_id', '!=', auth()->id()))
             ->orderBy('t.date')->get(['t.*', 'u.full_name']);
 
-        return view('hr.operations.manager', compact('cutoff','employees','teamWorked','teamLeaves','pendingLeave','pendingOt','otSuggestions','decidedLeave','decidedOt','noScanner','recentManual','pendingTimeLogs'));
+        return view('hr.operations.manager', compact('cutoff','cutoffs','employees','teamWorked','teamLeaves','pendingLeave','pendingOt','otSuggestions','decidedLeave','decidedOt','noScanner','recentManual','pendingTimeLogs'));
     }
 
     private function teamOvertimeSuggestions($employees, \App\Support\PayPeriod $cutoff): \Illuminate\Support\Collection

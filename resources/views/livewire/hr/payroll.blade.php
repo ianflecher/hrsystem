@@ -27,6 +27,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     /** The year the 13th month panel is showing. */
     public $thirteenthYear = '';
     public bool $showThirteenth = false;
+    public bool $showAttendanceWarnings = false;
     
     // Payroll details modal
     public $showPayrollDetails = false;
@@ -46,6 +47,11 @@ new #[Layout('components.layouts.humanresource')] class extends Component
     {
         // The cutoff today falls in: the 1st-15th, or the 16th to month end.
         $this->payPeriod = PayPeriod::recent(1)[0]->start;
+    }
+
+    public function toggleAttendanceWarnings(): void
+    {
+        $this->showAttendanceWarnings = ! $this->showAttendanceWarnings;
     }
     
     public function getCompaniesProperty(): array
@@ -585,7 +591,9 @@ new #[Layout('components.layouts.humanresource')] class extends Component
             ->whereRaw("COALESCE(NULLIF(company, ''), 'GKLASAM OPC') = ?", [$this->company])
             ->select('employee_id', 'rest_days', 'hire_date', 'shift_start', 'shift_end', 'job_title')->get();
 
-        $present = DB::table('hr_attendance')->whereBetween('date', [$start, $end])->where(fn ($q) => $q->whereNotNull('time_in')->orWhere('status', 'official_business')
+        $present = DB::table('hr_attendance')->whereBetween('date', [$start, $end])->where(fn ($q) => $q->whereNotNull('time_in')
+                ->orWhereNotNull('lunch_in')->orWhereNotNull('lunch_out')->orWhereNotNull('cb_in')->orWhereNotNull('cb_out')->orWhereNotNull('time_out')
+                ->orWhere('status', 'official_business')
                 // A suspension is a recorded absence, not a missing one.
                 ->orWhere(fn ($s) => $s->where('status', 'absent')->where('notes', 'Suspension')))
             ->get(['employee_id', 'date'])
@@ -624,6 +632,30 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         }
 
         return ['days' => $days, 'people' => count($people)];
+    }
+
+    public function getAttendanceDiscrepanciesProperty()
+    {
+        $start = $this->period()->start;
+        $end = min($this->period()->end, today()->toDateString());
+
+        return DB::table('hr_attendance as a')
+            ->join('employees as e', 'e.employee_id', '=', 'a.employee_id')
+            ->join('users as u', 'u.user_id', '=', 'e.user_id')
+            ->whereRaw("COALESCE(NULLIF(e.company, ''), 'GKLASAM OPC') = ?", [$this->company])
+            ->whereBetween('a.date', [$start, $end])
+            ->where(fn ($q) => $q
+                ->where(fn ($missingIn) => $missingIn->whereNull('a.time_in')
+                    ->where(fn ($hasLater) => $hasLater->whereNotNull('a.lunch_in')->orWhereNotNull('a.lunch_out')->orWhereNotNull('a.cb_in')->orWhereNotNull('a.cb_out')->orWhereNotNull('a.time_out')))
+                ->orWhere(fn ($missingOut) => $missingOut->whereNotNull('a.time_in')->whereNull('a.time_out')))
+            ->select('a.attendance_id', 'a.employee_id', 'a.date', 'a.time_in', 'a.lunch_in', 'a.lunch_out', 'a.cb_in', 'a.cb_out', 'a.time_out', 'u.full_name')
+            ->orderBy('a.date')->orderBy('u.full_name')
+            ->get()
+            ->map(function ($row) {
+                $row->discrepancy = $row->time_in ? 'No final out' : 'No first in';
+
+                return $row;
+            });
     }
 
     public function getPeriodCountsProperty(): array
@@ -720,7 +752,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
 }
 ?>
 
-<div class="p-6 md:p-8">
+<div class="p-6 md:p-8" data-page="hr-payroll">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Header Section -->
         <div class="md:flex md:items-center md:justify-between mb-6">
@@ -787,12 +819,59 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         {{-- Said before generating, not after: a missed day now costs a day's pay,
              and the usual cause of a gap is a scanner that was off rather than
              somebody who stayed home. --}}
-        @if ($this->attendanceGaps['days'] > 0)
+        @if ($this->attendanceGaps['days'] > 0 || $this->attendanceDiscrepancies->isNotEmpty())
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <span class="font-medium">
+                    Attendance issues need review:
+                    {{ $this->attendanceGaps['days'] }} missing day(s),
+                    {{ $this->attendanceDiscrepancies->count() }} punch discrepancy/discrepancies.
+                </span>
+                <button type="button" wire:click="toggleAttendanceWarnings" class="btn-secondary">
+                    {{ $showAttendanceWarnings ? 'Hide details' : 'Review attendance issues' }}
+                </button>
+            </div>
+        @endif
+
+        @if ($showAttendanceWarnings && $this->attendanceGaps['days'] > 0)
             <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 <strong>{{ $this->attendanceGaps['days'] }} day(s) with no attendance record</strong>
                 across {{ $this->attendanceGaps['people'] }} employee(s) in this cutoff.
                 Each will be treated as a day missed and deducted.
                 If the scanner was down, sync or correct attendance before generating.
+            </div>
+        @endif
+
+        @if ($showAttendanceWarnings && $this->attendanceDiscrepancies->isNotEmpty())
+            <div class="mb-4 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-950">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                        <strong>{{ $this->attendanceDiscrepancies->count() }} attendance discrepancy/discrepancies</strong>
+                        <p class="mt-1 text-orange-900">These days have scanner punches but are missing first-in or final-out. Review before approving payroll.</p>
+                    </div>
+                    <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-orange-700 ring-1 ring-orange-200">Needs review</span>
+                </div>
+                <div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                    @foreach($this->attendanceDiscrepancies->take(12) as $gap)
+                        @php
+                            $lastPunch = \App\Support\WorkDay::effectiveOut($gap);
+                        @endphp
+                        <div class="rounded-lg border border-orange-100 bg-white px-3 py-2">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="font-semibold text-slate-950">{{ $gap->full_name }}</div>
+                                <span class="shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-800">{{ $gap->discrepancy }}</span>
+                            </div>
+                            <div class="mt-1 text-xs text-slate-600">
+                                {{ \Carbon\Carbon::parse($gap->date)->format('M j') }}
+                                @if($lastPunch)
+                                    · last punch {{ \Carbon\Carbon::parse($lastPunch)->format('g:i A') }}
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                @if($this->attendanceDiscrepancies->count() > 12)
+                    <p class="mt-2 text-xs text-orange-800">Showing first 12 only.</p>
+                @endif
             </div>
         @endif
 
