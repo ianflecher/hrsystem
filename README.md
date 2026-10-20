@@ -43,14 +43,14 @@ them stops the system.
 
 For a local three-application test stack, use the setup in
 [`deploy/kubernetes/README.md`](deploy/kubernetes/README.md). Clone the HRIS,
-Production, and Marketing repositories beside one another, enable Kubernetes
-in Docker Desktop, then run:
+Production, Marketing, and separate Central Admin repositories beside one
+another, enable Kubernetes in Docker Desktop, then run:
 
 ```powershell
 .\deploy\kubernetes\start-local.ps1
 ```
 
-It builds the four local images, creates missing test secrets, applies the
+It builds the four local images from those repositories, creates missing test secrets, applies the
 Kubernetes resources, and starts the local port-forwards. The separate Central
 Admin page is at `http://127.0.0.1:30083`. The scanner and public Cloudflare
 access are not part of this local test setup.

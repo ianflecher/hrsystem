@@ -1,6 +1,7 @@
 param(
     [string] $ProductionPath = (Join-Path $PSScriptRoot '..\..\..\production'),
-    [string] $MarketingPath = (Join-Path $PSScriptRoot '..\..\..\marketing')
+    [string] $MarketingPath = (Join-Path $PSScriptRoot '..\..\..\marketing'),
+    [string] $CentralAdminPath = (Join-Path $PSScriptRoot '..\..\..\imprint-admin')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -57,6 +58,7 @@ Require-Command 'kubectl'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $productionPath = (Resolve-Path $ProductionPath).Path
 $marketingPath = (Resolve-Path $MarketingPath).Path
+$centralAdminPath = (Resolve-Path $CentralAdminPath).Path
 
 if (-not (Test-Path (Join-Path $productionPath 'composer.json'))) {
     throw "Production repository was not found at $productionPath. Clone https://github.com/ianflecher/production beside hris or pass -ProductionPath."
@@ -64,11 +66,14 @@ if (-not (Test-Path (Join-Path $productionPath 'composer.json'))) {
 if (-not (Test-Path (Join-Path $marketingPath 'composer.json'))) {
     throw "Marketing repository was not found at $marketingPath. Clone https://github.com/ianflecher/marketing beside hris or pass -MarketingPath."
 }
+if (-not (Test-Path (Join-Path $centralAdminPath 'package.json'))) {
+    throw "Central Admin repository was not found at $centralAdminPath. Clone https://github.com/imprintcustomsecommerce-cell/imprint-admin beside hris or pass -CentralAdminPath."
+}
 
 Write-Host 'Building HRIS...'
 & docker build -t imprint/hris:central-admin-v1 $repoRoot
 Write-Host 'Building Central Admin...'
-& docker build -t imprint/central-admin:test (Join-Path $repoRoot 'central-admin')
+& docker build -t imprint/central-admin:test $centralAdminPath
 Write-Host 'Building Production...'
 & docker build -f (Join-Path $PSScriptRoot 'production.Dockerfile') -t imprint/production:test $productionPath
 Write-Host 'Building Marketing...'

@@ -6,12 +6,13 @@ intentionally excluded.
 
 ## First setup
 
-Clone the three repositories beside one another:
+Clone the four repositories beside one another:
 
 ```text
 D:\GitHub\hris
 D:\GitHub\production
 D:\GitHub\marketing
+D:\GitHub\imprint-admin
 ```
 
 Install Docker Desktop, enable Kubernetes in Docker Desktop, and make sure
@@ -34,7 +35,8 @@ If the other repositories are in different folders, pass their paths:
 ```powershell
 .\deploy\kubernetes\start-local.ps1 `
   -ProductionPath 'D:\Projects\production' `
-  -MarketingPath 'D:\Projects\marketing'
+  -MarketingPath 'D:\Projects\marketing' `
+  -CentralAdminPath 'D:\Projects\imprint-admin'
 ```
 
 ## Local URLs
