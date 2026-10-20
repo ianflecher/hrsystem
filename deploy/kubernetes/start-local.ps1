@@ -91,6 +91,8 @@ Write-Host 'Applying Kubernetes resources...'
 & kubectl apply -f (Join-Path $PSScriptRoot 'local-test.yaml')
 & kubectl rollout status deployment/mysql -n imprint-test --timeout=180s
 & kubectl rollout status deployment/hris -n imprint-test --timeout=180s
+Write-Host 'Seeding the default local administrator accounts...'
+& kubectl exec deployment/hris -n imprint-test -- php artisan db:seed --force
 & kubectl rollout status deployment/production -n imprint-test --timeout=180s
 & kubectl rollout status deployment/marketing -n imprint-test --timeout=180s
 
