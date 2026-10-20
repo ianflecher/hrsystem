@@ -50,10 +50,10 @@ in Docker Desktop, then run:
 .\deploy\kubernetes\start-local.ps1
 ```
 
-It builds the three local images, creates missing test secrets, applies the
-Kubernetes resources, and starts the local port-forwards. The HRIS control
-center is at `http://127.0.0.1:30080/admin/control-center`. The scanner and
-public Cloudflare access are not part of this local test setup.
+It builds the four local images, creates missing test secrets, applies the
+Kubernetes resources, and starts the local port-forwards. The separate Central
+Admin page is at `http://127.0.0.1:30083`. The scanner and public Cloudflare
+access are not part of this local test setup.
 
 ## Setup by hand
 

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Central Admin | Imprint Customs</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><span class="brand-mark small">IC</span><span>Imprint Customs</span></div>
+      <form method="post" action="/logout"><button class="button button-quiet" type="submit">Sign out</button></form>
+    </div>
+  </header>
+  <main class="page-shell">
+    <section class="page-heading">
+      <div>
+        <p class="eyebrow">CENTRAL ADMIN</p>
+        <h1>System control center</h1>
+        <p class="lede">Monitor the three applications and open the one you need.</p>
+      </div>
+      <div class="summary" aria-live="polite">
+        <strong id="online-count">Checking...</strong>
+        <span id="checked-at">Connecting to services</span>
+      </div>
+    </section>
+    <section id="service-grid" class="service-grid" aria-live="polite"></section>
+    <p id="load-error" class="notice" hidden>Unable to load service status. The admin page is still available; try again in a moment.</p>
+  </main>
+  <script src="/dashboard.js"></script>
+</body>
+</html>

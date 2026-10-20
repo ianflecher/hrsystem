@@ -107,7 +107,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/hr/operations/payroll/approve', [\App\Http\Controllers\HrOperationsController::class, 'approvePayroll'])->name('hr.operations.payroll.approve');
     Route::post('/hr/operations/payroll/paid', [\App\Http\Controllers\HrOperationsController::class, 'paidPayroll'])->name('hr.operations.payroll.paid');
     Route::get('/hr/operations/admin-center', [\App\Http\Controllers\HrOperationsController::class, 'adminCenter'])->name('hr.operations.admin-center');
-    Route::get('/admin/control-center', [\App\Http\Controllers\CentralAdminController::class, 'index'])->name('admin.control-center');
     Route::get('/hr/operations/analytics', [\App\Http\Controllers\HrOperationsController::class, 'analytics'])->name('hr.operations.analytics');
     Route::get('/hr/operations/attendance-exceptions', [\App\Http\Controllers\HrOperationsController::class, 'attendanceExceptions'])->name('hr.operations.attendance-exceptions');
     Route::post('/hr/operations/admin-center/settings', [\App\Http\Controllers\HrOperationsController::class, 'adminSet'])->name('hr.operations.admin-center.settings');

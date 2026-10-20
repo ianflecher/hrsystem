@@ -1,0 +1,9 @@
+{
+  "name": "imprint-central-admin",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Standalone local control center for Imprint Customs applications",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

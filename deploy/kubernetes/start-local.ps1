@@ -67,6 +67,8 @@ if (-not (Test-Path (Join-Path $marketingPath 'composer.json'))) {
 
 Write-Host 'Building HRIS...'
 & docker build -t imprint/hris:central-admin-v1 $repoRoot
+Write-Host 'Building Central Admin...'
+& docker build -t imprint/central-admin:test (Join-Path $repoRoot 'central-admin')
 Write-Host 'Building Production...'
 & docker build -f (Join-Path $PSScriptRoot 'production.Dockerfile') -t imprint/production:test $productionPath
 Write-Host 'Building Marketing...'
@@ -86,6 +88,10 @@ Ensure-Secret 'app-keys' @{
     production = New-AppKey
     marketing = New-AppKey
 }
+Ensure-Secret 'central-admin-credentials' @{
+    username = 'admin'
+    password = 'imprint123'
+}
 
 Write-Host 'Applying Kubernetes resources...'
 & kubectl apply -f (Join-Path $PSScriptRoot 'local-test.yaml')
@@ -95,15 +101,19 @@ Write-Host 'Seeding the default local administrator accounts...'
 & kubectl exec deployment/hris -n imprint-test -- php artisan db:seed --force
 & kubectl rollout status deployment/production -n imprint-test --timeout=180s
 & kubectl rollout status deployment/marketing -n imprint-test --timeout=180s
+& kubectl rollout status deployment/central-admin -n imprint-test --timeout=180s
 
 Start-PortForward 'hris' 30080
 Start-PortForward 'production' 30081
 Start-PortForward 'marketing' 30082
+Start-PortForward 'central-admin' 30083
 
 Write-Host ''
 Write-Host 'Local stack is ready:'
-Write-Host '  HRIS control center: http://127.0.0.1:30080/admin/control-center'
+Write-Host '  Central Admin:       http://127.0.0.1:30083'
 Write-Host '  Production:          http://127.0.0.1:30081'
 Write-Host '  Marketing:           http://127.0.0.1:30082'
+Write-Host ''
+Write-Host '  Central Admin login: admin / imprint123'
 Write-Host ''
 Write-Host 'The scanner is intentionally not included in this local stack.'

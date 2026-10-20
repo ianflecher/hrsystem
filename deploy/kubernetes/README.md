@@ -1,7 +1,8 @@
 # Docker Desktop Kubernetes
 
-This folder runs HRIS, Imprint Production, and Imprint Marketing together for
-local testing. The scanner is intentionally excluded.
+This folder runs a standalone Central Admin service beside HRIS, Imprint
+Production, and Imprint Marketing for local testing. The scanner is
+intentionally excluded.
 
 ## First setup
 
@@ -23,9 +24,10 @@ From the HRIS repository, run PowerShell:
 .\deploy\kubernetes\start-local.ps1
 ```
 
-The script builds all three images locally, creates local-only Kubernetes
+The script builds all four images locally, creates local-only Kubernetes
 secrets when they do not already exist, applies the namespace and services, and
-starts port-forwards. It does not overwrite existing database or app secrets.
+starts port-forwards. It does not overwrite existing database, app, or Central
+Admin secrets.
 
 If the other repositories are in different folders, pass their paths:
 
@@ -37,13 +39,15 @@ If the other repositories are in different folders, pass their paths:
 
 ## Local URLs
 
-- HRIS control center: `http://127.0.0.1:30080/admin/control-center`
+- Central Admin: `http://127.0.0.1:30083`
+- HRIS: `http://127.0.0.1:30080`
 - Production: `http://127.0.0.1:30081`
 - Marketing: `http://127.0.0.1:30082`
 
-Sign in to the control center with an HRIS administrator account. It checks all
-three services and provides links to each one. This is a local control center,
-not shared single sign-on; each application keeps its own login session.
+Sign in to Central Admin with `admin` / `imprint123` on the first local run.
+Change that secret before using it outside local testing. Central Admin checks
+all three services and provides links to each one. It is a separate login, not
+shared single sign-on; each application keeps its own login session.
 
 The Kubernetes data is stored in Docker Desktop volumes. Keep Docker Desktop
 running while using the applications. This setup is for testing on the same

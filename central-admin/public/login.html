@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Central Admin | Imprint Customs</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="auth-shell">
+  <main class="auth-panel">
+    <div class="brand-mark">IC</div>
+    <p class="eyebrow">IMPRINT CUSTOMS</p>
+    <h1>Central Admin</h1>
+    <p class="lede">One place to check and open the HRIS, Production, and Marketing systems.</p>
+    <form method="post" action="/login" class="auth-form">
+      <label for="username">Username</label>
+      <input id="username" name="username" autocomplete="username" required>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <p class="form-error" hidden>Invalid username or password.</p>
+      <button type="submit">Sign in</button>
+    </form>
+    <p class="muted">Central access only. The connected applications keep their own sessions.</p>
+  </main>
+  <script>
+    if (new URLSearchParams(window.location.search).has('error')) {
+      document.querySelector('.form-error').hidden = false;
+    }
+  </script>
+</body>
+</html>
