@@ -45,10 +45,19 @@ function Start-PortForward([string] $Service, [int] $LocalPort) {
         return
     }
 
+    $loopScript = Join-Path $PSScriptRoot 'port-forward-loop.ps1'
+    $running = Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like "*port-forward-loop.ps1*" -and $_.CommandLine -like "*-Service $Service*" }
+    if ($running) {
+        Write-Host "Port-forward supervisor for $Service is already running."
+        return
+    }
+
     $stdout = Join-Path $env:TEMP "imprint-$Service-port-forward.out.log"
     $stderr = Join-Path $env:TEMP "imprint-$Service-port-forward.err.log"
-    Start-Process -WindowStyle Hidden -FilePath 'kubectl' -ArgumentList @(
-        'port-forward', '-n', 'imprint-test', "service/$Service", "${LocalPort}:10000"
+    Start-Process -WindowStyle Hidden -FilePath 'powershell.exe' -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $loopScript,
+        '-Service', $Service, '-LocalPort', $LocalPort
     ) -RedirectStandardOutput $stdout -RedirectStandardError $stderr | Out-Null
 }
 

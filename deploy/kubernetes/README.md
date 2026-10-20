@@ -27,8 +27,9 @@ From the HRIS repository, run PowerShell:
 
 The script builds all four images locally, creates local-only Kubernetes
 secrets when they do not already exist, applies the namespace and services, and
-starts port-forwards. It does not overwrite existing database, app, or Central
-Admin secrets.
+starts hidden port-forward supervisors that reconnect when a Kubernetes pod or
+connection is replaced. It does not overwrite existing database, app, or
+Central Admin secrets.
 
 If the other repositories are in different folders, pass their paths:
 

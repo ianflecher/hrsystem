@@ -51,7 +51,7 @@ another, enable Kubernetes in Docker Desktop, then run:
 ```
 
 It builds the four local images from those repositories, creates missing test secrets, applies the
-Kubernetes resources, and starts the local port-forwards. The separate Central
+Kubernetes resources, and starts reconnecting local port-forward supervisors. The separate Central
 Admin page is at `http://127.0.0.1:30083`. The scanner and public Cloudflare
 access are not part of this local test setup.
 
