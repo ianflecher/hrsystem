@@ -1,6 +1,6 @@
 param(
-    [string] $ProductionPath = (Join-Path $PSScriptRoot '..\..\..\production'),
-    [string] $MarketingPath = (Join-Path $PSScriptRoot '..\..\..\marketing'),
+    [string] $ProductionPath = (Join-Path $PSScriptRoot '..\..\..\production\application'),
+    [string] $MarketingPath = (Join-Path $PSScriptRoot '..\..\..\marketing\temp_app'),
     [string] $CentralAdminPath = (Join-Path $PSScriptRoot '..\..\..\imprint-admin'),
     [switch] $SeedDefaultAccounts
 )

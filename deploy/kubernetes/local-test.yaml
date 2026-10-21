@@ -83,7 +83,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: production-data
+  name: production-data-v2
   namespace: imprint-test
 spec:
   accessModes: [ReadWriteOnce]
@@ -94,7 +94,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: marketing-data
+  name: marketing-data-v2
   namespace: imprint-test
 spec:
   accessModes: [ReadWriteOnce]
@@ -207,9 +207,17 @@ spec:
       labels:
         app: production
     spec:
+      initContainers:
+        - name: initialize-database-file
+          image: localhost:5000/imprint/production:central-admin-v2
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "touch /data/imprint.sqlite"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
       containers:
         - name: production
-          image: localhost:5000/imprint/production:test
+          image: localhost:5000/imprint/production:central-admin-v2
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 10000
@@ -243,15 +251,21 @@ spec:
               value: sync
             - name: FILESYSTEM_DISK
               value: local
+            - name: CENTRAL_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: central-admin-internal
+                  key: token
             - name: PORT
               value: "10000"
           volumeMounts:
             - name: data
-              mountPath: /var/www/html/database
+              mountPath: /var/www/html/database/imprint.sqlite
+              subPath: imprint.sqlite
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: production-data
+            claimName: production-data-v2
 ---
 apiVersion: v1
 kind: Service
@@ -282,9 +296,17 @@ spec:
       labels:
         app: marketing
     spec:
+      initContainers:
+        - name: initialize-database-file
+          image: localhost:5000/imprint/marketing:central-admin-v2
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "touch /data/database.sqlite"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
       containers:
         - name: marketing
-          image: localhost:5000/imprint/marketing:test
+          image: localhost:5000/imprint/marketing:central-admin-v2
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 10000
@@ -318,15 +340,21 @@ spec:
               value: sync
             - name: FILESYSTEM_DISK
               value: local
+            - name: CENTRAL_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: central-admin-internal
+                  key: token
             - name: PORT
               value: "10000"
           volumeMounts:
             - name: data
-              mountPath: /var/www/html/database
+              mountPath: /var/www/html/database/database.sqlite
+              subPath: database.sqlite
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: marketing-data
+            claimName: marketing-data-v2
 ---
 apiVersion: v1
 kind: Service
@@ -359,7 +387,7 @@ spec:
     spec:
       containers:
         - name: central-admin
-          image: localhost:5000/imprint/central-admin:test
+          image: localhost:5000/imprint/central-admin:central-admin-v2
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 10000

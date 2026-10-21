@@ -30,4 +30,6 @@ yarn-error.log
 
 # Local deployment helpers and database exports are never source files.
 /central-admin-source/
+/production-source/
+/marketing-source/
 /tgif_hris-source.sql
