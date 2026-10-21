@@ -109,6 +109,7 @@ metadata:
   namespace: imprint-test
 spec:
   replicas: 1
+  progressDeadlineSeconds: 1800
   selector:
     matchLabels:
       app: hris
@@ -119,8 +120,8 @@ spec:
     spec:
       containers:
         - name: hris
-          image: imprint/hris:central-admin-v1
-          imagePullPolicy: Never
+          image: localhost:5000/imprint/hris:central-admin-v1
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 10000
           readinessProbe:
@@ -164,6 +165,11 @@ spec:
               value: database
             - name: FILESYSTEM_DISK
               value: local
+            - name: CENTRAL_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: central-admin-internal
+                  key: token
           volumeMounts:
             - name: data
               mountPath: /var/www/html/database/data
@@ -203,8 +209,8 @@ spec:
     spec:
       containers:
         - name: production
-          image: imprint/production:test
-          imagePullPolicy: Never
+          image: localhost:5000/imprint/production:test
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 10000
           readinessProbe:
@@ -278,8 +284,8 @@ spec:
     spec:
       containers:
         - name: marketing
-          image: imprint/marketing:test
-          imagePullPolicy: Never
+          image: localhost:5000/imprint/marketing:test
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 10000
           readinessProbe:
@@ -353,8 +359,8 @@ spec:
     spec:
       containers:
         - name: central-admin
-          image: imprint/central-admin:test
-          imagePullPolicy: Never
+          image: localhost:5000/imprint/central-admin:test
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 10000
           readinessProbe:
@@ -381,6 +387,11 @@ spec:
               value: http://localhost:30080
             - name: CENTRAL_ADMIN_HRIS_HEALTH_URL
               value: http://hris:10000
+            - name: CENTRAL_ADMIN_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: central-admin-internal
+                  key: token
             - name: CENTRAL_ADMIN_PRODUCTION_URL
               value: http://localhost:30081
             - name: CENTRAL_ADMIN_PRODUCTION_HEALTH_URL

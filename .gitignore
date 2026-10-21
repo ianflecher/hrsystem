@@ -27,3 +27,7 @@ yarn-error.log
 
 # The dev server log, written by start.bat.
 /logs
+
+# Local deployment helpers and database exports are never source files.
+/central-admin-source/
+/tgif_hris-source.sql

@@ -1,7 +1,8 @@
 param(
     [string] $ProductionPath = (Join-Path $PSScriptRoot '..\..\..\production'),
     [string] $MarketingPath = (Join-Path $PSScriptRoot '..\..\..\marketing'),
-    [string] $CentralAdminPath = (Join-Path $PSScriptRoot '..\..\..\imprint-admin')
+    [string] $CentralAdminPath = (Join-Path $PSScriptRoot '..\..\..\imprint-admin'),
+    [switch] $SeedDefaultAccounts
 )
 
 $ErrorActionPreference = 'Stop'
@@ -9,6 +10,37 @@ $ErrorActionPreference = 'Stop'
 function Require-Command([string] $Name) {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
         throw "'$Name' is required. Install Docker Desktop with Kubernetes enabled."
+    }
+}
+
+function Ensure-LocalRegistry {
+    $registryName = 'imprint-registry'
+    $existing = & docker ps -a --filter "name=^/$registryName$" --format '{{.Names}}'
+
+    if (-not $existing) {
+        Write-Host 'Creating the local image registry...'
+        & docker run -d --name $registryName -p 5000:5000 --restart unless-stopped registry:2
+        if ($LASTEXITCODE -ne 0) {
+            throw 'The local Docker registry could not be created.'
+        }
+    } else {
+        $running = & docker ps --filter "name=^/$registryName$" --format '{{.Names}}'
+        if (-not $running) {
+            Write-Host 'Starting the existing local image registry...'
+            & docker start $registryName
+        }
+    }
+}
+
+function Publish-LocalImage([string] $LocalTag, [string] $RegistryTag) {
+    & docker tag $LocalTag $RegistryTag
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not tag $LocalTag for the local registry."
+    }
+
+    & docker push $RegistryTag
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not publish $RegistryTag to the local registry."
     }
 }
 
@@ -64,6 +96,8 @@ function Start-PortForward([string] $Service, [int] $LocalPort) {
 Require-Command 'docker'
 Require-Command 'kubectl'
 
+Ensure-LocalRegistry
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $productionPath = (Resolve-Path $ProductionPath).Path
 $marketingPath = (Resolve-Path $MarketingPath).Path
@@ -88,6 +122,12 @@ Write-Host 'Building Production...'
 Write-Host 'Building Marketing...'
 & docker build -f (Join-Path $PSScriptRoot 'marketing.Dockerfile') -t imprint/marketing:test $marketingPath
 
+Write-Host 'Publishing images to the local Kubernetes registry...'
+Publish-LocalImage 'imprint/hris:central-admin-v1' 'localhost:5000/imprint/hris:central-admin-v1'
+Publish-LocalImage 'imprint/production:test' 'localhost:5000/imprint/production:test'
+Publish-LocalImage 'imprint/marketing:test' 'localhost:5000/imprint/marketing:test'
+Publish-LocalImage 'imprint/central-admin:test' 'localhost:5000/imprint/central-admin:test'
+
 & kubectl get namespace imprint-test *> $null
 if ($LASTEXITCODE -ne 0) {
     & kubectl create namespace imprint-test
@@ -106,13 +146,18 @@ Ensure-Secret 'central-admin-credentials' @{
     username = 'admin'
     password = 'imprint123'
 }
+Ensure-Secret 'central-admin-internal' @{
+    token = 'imprint-central-admin-local-token'
+}
 
 Write-Host 'Applying Kubernetes resources...'
 & kubectl apply -f (Join-Path $PSScriptRoot 'local-test.yaml')
 & kubectl rollout status deployment/mysql -n imprint-test --timeout=180s
-& kubectl rollout status deployment/hris -n imprint-test --timeout=180s
-Write-Host 'Seeding the default local administrator accounts...'
-& kubectl exec deployment/hris -n imprint-test -- php artisan db:seed --force
+& kubectl rollout status deployment/hris -n imprint-test --timeout=1800s
+if ($SeedDefaultAccounts) {
+    Write-Host 'Seeding the default local administrator accounts by request...'
+    & kubectl exec deployment/hris -n imprint-test -- php artisan db:seed --force
+}
 & kubectl rollout status deployment/production -n imprint-test --timeout=180s
 & kubectl rollout status deployment/marketing -n imprint-test --timeout=180s
 & kubectl rollout status deployment/central-admin -n imprint-test --timeout=180s

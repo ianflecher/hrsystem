@@ -3,6 +3,8 @@
 use App\Livewire\Actions\LogoutAdmin;
 use App\Livewire\Actions\LogoutApplicant;
 use App\Livewire\Actions\LogoutEmployee;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
 
@@ -53,6 +55,32 @@ Route::redirect('/login', '/portals')->name('login');
 Volt::route('/admin/login', 'auth.adminlogin')->name('admin.login');
 Volt::route('/employee/login', 'auth.employeelogin')->name('employee.login');
 Volt::route('/applicant/login', 'auth.applicantlogin')->name('applicant.login');
+
+/*
+|--------------------------------------------------------------------------
+| Internal Central Admin data
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/internal/central-admin/summary', function (Request $request) {
+    $token = (string) config('services.central_admin.token');
+    $provided = (string) $request->header('X-Central-Admin-Token');
+
+    abort_unless($token !== '' && hash_equals($token, $provided), 404);
+
+    return response()->json([
+        'service' => 'HRIS',
+        'generatedAt' => now()->toIso8601String(),
+        'employees' => [
+            'total' => DB::table('employees')->count(),
+            'active' => DB::table('employees')->where('status', 'active')->count(),
+        ],
+        'departments' => DB::table('departments')->count(),
+        'payrollRecords' => DB::table('hr_payroll')->count(),
+        'pendingLeave' => DB::table('leaves')->whereIn('status', ['pending', 'pending_hr'])->count(),
+        'pendingOvertime' => DB::table('overtime_requests')->whereIn('status', ['pending', 'pending_hr'])->count(),
+    ]);
+})->name('internal.central-admin.summary');
 
 /*
 |--------------------------------------------------------------------------
