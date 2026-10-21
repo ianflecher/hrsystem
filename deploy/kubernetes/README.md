@@ -31,6 +31,20 @@ starts hidden port-forward supervisors that reconnect when a Kubernetes pod or
 connection is replaced. It does not overwrite existing database, app, or
 Central Admin secrets.
 
+The application databases remain in Docker Desktop Kubernetes volumes; they are
+not committed to GitHub. This keeps employee, customer, payroll, order, and
+marketing records out of source control. The local test cluster can still be
+recreated with demo records when needed:
+
+```powershell
+.\deploy\kubernetes\start-local.ps1 -SeedDemoData
+```
+
+Use that option only for a disposable test cluster. It resets the Production
+business tables before loading demo orders and runs the Marketing demo seeder.
+For real records, restore a database backup into the named Kubernetes volumes
+instead of committing the database file.
+
 If the other repositories are in different folders, pass their paths:
 
 ```powershell

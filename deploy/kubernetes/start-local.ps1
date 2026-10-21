@@ -2,7 +2,8 @@ param(
     [string] $ProductionPath = (Join-Path $PSScriptRoot '..\..\..\production\application'),
     [string] $MarketingPath = (Join-Path $PSScriptRoot '..\..\..\marketing\temp_app'),
     [string] $CentralAdminPath = (Join-Path $PSScriptRoot '..\..\..\imprint-admin'),
-    [switch] $SeedDefaultAccounts
+    [switch] $SeedDefaultAccounts,
+    [switch] $SeedDemoData
 )
 
 $ErrorActionPreference = 'Stop'
@@ -116,17 +117,17 @@ if (-not (Test-Path (Join-Path $centralAdminPath 'package.json'))) {
 Write-Host 'Building HRIS...'
 & docker build -t imprint/hris:central-admin-v1 $repoRoot
 Write-Host 'Building Central Admin...'
-& docker build -t imprint/central-admin:test $centralAdminPath
+& docker build -t imprint/central-admin:central-admin-v2 $centralAdminPath
 Write-Host 'Building Production...'
-& docker build -f (Join-Path $PSScriptRoot 'production.Dockerfile') -t imprint/production:test $productionPath
+& docker build -f (Join-Path $PSScriptRoot 'production.Dockerfile') -t imprint/production:central-admin-v2 $productionPath
 Write-Host 'Building Marketing...'
-& docker build -f (Join-Path $PSScriptRoot 'marketing.Dockerfile') -t imprint/marketing:test $marketingPath
+& docker build -f (Join-Path $PSScriptRoot 'marketing.Dockerfile') -t imprint/marketing:central-admin-v2 $marketingPath
 
 Write-Host 'Publishing images to the local Kubernetes registry...'
 Publish-LocalImage 'imprint/hris:central-admin-v1' 'localhost:5000/imprint/hris:central-admin-v1'
-Publish-LocalImage 'imprint/production:test' 'localhost:5000/imprint/production:test'
-Publish-LocalImage 'imprint/marketing:test' 'localhost:5000/imprint/marketing:test'
-Publish-LocalImage 'imprint/central-admin:test' 'localhost:5000/imprint/central-admin:test'
+Publish-LocalImage 'imprint/production:central-admin-v2' 'localhost:5000/imprint/production:central-admin-v2'
+Publish-LocalImage 'imprint/marketing:central-admin-v2' 'localhost:5000/imprint/marketing:central-admin-v2'
+Publish-LocalImage 'imprint/central-admin:central-admin-v2' 'localhost:5000/imprint/central-admin:central-admin-v2'
 
 & kubectl get namespace imprint-test *> $null
 if ($LASTEXITCODE -ne 0) {
@@ -160,6 +161,11 @@ if ($SeedDefaultAccounts) {
 }
 & kubectl rollout status deployment/production -n imprint-test --timeout=180s
 & kubectl rollout status deployment/marketing -n imprint-test --timeout=180s
+if ($SeedDemoData) {
+    Write-Host 'Loading disposable demo data into Production and Marketing...'
+    & kubectl exec deployment/production -n imprint-test -- php artisan db:seed --class=DemoDataSeeder --force --no-interaction
+    & kubectl exec deployment/marketing -n imprint-test -- php artisan db:seed --class=DemoSeeder --force --no-interaction
+}
 & kubectl rollout status deployment/central-admin -n imprint-test --timeout=180s
 
 Start-PortForward 'hris' 30080
