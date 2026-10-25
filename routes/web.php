@@ -57,6 +57,17 @@ Volt::route('/employee/login', 'auth.employeelogin')->name('employee.login');
 Volt::route('/applicant/login', 'auth.applicantlogin')->name('applicant.login');
 
 /*
+ * Keep an open HRIS tab from carrying an expired CSRF token or session.
+ * The browser refreshes this route periodically while the tab is visible;
+ * closed or hidden tabs still expire normally after the configured lifetime.
+ */
+Route::get('/session/keep-alive', function () {
+    return response()
+        ->json(['token' => csrf_token()])
+        ->header('Cache-Control', 'no-store');
+})->name('session.keep-alive');
+
+/*
 |--------------------------------------------------------------------------
 | Internal Central Admin data
 |--------------------------------------------------------------------------

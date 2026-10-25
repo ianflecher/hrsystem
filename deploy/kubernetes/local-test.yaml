@@ -120,7 +120,7 @@ spec:
     spec:
       containers:
         - name: hris
-          image: localhost:5000/imprint/hris:central-admin-v1
+          image: localhost:5000/imprint/hris:central-admin-v2
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 10000

@@ -115,7 +115,7 @@ if (-not (Test-Path (Join-Path $centralAdminPath 'package.json'))) {
 }
 
 Write-Host 'Building HRIS...'
-& docker build -t imprint/hris:central-admin-v1 $repoRoot
+& docker build -t imprint/hris:central-admin-v2 $repoRoot
 Write-Host 'Building Central Admin...'
 & docker build -t imprint/central-admin:central-admin-v2 $centralAdminPath
 Write-Host 'Building Production...'
@@ -124,7 +124,7 @@ Write-Host 'Building Marketing...'
 & docker build -f (Join-Path $PSScriptRoot 'marketing.Dockerfile') -t imprint/marketing:central-admin-v2 $marketingPath
 
 Write-Host 'Publishing images to the local Kubernetes registry...'
-Publish-LocalImage 'imprint/hris:central-admin-v1' 'localhost:5000/imprint/hris:central-admin-v1'
+Publish-LocalImage 'imprint/hris:central-admin-v2' 'localhost:5000/imprint/hris:central-admin-v2'
 Publish-LocalImage 'imprint/production:central-admin-v2' 'localhost:5000/imprint/production:central-admin-v2'
 Publish-LocalImage 'imprint/marketing:central-admin-v2' 'localhost:5000/imprint/marketing:central-admin-v2'
 Publish-LocalImage 'imprint/central-admin:central-admin-v2' 'localhost:5000/imprint/central-admin:central-admin-v2'

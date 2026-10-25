@@ -531,6 +531,49 @@
 </style>
 
 <script>
+    /* Keep an open portal tab signed in, matching the Production app. */
+    (function () {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        if (!meta) { return; }
+
+        var url = '{{ route('session.keep-alive') }}';
+        var busy = false;
+        var last = Date.now();
+
+        function refresh() {
+            if (busy) { return; }
+            busy = true;
+
+            fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+                .then(function (response) { return response.ok ? response.json() : null; })
+                .then(function (data) {
+                    if (!data || !data.token) { return; }
+
+                    meta.setAttribute('content', data.token);
+                    document.querySelectorAll('input[name="_token"]').forEach(function (input) {
+                        input.value = data.token;
+                    });
+                    last = Date.now();
+                })
+                .catch(function () { /* The next refresh can retry. */ })
+                .finally(function () { busy = false; });
+        }
+
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden && Date.now() - last > 60000) { refresh(); }
+        });
+
+        window.addEventListener('focus', function () {
+            if (Date.now() - last > 60000) { refresh(); }
+        });
+
+        setInterval(function () {
+            if (!document.hidden) { refresh(); }
+        }, 15 * 60 * 1000);
+    })();
+</script>
+
+<script>
     (() => {
         if (window.hrPortalShellReady) return;
         window.hrPortalShellReady = true;
