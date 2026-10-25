@@ -549,8 +549,8 @@ class extends Component
                      not a calculation, so it reported growth whatever the
                      headcount actually did. --}}
             </div>
-            <div class="p-3 rounded-full bg-slate-100">
-                <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <div class="p-3 rounded-full bg-blue-50">
+                <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m8-10a4 4 0 100-8 4 4 0 000 8zm12 10v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75" />
                 </svg>
             </div>
@@ -570,8 +570,8 @@ class extends Component
                     <span class="text-sm text-gray-600 font-medium ml-3">{{ $totalEmployees > 0 ? round($activeEmployees / $totalEmployees * 100, 1) : 0 }}%</span>
                 </div>
             </div>
-            <div class="p-3 rounded-full bg-slate-100">
-                <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <div class="p-3 rounded-full bg-teal-50">
+                <svg class="w-8 h-8 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
             </div>
@@ -591,8 +591,8 @@ class extends Component
                     <span class="text-sm text-gray-600">{{ $applicationStats['pending'] }} pending review</span>
                 </div>
             </div>
-            <div class="p-3 rounded-full bg-slate-100">
-                <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <div class="p-3 rounded-full bg-indigo-50">
+                <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m-6 0a3 3 0 006 0M8 12h8M8 16h5" />
                 </svg>
             </div>
@@ -618,8 +618,8 @@ class extends Component
                     <span class="text-sm text-gray-600">{{ $applicationStats['hired'] }} hired this month</span>
                 </div>
             </div>
-            <div class="p-3 rounded-full bg-slate-100">
-                <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <div class="p-3 rounded-full bg-green-50">
+                <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m7-10a4 4 0 100-8 4 4 0 000 8m8 2l2 2 4-4" />
                 </svg>
             </div>
