@@ -6,6 +6,7 @@ use App\Services\Attendance\PunchImporter;
 use App\Services\Attendance\ZktecoPuller;
 use Livewire\Volt\Component;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\WithFileUploads;
 use Illuminate\Support\Facades\DB;
 
@@ -318,6 +319,7 @@ new #[Layout('components.layouts.humanresource')] class extends Component
         $this->loadData();
     }
 
+    #[On('editAttendance')]
     public function editAttendance($attendanceId, $status, $timeIn = null, $timeOut = null, $notes = null)
     {
         $before = DB::table('hr_attendance')->where('attendance_id', $attendanceId)->first();
